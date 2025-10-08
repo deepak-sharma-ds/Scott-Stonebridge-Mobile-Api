@@ -1,0 +1,25 @@
+@charset "UTF-8";
+
+/*login css*/
+body{background: #f3f4f6;}
+.login {position: absolute;top: 50%;transform: translate(-50%, -50%);left: 50%;max-width: 700px;width: 100%;padding: 0 15px;}
+.login .logo img {width: 250px;}
+.login .card-header {text-align: center;margin: 0 0 22px;}
+.login-card {margin: auto; box-shadow: 0 0 1px rgba(0, 0, 0, .125), 0 1px 3px rgba(0, 0, 0, .2) !important;border-top: 3px solid #0d51aa;padding: 30px 20px 30px !important;max-width: 700px;width: 100%;margin-bottom: 30px;
+border-radius: .5rem;background: #fff;}
+.login-card form {max-width: 400px;width: 100%;margin: 0 auto;}
+.login-card form h3 {text-align: center;margin: 0px 0 20px;color: #000000;font-weight: bold;font-size: 24px;}
+.login-card form .login-field {position: relative; margin-top: 15px;}
+.login-card form .login-field span.input-icon {position: absolute;top: 0;right: 0;background-color: #e9ecef;border: 1px solid #ced4da;width: 39px;height: 38px;border-radius: 0 5px 5px 0;
+display: flex;align-items: center;justify-content: center;}
+.login-card form .form-check {margin: 15px 0 0; padding: 0;}
+.login-card form .form-check label.form-check-label {font-weight: 600; color: #0d51aa;}
+.login-card form .form-check input#remember {margin: 5px 10px 0px 0;}
+.login-card form button.btn {background: #0d51aa;padding: 10px 30px 12px;font-size: 15px;text-align: center;color: #fff;border-radius: 5px;text-decoration: none;transition: all 0.2s ease;
+border: 1px solid transparent;text-transform: uppercase;margin: auto;display: table;margin-top: 20px;font-weight: 600; width: 100%;}
+.login-card form button.btn:hover{background: rgb(13 81 170 / 20%);border: 1px solid #0d51aa;transition: all 0.2s ease;color: #0d51aa;}
+.login-card form a.btn.btn-link {width: 100%;text-align: left;padding: 0;color:#0d51aa;text-decoration: none;font-weight: 600;margin-top: 7px;}
+.login-card form .register-btns {margin-top: 20px;}
+.login-card form .register-btns p {margin: 15px 0 5px;text-align: center;font-weight: bold;}
+.login-card form .register-btns button.btn{ margin: 0;}
+/*login css end*/

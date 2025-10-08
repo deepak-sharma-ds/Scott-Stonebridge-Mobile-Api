@@ -1,0 +1,157 @@
+.btn-primary {
+    background: #179fd9;
+    border-color: #179fd9;
+}
+.btn-primary:hover {
+    background: #26316f;
+}
+.form-group,
+.col-form-label {
+    margin-bottom: 15px;
+}
+.col-form-label {
+    font-weight: 500;
+}
+
+.form-group.row .form-group,
+.form-group.row .col-form-label {
+    margin-bottom: 0;
+}
+.form-group small {
+    opacity: 0.75;
+    margin-top: 10px;
+}
+
+.page-link.active,
+.datatable-pagination a.active,
+.active > .page-link,
+.datatable-pagination .active > a {
+    background: #179fd9;
+    border-color: #179fd9;
+}
+.page-link,
+.datatable-pagination a {
+    color: #179fd9;
+}
+.card-header {
+    padding: 20px var(--bs-card-cap-padding-x);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+.card-header h4 {
+    margin-bottom: 0;
+    font-weight: 600;
+}
+
+.sb-nav-fixed #layoutSidenav #layoutSidenav_content {
+    padding-left: 310px;
+    padding-right: 30px;
+}
+
+.welcome-text h4 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #26316f;
+}
+
+.table thead th,
+.table thead th strong {
+    font-weight: 600;
+}
+
+.img-parent-box img {
+    border: 1px solid #eee;
+    padding: 4px;
+    max-width: 160px;
+    height: 38px;
+}
+.prod-p-card {
+    height: 100%;
+}
+.bg-light-info {
+    background: #d8f4f7;
+    color: #3ec9d6;
+}
+.bg-light-success {
+    background: #d1f4e0;
+    color: #17c666;
+}
+.bg-light-primary {
+    background: #e3e1fc;
+    color: #7267ef;
+}
+.prod-p-card h6 {
+    font-size: 20px;
+}
+.prod-p-card h3 {
+    font-size: 40px;
+}
+.prod-p-card p:last-child {
+    margin-bottom: 0;
+}
+.prod-p-card .btn-info {
+    color: #fff;
+}
+.recent-signup {
+    margin-top: 20px;
+}
+.recent-signup h6 {
+    font-size: 24px;
+    font-weight: 700;
+    color: #26316f;
+}
+.recent-signup ul {
+    padding-left: 20px;
+    margin-top: 20px;
+}
+.recent-signup ul li {
+    margin-bottom: 10px;
+}
+
+@media screen and (min-width: 992px) {
+    .sb-sidenav-toggled #layoutSidenav #layoutSidenav_content {
+        margin-left: -280px;
+    }
+}
+
+label.error {
+    color: #dc3545;
+    /* Bootstrap’s red color */
+    font-size: 0.875em;
+    margin-top: 0.25rem;
+    display: block;
+}
+
+#loaderOverlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(255, 255, 255, 0.8);
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+}
+
+.loader {
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid #3498db;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0%   { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+
+
+
+
