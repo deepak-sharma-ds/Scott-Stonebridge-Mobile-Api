@@ -147,6 +147,11 @@ return [
             'path' => storage_path('logs/appointment_slots.log'),
             'level' => 'debug',   // you can set info, notice, warning, error as needed
         ],
+        'shopify_customers_auth' => [
+            'driver' => 'single',
+            'path'      => storage_path('logs/shopify_customers_auth.log'),
+            'level'  => 'debug',
+        ],
 
     ],
 

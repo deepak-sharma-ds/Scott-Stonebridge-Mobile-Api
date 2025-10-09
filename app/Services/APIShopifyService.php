@@ -207,4 +207,27 @@ class APIShopifyService
 
         return $body['data']['menu'] ?? null;
     }
+
+    /* Storefront API request service */
+    public function storefrontApiRequest($query, $variables = [])
+    {
+        $url = "https://" . config('shopify.store_domain') . "/api/2024-07/graphql.json"; // Updated API version 2025-01
+        $storefrontAccessToken = config('shopify.storefront_access_token');
+
+        $headers = [
+            'X-Shopify-Storefront-Access-Token' => $storefrontAccessToken,
+            'Content-Type' => 'application/json',
+        ];
+
+        // if ($customerAccessToken) {
+        //     $headers['Authorization'] = "Bearer {$customerAccessToken}";
+        // }
+
+        $response = Http::withHeaders($headers)->post($url, [
+            'query' => $query,
+            'variables' => $variables,
+        ]);
+
+        return $response->json();
+    }
 }

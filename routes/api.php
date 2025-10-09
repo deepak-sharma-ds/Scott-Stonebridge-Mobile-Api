@@ -39,7 +39,7 @@ Route::middleware(['disable.session'])->group(function () {
         Route::post('reset-password', [AuthController::class, 'resetPassword']);
     });
 
-    Route::prefix('home')->group(function () {
+    Route::middleware(['shopify.customer.auth'])->prefix('home')->group(function () {
         Route::get('/', [HomeController::class, 'home']);
         Route::post('/subscribe', [HomeController::class, 'subscribe']);
 

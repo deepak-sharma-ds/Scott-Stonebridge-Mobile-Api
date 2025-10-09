@@ -26,7 +26,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'disable.session' => \App\Http\Middleware\DisableSessionMiddleware::class,
             // 'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             // 'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
-            // 'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class
+            // 'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
+            'shopify.customer.auth' => \App\Http\Middleware\ShopifyCustomerAuth::class,
         ]);
     })
     ->withSchedule(function (Illuminate\Console\Scheduling\Schedule $schedule) {
