@@ -141,6 +141,13 @@ return [
 			'days' 	 => 3650, // Keep logs for 10 years
         ],
 
+        /* I'm using this log for appointment slots command */
+        'appointment_slots' => [
+            'driver' => 'single', // single log file
+            'path' => storage_path('logs/appointment_slots.log'),
+            'level' => 'debug',   // you can set info, notice, warning, error as needed
+        ],
+
     ],
 
 ];

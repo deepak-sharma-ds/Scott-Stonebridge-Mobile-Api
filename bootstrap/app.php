@@ -29,6 +29,9 @@ return Application::configure(basePath: dirname(__DIR__))
             // 'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class
         ]);
     })
+    ->withSchedule(function (Illuminate\Console\Scheduling\Schedule $schedule) {
+        $schedule->command('availability:generate-weekly')->weeklyOn(0, '00:00'); // Every Sunday midnight
+    })
     ->withExceptions(function (Exceptions $exceptions) {
         //
     })->create();
