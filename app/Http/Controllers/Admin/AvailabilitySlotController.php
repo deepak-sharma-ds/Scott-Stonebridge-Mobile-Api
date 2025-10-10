@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\AvailabilityDate;
 use App\Models\TimeSlot;
+use App\Services\BookingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
@@ -14,6 +15,12 @@ use Validator;
 
 class AvailabilitySlotController extends Controller
 {
+    private $bookingService;
+
+    public function __construct(BookingService $bookingService)
+    {
+        $this->bookingService = $bookingService;
+    }
     public function index()
     {
         $query = AvailabilityDate::with('timeSlots')->where('user_id', Auth::id())->orderBy('date', 'desc');
@@ -102,7 +109,7 @@ class AvailabilitySlotController extends Controller
 
         $availabilityDate = AvailabilityDate::findOrFail($id);
         $availabilityDate->update(['date' => $request->date]);
-    
+
         // Remove existing time slots and add new ones
         $availabilityDate->timeSlots()->delete();
 
@@ -128,8 +135,21 @@ class AvailabilitySlotController extends Controller
     public function deleteTimeSlot(Request $request, $id)
     {
         $timeSlot = TimeSlot::findOrFail($id);
+
+        // Check for booked meetings before deleting the slot
+        $result = $this->bookingService->handleSlotBookingDeletion($timeSlot->id, $timeSlot->availability_date_id);
+
         $timeSlot->delete();
 
-        return response()->json(['success' => true]);
+        // return response()->json(['success' => true]);
+        return response()->json([
+            'success' => true,
+            'message' => match ($result['status']) {
+                'reschedule_needed' => 'Slot deleted. Existing booking marked for reschedule.',
+                'no_booking' => 'Slot deleted successfully.',
+                'error' => 'Slot deleted, but there was an issue handling booked meetings.',
+                default => 'Slot deleted.',
+            },
+        ]);
     }
 }

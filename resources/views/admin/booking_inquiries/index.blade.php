@@ -103,15 +103,21 @@
                                             <td>{{ $inquiry->email }}</td>
                                             <td>{{ $inquiry->phone }}</td>
                                             <td>
-                                                {{ $inquiry->datetime->format(config('Reading.date_time_format')) }}
+                                                @if ($inquiry->status != 'needs_reschedule')
+                                                    {{ $inquiry->datetime->format(config('Reading.date_time_format')) }}
+                                                @else
+                                                    {{ 'N/A' }}
+                                                @endif
                                             </td>
-                                            <td>{{ ucfirst($inquiry->status) }}</td>
+                                            <td>{{ ucfirst(str_replace('_', ' ', $inquiry->status)) }}</td>
                                             <td>
                                                 <!-- View button -->
-                                                <a href="{{ route('admin.booking.view', $inquiry->id) }}" class="btn btn-primary btn-sm" title="View">
-                                                    <i class="fa-solid fa-eye"></i>
-                                                </a>
-
+                                                @if ($inquiry->status != 'needs_reschedule')
+                                                    <a href="{{ route('admin.booking.view', $inquiry->id) }}"
+                                                        class="btn btn-primary btn-sm" title="View">
+                                                        <i class="fa-solid fa-eye"></i>
+                                                    </a>
+                                                @endif
                                                 <!-- Reschedule button -->
                                                 <button type="button" 
                                                         class="btn btn-warning btn-sm btn-reschedule" 
