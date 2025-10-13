@@ -34,7 +34,7 @@ class BookingController extends Controller
         ]);
 
         $result = $bookingService->bookMeeting($data);
-        
+
         if (!empty($result['success'])) {
             return response()->json($result);
             // $booking = $result['booking'];  // Now this is the ScheduledMeeting model
@@ -60,9 +60,9 @@ class BookingController extends Controller
 
         // get booked slot ids for that date
         $bookedSlotIds = ScheduledMeeting::where('availability_date_id', $availability->id)
-                            ->where('status', '!=', 'closed')
-                            ->pluck('time_slot_id')
-                            ->toArray();
+            ->where('status', '!=', 'closed')
+            ->pluck('time_slot_id')
+            ->toArray();
 
         $slotsFormatted = $timeSlots->map(function ($slot) use ($bookedSlotIds) {
             return [
@@ -73,7 +73,7 @@ class BookingController extends Controller
             ];
         });
 
-         return response()->json([
+        return response()->json([
             'success' => true,
             'time_slots' => $slotsFormatted
         ]);

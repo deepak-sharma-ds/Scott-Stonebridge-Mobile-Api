@@ -27,7 +27,7 @@ class AuthController extends Controller
             'password' => 'required|string|min:6',
         ]);
 
-        if($validator->fails()) {
+        if ($validator->fails()) {
             return response()->json([
                 'message' => 'Validation failed',
                 'errors' => $validator->errors(),
@@ -35,9 +35,9 @@ class AuthController extends Controller
         }
 
         $data = $validator->validated();
-      
+
         try {
-            $data['password_confirmation'] = $data['password']; 
+            $data['password_confirmation'] = $data['password'];
             $response = $this->shopify->createCustomer([
                 'customer' => [
                     'email' => $data['email'],
@@ -51,14 +51,13 @@ class AuthController extends Controller
                     'form_type' => 'create_customer',
                 ],
             ]);
-            
+
             if (isset($response['customer'])) {
                 return response()->json(['message' => 'Customer registered successfully', 'customer' => $response['customer']], 201);
             }
 
             // If Shopify API returns error response but no exception thrown
             return response()->json(['error' => 'Failed to register customer', 'details' => $response], 400);
-
         } catch (\Throwable $th) {
             // Return the error message from the exception
             return response()->json([
@@ -68,33 +67,51 @@ class AuthController extends Controller
         }
     }
 
-    public function login(Request $request)
+    public function login(Request $request, ShopifyCustomerAuthService $authService)
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
             'password' => 'required|string',
         ]);
 
-        if($validator->fails()) {
+        if ($validator->fails()) {
             return response()->json([
+                'status' => 422,
                 'message' => 'Validation failed',
                 'errors' => $validator->errors(),
             ], 422);
         }
-        
-        $data = $validator->validated();
-        $response = $this->shopify->customerAccessTokenCreate($data['email'], $data['password']);
 
-        if ($response['success']) {
-            return response()->json([
-                'accessToken' => $response['token'],
-                'expiresAt' => $response['expiresAt'],
-            ]);
+        $data = $validator->validated();
+        $tokenData = $authService->loginCustomer($request->email, $request->password);
+
+        if (!$tokenData) {
+            return response()->json(['status' => 401, 'message' => 'Invalid credentials'], 401);
         }
 
         return response()->json([
-            'errors' => $response['errors']
-        ], 401);
+            'status' => 200,
+            'message' => 'Login successful',
+            'data' => [
+                'access_token' => $tokenData['access_token'],
+                'expires_at' => $tokenData['expires_at']->toDateTimeString(),
+            ],
+        ]);
+
+
+
+        // $response = $this->shopify->customerAccessTokenCreate($data['email'], $data['password']);
+
+        // if ($response['success']) {
+        //     return response()->json([
+        //         'accessToken' => $response['token'],
+        //         'expiresAt' => $response['expiresAt'],
+        //     ]);
+        // }
+
+        // return response()->json([
+        //     'errors' => $response['errors']
+        // ], 401);
     }
 
     public function forgotPassword(Request $request)
@@ -124,7 +141,6 @@ class AuthController extends Controller
                 'error' => 'Failed to send password reset email',
                 'details' => $errors
             ], 400);
-
         } catch (\Throwable $th) {
             return response()->json([
                 'error' => 'Unexpected error',

@@ -1,17 +1,20 @@
 <?php
 
 namespace App\Services;
+
 use Illuminate\Support\Facades\Http;
 
 class APIShopifyService
 {
     protected $baseUrl;
     protected $token;
+    protected $storefrontAccessToken;
 
     public function __construct()
     {
-        $this->baseUrl = 'https://' . config('shopify.store_domain') . '/admin/api/2024-07';
+        $this->baseUrl = 'https://' . config('shopify.store_domain') . '/admin/api/' . config('shopify.api_version');
         $this->token = config('shopify.access_token');
+        $this->storefrontAccessToken = config('shopify.storefront_access_token');
     }
 
     public function get($endpoint)
@@ -41,78 +44,78 @@ class APIShopifyService
      * @param string $password
      * @return array|null Returns access token info or error details
      */
-    public function customerAccessTokenCreate(string $email, string $password): ?array
-    {
-        $storefrontUrl = 'https://' . config('shopify.store_domain') . '/api/2024-07/graphql.json';
+    // public function customerAccessTokenCreate(string $email, string $password): ?array
+    // {
+    //     $storefrontUrl = 'https://' . config('shopify.store_domain') . '/api/' . config('shopify.api_version') . '/graphql.json';
 
-        $query = <<<'GRAPHQL'
-        mutation customerAccessTokenCreate($input: CustomerAccessTokenCreateInput!) {
-            customerAccessTokenCreate(input: $input) {
-                customerAccessToken {
-                    accessToken
-                    expiresAt
-                }
-                userErrors {
-                    field
-                    message
-                }
-            }
-        }
-        GRAPHQL;
+    //     $query = <<<'GRAPHQL'
+    //     mutation customerAccessTokenCreate($input: CustomerAccessTokenCreateInput!) {
+    //         customerAccessTokenCreate(input: $input) {
+    //             customerAccessToken {
+    //                 accessToken
+    //                 expiresAt
+    //             }
+    //             userErrors {
+    //                 field
+    //                 message
+    //             }
+    //         }
+    //     }
+    //     GRAPHQL;
 
-        $variables = [
-            'input' => [
-                'email' => $email,
-                'password' => $password,
-            ],
-        ];
+    //     $variables = [
+    //         'input' => [
+    //             'email' => $email,
+    //             'password' => $password,
+    //         ],
+    //     ];
 
-        $response = Http::withHeaders([
-            'X-Shopify-Storefront-Access-Token' => config('shopify.storefront_access_token'),
-            'Content-Type' => 'application/json',
-        ])->post($storefrontUrl, [
-            'query' => $query,
-            'variables' => $variables,
-        ]);
+    //     $response = Http::withHeaders([
+    //         'X-Shopify-Storefront-Access-Token' => $this->storefrontAccessToken,
+    //         'Content-Type' => 'application/json',
+    //     ])->post($storefrontUrl, [
+    //         'query' => $query,
+    //         'variables' => $variables,
+    //     ]);
 
-        $json = $response->json();
+    //     $json = $response->json();
 
-        // Check for errors
-        if (isset($json['errors'])) {
-            // GraphQL-level errors
-            return [
-                'success' => false,
-                'errors' => $json['errors'],
-            ];
-        }
+    //     // Check for errors
+    //     if (isset($json['errors'])) {
+    //         // GraphQL-level errors
+    //         return [
+    //             'success' => false,
+    //             'errors' => $json['errors'],
+    //         ];
+    //     }
 
-        $result = $json['data']['customerAccessTokenCreate'] ?? null;
+    //     $result = $json['data']['customerAccessTokenCreate'] ?? null;
 
-        if (!$result) {
-            return [
-                'success' => false,
-                'errors' => ['Unknown error occurred'],
-            ];
-        }
+    //     if (!$result) {
+    //         return [
+    //             'success' => false,
+    //             'errors' => ['Unknown error occurred'],
+    //         ];
+    //     }
 
-        if (!empty($result['userErrors'])) {
-            return [
-                'success' => false,
-                'errors' => $result['userErrors'],
-            ];
-        }
+    //     if (!empty($result['userErrors'])) {
+    //         return [
+    //             'success' => false,
+    //             'errors' => $result['userErrors'],
+    //         ];
+    //     }
 
-        // Successful login, return token data
-        return [
-            'success' => true,
-            'token' => $result['customerAccessToken']['accessToken'],
-            'expiresAt' => $result['customerAccessToken']['expiresAt'],
-        ];
-    }
+    //     // Successful login, return token data
+    //     return [
+    //         'success' => true,
+    //         'token' => $result['customerAccessToken']['accessToken'],
+    //         'expiresAt' => $result['customerAccessToken']['expiresAt'],
+    //     ];
+    // }
 
     public function sendPasswordResetEmail($email)
     {
-        $storefrontUrl = 'https://' . config('shopify.store_domain') . '/api/2024-07/graphql.json';
+        $storefrontUrl = 'https://' . config('shopify.store_domain') . '/api/' . config('shopify.api_version') . '/graphql.json';
 
         $query = <<<'GRAPHQL'
             mutation customerRecover($email: String!) {
@@ -127,7 +130,7 @@ class APIShopifyService
         GRAPHQL;
 
         $response = Http::withHeaders([
-            'X-Shopify-Storefront-Access-Token' => config('shopify.storefront_access_token'),
+            'X-Shopify-Storefront-Access-Token' => $this->storefrontAccessToken,
             'Content-Type' => 'application/json',
         ])->post($storefrontUrl, [
             'query' => $query,
@@ -139,12 +142,12 @@ class APIShopifyService
         return $response->json();
     }
 
-    public function getHomePageSections() 
+    public function getHomePageSections()
     {
         // Get theme ID dynamically first, or hardcode active theme ID if known
         $themeId = 179834880383;
 
-        $url = "https://" . config('shopify.store_domain') . "/admin/api/2025-01/themes/{$themeId}/assets.json?asset[key]=templates/index.json";
+        $url = "https://" . config('shopify.store_domain') . "/admin/api/" . config('shopify.api_version') . "/themes/{$themeId}/assets.json?asset[key]=templates/index.json";
 
         $response = Http::withHeaders([
             'X-Shopify-Access-Token' => config('shopify.access_token'),
@@ -167,8 +170,8 @@ class APIShopifyService
 
     public function getMenuByHandle(string $handle)
     {
-        $url = "https://" . config('shopify.store_domain') . "/api/2024-07/graphql.json";  // storefront endpoint
-        $token = config('shopify.storefront_access_token');
+        $url = "https://" . config('shopify.store_domain') . "/api/" . config('shopify.api_version') . "/graphql.json";  // storefront endpoint
+        $token = $this->storefrontAccessToken;
 
         $query = <<<'GRAPHQL'
         query($handle: String!) {
@@ -211,11 +214,10 @@ class APIShopifyService
     /* Storefront API request service */
     public function storefrontApiRequest($query, $variables = [])
     {
-        $url = "https://" . config('shopify.store_domain') . "/api/2024-07/graphql.json"; // Updated API version 2025-01
-        $storefrontAccessToken = config('shopify.storefront_access_token');
+        $url = "https://" . config('shopify.store_domain') . "/api/" . config('shopify.api_version') . "/graphql.json"; // Updated API version 2025-01
 
         $headers = [
-            'X-Shopify-Storefront-Access-Token' => $storefrontAccessToken,
+            'X-Shopify-Storefront-Access-Token' => $this->storefrontAccessToken,
             'Content-Type' => 'application/json',
         ];
 
@@ -229,5 +231,114 @@ class APIShopifyService
         ]);
 
         return $response->json();
+    }
+
+    public function fetchCollectionsWithProducts()
+    {
+        $url = "https://" . config('shopify.store_domain') . "/api/" . config('shopify.api_version') . "/graphql.json";
+
+        $query = <<<'GRAPHQL'
+            query ($limit: Int!, $after: String) {
+                collections(first: $limit, after: $after) {
+                    edges {
+                    node {
+                        id
+                        title
+                        handle
+                        image {
+                        originalSrc
+                        altText
+                        }
+                        products(first: 5) {
+                        edges {
+                            node {
+                            id
+                            title
+                            handle
+                            descriptionHtml
+                            featuredImage {
+                                originalSrc
+                                altText
+                            }
+                            images(first: 3) {
+                                edges {
+                                node {
+                                    originalSrc
+                                    altText
+                                }
+                                }
+                            }
+                            variants(first: 1) {
+                                edges {
+                                node {
+                                    price {
+                                    amount
+                                    currencyCode
+                                    }
+                                    compareAtPrice {
+                                    amount
+                                    currencyCode
+                                    }
+                                    availableForSale
+                                }
+                                }
+                            }
+                            }
+                        }
+                        }
+                    }
+                    }
+                }
+            }
+        GRAPHQL;
+
+        $response = Http::withHeaders([
+            'Content-Type' => 'application/json',
+            'X-Shopify-Access-Token' => $this->token,
+        ])->post($url, ['query' => $query]);
+
+        if ($response->failed()) {
+            return ['error' => 'Failed to fetch data from Shopify', 'details' => $response->json()];
+        }
+
+        return $this->transformResponse($response->json());
+    }
+
+    protected function transformResponse($data)
+    {
+        $collections = $data['data']['collections']['edges'] ?? [];
+
+        $formatted = [];
+        foreach ($collections as $collectionEdge) {
+            $collection = $collectionEdge['node'];
+
+            $products = [];
+            foreach ($collection['products']['edges'] as $productEdge) {
+                $product = $productEdge['node'];
+
+                $products[] = [
+                    'id' => $product['id'],
+                    'title' => $product['title'],
+                    'handle' => $product['handle'],
+                    'price' => $product['variants']['edges'][0]['node']['price'] ?? null,
+                    'compare_at_price' => $product['variants']['edges'][0]['node']['compareAtPrice'] ?? null,
+                    'available' => $product['variants']['edges'][0]['node']['availableForSale'] ?? false,
+                    'featured_image' => $product['featuredImage']['originalSrc'] ?? null,
+                    'carousel_images' => collect($product['images']['edges'])
+                        ->pluck('node.originalSrc')
+                        ->toArray(),
+                ];
+            }
+
+            $formatted[] = [
+                'id' => $collection['id'],
+                'title' => $collection['title'],
+                'handle' => $collection['handle'],
+                'image' => $collection['image']['originalSrc'] ?? null,
+                'products' => $products,
+            ];
+        }
+
+        return $formatted;
     }
 }

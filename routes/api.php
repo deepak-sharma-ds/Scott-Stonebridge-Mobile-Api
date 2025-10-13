@@ -32,6 +32,7 @@ Route::middleware(['disable.session'])->group(function () {
     Route::get('/products/search', [ProductController::class, 'searchProducts']);
     Route::get('/products/{productId}', [ProductController::class, 'getProductDetail']);
 
+
     Route::prefix('auth')->group(function () {
         Route::post('register', [AuthController::class, 'register']);
         Route::post('login', [AuthController::class, 'login']);
@@ -42,6 +43,11 @@ Route::middleware(['disable.session'])->group(function () {
     Route::middleware(['shopify.customer.auth'])->prefix('home')->group(function () {
         Route::get('/', [HomeController::class, 'home']);
         Route::post('/subscribe', [HomeController::class, 'subscribe']);
+    });
 
+    Route::middleware(['shopify.customer.auth'])->group(function () {
+        // Products
+        Route::post('/categories', [ProductController::class, 'getCategories']);
+        Route::post('/categories/products', [ProductController::class, 'getProducts']);
     });
 });

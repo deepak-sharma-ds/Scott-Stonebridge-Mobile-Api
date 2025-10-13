@@ -89,7 +89,7 @@ return [
             'handler_with' => [
                 'host' => env('PAPERTRAIL_URL'),
                 'port' => env('PAPERTRAIL_PORT'),
-                'connectionString' => 'tls://'.env('PAPERTRAIL_URL').':'.env('PAPERTRAIL_PORT'),
+                'connectionString' => 'tls://' . env('PAPERTRAIL_URL') . ':' . env('PAPERTRAIL_PORT'),
             ],
             'processors' => [PsrLogMessageProcessor::class],
         ],
@@ -130,15 +130,15 @@ return [
         /* I'm using this log for coniq signup */
         'signup' => [
             'driver' => 'daily',
-            'path' 	 => storage_path('logs/signup.log'),
+            'path'      => storage_path('logs/signup.log'),
             'level'  => 'info',
-			'days' 	 => 3650, // Keep logs for 10 years
+            'days'      => 3650, // Keep logs for 10 years
         ],
         'loyalty' => [
             'driver' => 'daily',
-            'path'	 => storage_path('logs/loyalty.log'),
+            'path'     => storage_path('logs/loyalty.log'),
             'level'  => 'info',
-			'days' 	 => 3650, // Keep logs for 10 years
+            'days'      => 3650, // Keep logs for 10 years
         ],
 
         /* I'm using this log for appointment slots command */

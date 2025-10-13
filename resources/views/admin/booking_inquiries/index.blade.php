@@ -44,7 +44,8 @@
                         <h4 class="card-title">Search</h4>
                     </div>
                     <div class="card-body">
-                        <form method="GET" action="{{ route('admin.scheduled-meetings') }}" class="row g-2 align-items-end">
+                        <form method="GET" action="{{ route('admin.scheduled-meetings') }}"
+                            class="row g-2 align-items-end">
                             {{-- Search --}}
                             <div class="col-md-4 search_inputs">
                                 <input type="text" name="search" value="{{ request('search') }}" class="form-control"
@@ -95,7 +96,7 @@
                                 <tbody>
                                     @forelse ($booking_inquiries as $index => $inquiry)
                                         <tr>
-                                            <td>{{$index+1}}</td>
+                                            <td>{{ $index + 1 }}</td>
                                             <td class="" style="max-width: 150px; word-wrap: break-word;">
                                                 {{ $inquiry->name }}
                                             </td>
@@ -119,16 +120,17 @@
                                                     </a>
                                                 @endif
                                                 <!-- Reschedule button -->
-                                                <button type="button" 
-                                                        class="btn btn-warning btn-sm btn-reschedule" 
-                                                        data-id="{{ $inquiry->id }}" 
-                                                        data-datetime="{{ $inquiry->datetime->format('Y-m-d\TH:i') }}"
-                                                        title="Reschedule">
-                                                        <i class="fa fa-calendar" aria-hidden="true"></i></i>
+                                                <button type="button" class="btn btn-warning btn-sm btn-reschedule"
+                                                    data-id="{{ $inquiry->id }}"
+                                                    data-datetime="{{ $inquiry->datetime->format('Y-m-d\TH:i') }}"
+                                                    title="Reschedule">
+                                                    <i class="fa fa-calendar" aria-hidden="true"></i></i>
                                                 </button>
 
                                                 <!-- Cancel form with confirmation -->
-                                                <form action="{{ route('admin.booking.cancel') }}" method="POST" style="display:inline;" onsubmit="return confirm('Are you sure you want to cancel this booking?');">
+                                                <form action="{{ route('admin.booking.cancel') }}" method="POST"
+                                                    style="display:inline;"
+                                                    onsubmit="return confirm('Are you sure you want to cancel this booking?');">
                                                     @csrf
                                                     @method('PUT')
                                                     <input type="hidden" name="booking_id" value="{{ $inquiry->id }}">
@@ -156,45 +158,48 @@
         </div>
 
         {{-- Model for reschedule meetings --}}
-        <div class="modal fade" id="rescheduleModal" tabindex="-1" aria-labelledby="rescheduleModalLabel" aria-hidden="true">
+        <div class="modal fade" id="rescheduleModal" tabindex="-1" aria-labelledby="rescheduleModalLabel"
+            aria-hidden="true">
             <div class="modal-dialog">
                 <form id="rescheduleForm" method="POST" action="{{ route('admin.booking.reschedule') }}">
-                @csrf
-                @method('PUT')
-                <div class="modal-content">
-                    <div class="modal-header">
-                    <h5 class="modal-title" id="rescheduleModalLabel">Reschedule Booking</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
+                    @csrf
+                    @method('PUT')
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 class="modal-title" id="rescheduleModalLabel">Reschedule Booking</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
 
-                    <div class="modal-body">
-                        <input type="hidden" name="booking_id" id="booking_id" value="">
+                        <div class="modal-body">
+                            <input type="hidden" name="booking_id" id="booking_id" value="">
 
-                        <div class="row">
-                            <!-- Date Picker -->
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="availability_date" class="form-label">New Date</label>
-                                    <input type="date" class="form-control available_input" name="availability_date" id="availability_date" required>
+                            <div class="row">
+                                <!-- Date Picker -->
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="availability_date" class="form-label">New Date</label>
+                                        <input type="date" class="form-control available_input"
+                                            name="availability_date" id="availability_date" required>
+                                    </div>
                                 </div>
-                            </div>
-                            <!-- Time Slot Dropdown -->
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="time_slot_id" class="form-label">Available Time Slots</label>
-                                    <select name="time_slot_id" id="time_slot_id" class="form-control available_input" required>
-                                        <option value="">Select a time slot</option>
-                                    </select>
+                                <!-- Time Slot Dropdown -->
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="time_slot_id" class="form-label">Available Time Slots</label>
+                                        <select name="time_slot_id" id="time_slot_id"
+                                            class="form-control available_input" required>
+                                            <option value="">Select a time slot</option>
+                                        </select>
+                                    </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
 
-                    <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Update Booking</button>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Update Booking</button>
+                        </div>
                     </div>
-                </div>
                 </form>
             </div>
         </div>
@@ -232,12 +237,12 @@
             });
             document.addEventListener('DOMContentLoaded', function() {
                 const dateInput = document.getElementById('availability_date');
-                const today = new Date().toISOString().split('T')[0];  // Format: yyyy-mm-dd
+                const today = new Date().toISOString().split('T')[0]; // Format: yyyy-mm-dd
                 dateInput.setAttribute('min', today);
             });
         </script>
         <script>
-            document.addEventListener('DOMContentLoaded', function () {
+            document.addEventListener('DOMContentLoaded', function() {
                 var rescheduleModal = new bootstrap.Modal(document.getElementById('rescheduleModal'));
                 document.querySelectorAll('.btn-reschedule').forEach(function(button) {
                     button.addEventListener('click', function() {
@@ -254,7 +259,7 @@
                 const dateInput = document.getElementById('availability_date');
                 const timeSlotDropdown = document.getElementById('time_slot_id');
 
-                dateInput.addEventListener('change', function () {
+                dateInput.addEventListener('change', function() {
                     const selectedDate = this.value;
 
                     if (selectedDate) {
@@ -267,7 +272,8 @@
                                     data.time_slots.forEach(slot => {
                                         const option = document.createElement('option');
                                         option.value = slot.id;
-                                        option.textContent = `${slot.start_time} - ${slot.end_time}`;
+                                        option.textContent =
+                                            `${slot.start_time} - ${slot.end_time}`;
 
                                         // Disable booked slots
                                         if (slot.booked) {
@@ -288,8 +294,7 @@
                                 console.error('Error fetching time slots:', error);
                             });
                     }
-                    });
                 });
+            });
         </script>
-    
     @endsection
