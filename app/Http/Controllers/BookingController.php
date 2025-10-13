@@ -20,6 +20,10 @@ class BookingController extends Controller
 
     public function store(Request $request, BookingService $bookingService)
     {
+        if ($request->header('X-App-Secret') !== config('shopify.api_secret')) {
+            return response()->json(['error' => 'Unauthorized access'], 403);
+        }
+
         $data = $request->validate([
             'name'            => 'required|string|max:255',
             'email'           => 'required|email',

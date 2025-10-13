@@ -14,7 +14,7 @@ use App\Http\Controllers\Apis\AuthController;
 
 // Google Booking apis
 Route::post('/shopify/send-html', [ShopifyController::class, 'createPage']);
-Route::post('/shopify/receive-form', [BookingController::class, 'store']);
+Route::post('/shopify/receive-form', [BookingController::class, 'store'])->middleware('throttle:3,1');
 
 Route::get('/google/auth-url', [GoogleOAuthController::class, 'getAuthUrl']);
 Route::get('/google/callback', [GoogleOAuthController::class, 'handleCallback']);
