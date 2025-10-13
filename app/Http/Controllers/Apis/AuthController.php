@@ -6,6 +6,7 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use Illuminate\Support\Facades\Http;
 use App\Services\APIShopifyService;
+use App\Services\ShopifyCustomerAuthService;
 use Illuminate\Support\Facades\Validator;
 
 class AuthController extends Controller
