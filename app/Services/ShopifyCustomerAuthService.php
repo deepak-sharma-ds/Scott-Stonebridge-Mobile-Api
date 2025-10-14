@@ -78,6 +78,7 @@ class ShopifyCustomerAuthService
 
     /**
      * Login customer and get access token
+     * @return array|null Token data or null on failure
      */
     public function loginCustomer($email, $password)
     {
@@ -99,7 +100,7 @@ class ShopifyCustomerAuthService
         $variables = ['input' => ['email' => $email, 'password' => $password]];
 
         $response = $this->api->storefrontApiRequest($query, $variables);
-        if (isset($data['errors'])) {
+        if (isset($response['errors'])) {
             return null;
         }
 
@@ -121,6 +122,8 @@ class ShopifyCustomerAuthService
 
     /**
      * Verify token validity
+     * Optionally check expiry time
+     * @return array|false Customer data or false if invalid
      */
     public function verifyToken($accessToken, $expiresAt = null)
     {
@@ -144,7 +147,7 @@ class ShopifyCustomerAuthService
 
         try {
             $response = $this->api->storefrontApiRequest($query, $variables);
-            if (isset($data['errors'])) {
+            if (isset($response['errors'])) {
                 return false;
             }
             $customer = data_get($response, 'data.customer');
@@ -162,6 +165,7 @@ class ShopifyCustomerAuthService
 
     /**
      * Renew token if expired
+     * @return array|null New token data or null on failure
      */
     public function renewToken($accessToken)
     {
@@ -183,7 +187,7 @@ class ShopifyCustomerAuthService
         $variables = ['token' => $accessToken];
 
         $response = $this->api->storefrontApiRequest($query, $variables);
-        if (isset($data['errors'])) {
+        if (isset($response['errors'])) {
             return null;
         }
 
@@ -200,6 +204,7 @@ class ShopifyCustomerAuthService
 
     /**
      * Sends a password reset email to the customer.
+     * @return array
      */
     public function sendPasswordResetEmail(string $email)
     {
@@ -217,10 +222,11 @@ class ShopifyCustomerAuthService
         $variables = ['email' => $email];
 
         $response = $this->api->storefrontApiRequest($query, $variables);
-        if (isset($data['errors'])) {
+        if (isset($response['errors'])) {
             return [
                 'success' => false,
                 'message' => 'Unknown error occurred',
+                'error' => $response['errors'] ?? []
             ];
         }
 
@@ -239,6 +245,7 @@ class ShopifyCustomerAuthService
 
     /**
      * Resets customer password using Shopify token.
+     * @return array
      */
     public function resetPassword(string $resetUrl, string $newPassword)
     {
@@ -267,12 +274,11 @@ class ShopifyCustomerAuthService
         ];
 
         $response = $this->api->storefrontApiRequest($query, $variables);
-        return $response;
-
-        if (isset($data['errors'])) {
+        if (isset($response['errors'])) {
             return [
                 'success' => false,
                 'message' => 'Unknown error occurred',
+                'error' => $response['errors'] ?? []
             ];
         }
 

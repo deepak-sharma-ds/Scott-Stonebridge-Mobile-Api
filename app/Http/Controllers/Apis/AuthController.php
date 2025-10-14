@@ -20,6 +20,10 @@ class AuthController extends Controller
         $this->authService = $authService;
     }
 
+    /**
+     * Register new customer
+     * @return \Illuminate\Http\JsonResponse
+     */
     public function register(Request $request)
     {
         // Validate incoming request
@@ -70,7 +74,11 @@ class AuthController extends Controller
         }
     }
 
-    public function login(Request $request,)
+    /**
+     * Login customer and return access token
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function login(Request $request)
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
@@ -119,6 +127,7 @@ class AuthController extends Controller
 
     /**
      * Step 1: Send password reset email
+     * Shopify will handle the email and token generation
      */
     public function forgotPassword(Request $request)
     {
@@ -149,7 +158,7 @@ class AuthController extends Controller
             return response()->json([
                 'status' => 400,
                 'message' => 'Failed to send password reset email. Please check the email address.',
-                'error' => $response['errors'] ?? []
+                'error' => $response['error'] ?? []
             ], 400);
         } catch (\Throwable $th) {
             return response()->json([
@@ -183,7 +192,7 @@ class AuthController extends Controller
 
         try {
             $response = $this->authService->resetPassword($data['reset_token'], $data['new_password']);
-            dd($response);
+
             if (!empty($response['success']) && $response['success']) {
                 return response()->json([
                     'status' => 200,
@@ -198,7 +207,7 @@ class AuthController extends Controller
             return response()->json([
                 'status' => 400,
                 'message' => 'Failed to reset password',
-                'error' => $response['errors'] ?? []
+                'error' => $response['error'] ?? []
             ], 400);
         } catch (\Throwable $th) {
             return response()->json([

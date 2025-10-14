@@ -106,7 +106,10 @@ class APIShopifyService
         return $body['data']['menu'] ?? null;
     }
 
-    /* Storefront API request service */
+    /**
+     * Storefront/Customer API request service
+     * @return array
+     */
     public function storefrontApiRequest($query, $variables = [])
     {
         $url = "https://" . config('shopify.store_domain') . "/api/" . config('shopify.api_version') . "/graphql.json"; // Updated API version 2025-01
@@ -116,9 +119,26 @@ class APIShopifyService
             'Content-Type' => 'application/json',
         ];
 
-        // if ($customerAccessToken) {
-        //     $headers['Authorization'] = "Bearer {$customerAccessToken}";
-        // }
+        $response = Http::withHeaders($headers)->post($url, [
+            'query' => $query,
+            'variables' => $variables,
+        ]);
+
+        return $response->json();
+    }
+
+    /**
+     *  Admin/GraphQL API request service
+     * @return array
+     */
+    public function adminApiRequest($query, $variables = [])
+    {
+        $url = "https://" . config('shopify.store_domain') . "/admin/api/" . config('shopify.api_version') . "/graphql.json"; // Updated API version 2025-01
+
+        $headers = [
+            'X-Shopify-Access-Token' => $this->token,
+            'Content-Type' => 'application/json',
+        ];
 
         $response = Http::withHeaders($headers)->post($url, [
             'query' => $query,
