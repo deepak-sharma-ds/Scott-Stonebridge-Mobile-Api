@@ -330,7 +330,7 @@ class BookingService
     {
         $log = Log::channel('appointment_slots');
         try {
-            $adminEmail = env('ADMIN_EMAIL', 'admin@yourdomain.com');
+            $adminEmail = config('env.ADMIN_EMAIL');
 
             Mail::send('emails.reschedule_reminder', ['meeting' => $meeting], function ($message) use ($adminEmail) {
                 $message->to($adminEmail)

@@ -35,7 +35,7 @@ class GenerateWeeklyAppoinmentSlots extends Command
 
         try {
             $availability = config('weekly_appoinment_availability');
-            $USER_ID = env('ADMIN_USER_ID'); // Admin user ID
+            $USER_ID = config('env.ADMIN_USER_ID'); // Admin user ID
 
             $startOfWeek = Carbon::now()->startOfWeek(); // Monday
             $endOfWeek   = Carbon::now()->endOfWeek();   // Sunday

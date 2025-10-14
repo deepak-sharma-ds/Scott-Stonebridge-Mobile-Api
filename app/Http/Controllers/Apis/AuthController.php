@@ -12,10 +12,12 @@ use Illuminate\Support\Facades\Validator;
 class AuthController extends Controller
 {
     protected $shopify;
+    protected $authService;
 
-    public function __construct(APIShopifyService $shopify)
+    public function __construct(APIShopifyService $shopify, ShopifyCustomerAuthService $authService)
     {
         $this->shopify = $shopify;
+        $this->authService = $authService;
     }
 
     public function register(Request $request)
@@ -68,7 +70,7 @@ class AuthController extends Controller
         }
     }
 
-    public function login(Request $request, ShopifyCustomerAuthService $authService)
+    public function login(Request $request,)
     {
         $validator = Validator::make($request->all(), [
             'email' => 'required|email',
@@ -84,7 +86,7 @@ class AuthController extends Controller
         }
 
         $data = $validator->validated();
-        $tokenData = $authService->loginCustomer($request->email, $request->password);
+        $tokenData = $this->authService->loginCustomer($request->email, $request->password);
 
         if (!$tokenData) {
             return response()->json(['status' => 401, 'message' => 'Invalid credentials'], 401);
@@ -115,12 +117,63 @@ class AuthController extends Controller
         // ], 401);
     }
 
+    /**
+     * Step 1: Send password reset email
+     */
     public function forgotPassword(Request $request)
     {
-        $validator = Validator::make($request->all(), ['email' => 'required|email']);
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email'
+        ]);
 
         if ($validator->fails()) {
             return response()->json([
+                'status' => 422,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $email = $validator->validated()['email'];
+
+        try {
+            $response = $this->authService->sendPasswordResetEmail($email);
+
+            if (!empty($response['success']) && $response['success']) {
+                return response()->json([
+                    'status' => 200,
+                    'message' => 'Password reset email sent if the email exists in our system'
+                ], 200);
+            }
+
+            return response()->json([
+                'status' => 400,
+                'message' => 'Failed to send password reset email. Please check the email address.',
+                'error' => $response['errors'] ?? []
+            ], 400);
+        } catch (\Throwable $th) {
+            return response()->json([
+                'status' => 500,
+                'message' => 'Unexpected error',
+                'error' => $th->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Step 2: Reset password using token from email
+     * Shopify will automatically reset from website, here we just create the API not using it.
+     */
+    public function resetPassword(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'reset_token' => 'required|string',
+            'new_password' => 'required|string|min:6|confirmed',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 422,
                 'message' => 'Validation failed',
                 'errors' => $validator->errors(),
             ], 422);
@@ -129,29 +182,59 @@ class AuthController extends Controller
         $data = $validator->validated();
 
         try {
-            $response = $this->shopify->sendPasswordResetEmail($data['email']);
-
-            // Extract errors from response
-            $errors = $response['data']['customerRecover']['customerUserErrors'] ?? [];
-
-            if (empty($errors)) {
-                return response()->json(['message' => 'Password reset email sent if the email exists in our system']);
+            $response = $this->authService->resetPassword($data['reset_token'], $data['new_password']);
+            dd($response);
+            if (!empty($response['success']) && $response['success']) {
+                return response()->json([
+                    'status' => 200,
+                    'message' => $response['message'] ?? 'Password has been reset successfully',
+                    'data' => [
+                        'access_token' => $response['access_token'] ?? null,
+                        'expires_at' => $response['expires_at'] ?? null,
+                    ],
+                ], 200);
             }
 
             return response()->json([
-                'error' => 'Failed to send password reset email',
-                'details' => $errors
+                'status' => 400,
+                'message' => 'Failed to reset password',
+                'error' => $response['errors'] ?? []
             ], 400);
         } catch (\Throwable $th) {
             return response()->json([
-                'error' => 'Unexpected error',
-                'message' => $th->getMessage()
+                'status' => 500,
+                'message' => 'Unexpected error',
+                'error' => $th->getMessage()
             ], 500);
         }
     }
 
-    public function resetPassword(Request $request)
+    /**
+     * Get authenticated customer profile
+     */
+    public function getProfile(Request $request)
     {
-        
+        try {
+            $token = $request->bearerToken();
+            $expiresAt = $request->header('X-Token-Expires-At');
+
+            $customer = $this->authService->verifyToken($token, $expiresAt);
+
+            if (!$customer) {
+                return response()->json(['status' => 401, 'message' => 'Token invalid or expired'], 401);
+            }
+
+            return response()->json([
+                'status' => 200,
+                'message' => 'Profile retrieved successfully',
+                'data' => ['customer' => $customer]
+            ]);
+        } catch (\Throwable $th) {
+            return response()->json([
+                'status' => 500,
+                'message' => 'Internal Server Error',
+                'error' => $th->getMessage()
+            ], 500);
+        }
     }
 }

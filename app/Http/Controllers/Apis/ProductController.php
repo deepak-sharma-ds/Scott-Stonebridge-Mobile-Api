@@ -15,8 +15,8 @@ class ProductController extends Controller
 
   public function __construct(APIShopifyService $shopify)
   {
-    $this->storeUrl = env('SHOPIFY_STORE_DOMAIN');
-    $this->accessToken = env('SHOPIFY_ACCESS_TOKEN');
+    $this->storeUrl = config('shopify.store_domain');
+    $this->accessToken = config('shopify.access_token');
     $this->shopify = $shopify;
   }
 
@@ -321,58 +321,73 @@ class ProductController extends Controller
 
       // Map sort param to Shopify GraphQL
       $sortMap = [
-        'newest' => ['sortKey' => 'CREATED_AT', 'reverse' => true],
-        'oldest' => ['sortKey' => 'CREATED_AT', 'reverse' => false],
-        'low_price' => ['sortKey' => 'PRICE', 'reverse' => false],
-        'high_price' => ['sortKey' => 'PRICE', 'reverse' => true],
+        'categorywise' => [
+          'newest' => ['sortKey' => 'CREATED', 'reverse' => true],
+          'oldest' => ['sortKey' => 'CREATED', 'reverse' => false],
+          'low_price' => ['sortKey' => 'PRICE', 'reverse' => false],
+          'high_price' => ['sortKey' => 'PRICE', 'reverse' => true],
+        ],
+        'allProducts' => [
+          'newest' => ['sortKey' => 'CREATED_AT', 'reverse' => true],
+          'oldest' => ['sortKey' => 'CREATED_AT', 'reverse' => false],
+          'low_price' => ['sortKey' => 'PRICE', 'reverse' => false],
+          'high_price' => ['sortKey' => 'PRICE', 'reverse' => true],
+        ]
       ];
 
-      $sortOptions = $sortMap[$sort] ?? $sortMap['newest'];
-
       if ($collectionHandle) {
+        $sortOptions = $sortMap['categorywise'][$sort] ?? $sortMap['categorywise']['newest'];
+
         $query = <<<'GRAPHQL'
-        query ($handle: String!, $limit: Int!, $after: String, $sortKey: ProductSortKeys, $reverse: Boolean) {
-          collectionByHandle(handle: $handle) {
-            id
-            title
-            handle
-            products(first: $limit, after: $after, sortKey: $sortKey, reverse: $reverse) {
-              edges {
-                cursor
-                node {
-                  id
-                  title
-                  handle
-                  description
-                  images(first: 1) {
-                    edges {
-                      node {
-                        url
-                        altText
+          query (
+            $handle: String!, 
+            $limit: Int!, 
+            $after: String, 
+            $sortKey: ProductCollectionSortKeys, 
+            $reverse: Boolean
+          ) {
+            collectionByHandle(handle: $handle) {
+              id
+              title
+              handle
+              products(first: $limit, after: $after, sortKey: $sortKey, reverse: $reverse) {
+                edges {
+                  cursor
+                  node {
+                    id
+                    title
+                    handle
+                    description
+                    images(first: 1) {
+                      edges {
+                        node {
+                          url
+                          altText
+                        }
                       }
                     }
-                  }
-                  variants(first: 1) {
-                    edges {
-                      node {
-                        price {
-                          amount
-                          currencyCode
+                    variants(first: 1) {
+                      edges {
+                        node {
+                          price {
+                            amount
+                            currencyCode
+                          }
+                          sku
                         }
-                        sku
                       }
                     }
                   }
                 }
-              }
-              pageInfo {
-                hasNextPage
-                endCursor
+                pageInfo {
+                  hasNextPage
+                  endCursor
+                }
               }
             }
           }
-        }
-        GRAPHQL;
+          GRAPHQL;
+
 
         $variables = [
           'handle' => $collectionHandle,
@@ -382,6 +397,7 @@ class ProductController extends Controller
           'reverse' => $sortOptions['reverse'],
         ];
         $data = $this->shopify->storefrontApiRequest($query, $variables);
+
         if (isset($data['errors'])) {
           return response()->json([
             'status' => 500,
@@ -400,6 +416,8 @@ class ProductController extends Controller
 
         $productsData = data_get($collection, 'products', []);
       } else {
+        $sortOptions = $sortMap['allProducts'][$sort] ?? $sortMap['allProducts']['newest'];
+
         $query = <<<'GRAPHQL'
         query ($limit: Int!, $after: String, $sortKey: ProductSortKeys, $reverse: Boolean) {
           products(first: $limit, after: $after, sortKey: $sortKey, reverse: $reverse) {

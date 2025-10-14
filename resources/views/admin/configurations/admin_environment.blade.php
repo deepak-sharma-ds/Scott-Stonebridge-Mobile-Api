@@ -105,14 +105,14 @@
                                                 <div class="form-group">
                                                     <label for="app_log_level">{{ __('common.app_log_level') }}</label>
                                                     <select name="app_log_level" class="form-control default-select" id="app_log_level">
-                                                        <option value="debug" {{ old('app_log_level', env('LOG_LEVEL')) == 'debug' ? 'selected' : '' }}>{{ __('common.debug') }}</option>
-                                                        <option value="info" {{ old('app_log_level', env('LOG_LEVEL')) == 'info' ? 'selected' : '' }}>{{ __('common.Info') }}</option>
-                                                        <option value="notice" {{ old('app_log_level', env('LOG_LEVEL')) == 'notice' ? 'selected' : '' }}>{{ __('common.Notice') }}</option>
-                                                        <option value="warning" {{ old('app_log_level', env('LOG_LEVEL')) == 'warning' ? 'selected' : '' }}>{{ __('common.Warning') }}</option>
-                                                        <option value="error" {{ old('app_log_level', env('LOG_LEVEL')) == 'error' ? 'selected' : '' }}>{{ __('common.Error') }}</option>
-                                                        <option value="critical" {{ old('app_log_level', env('LOG_LEVEL')) == 'critical' ? 'selected' : '' }}>{{ __('common.Critical') }}</option>
-                                                        <option value="alert" {{ old('app_log_level', env('LOG_LEVEL')) == 'alert' ? 'selected' : '' }}>{{ __('common.Alert') }}</option>
-                                                        <option value="emergency" {{ old('app_log_level', env('LOG_LEVEL')) == 'emergency' ? 'selected' : '' }}>{{ __('common.Emergency') }}</option>
+                                                        <option value="debug" {{ old('app_log_level', config('env.LOG_LEVEL')) == 'debug' ? 'selected' : '' }}>{{ __('common.debug') }}</option>
+                                                        <option value="info" {{ old('app_log_level', config('env.LOG_LEVEL')) == 'info' ? 'selected' : '' }}>{{ __('common.Info') }}</option>
+                                                        <option value="notice" {{ old('app_log_level', config('env.LOG_LEVEL')) == 'notice' ? 'selected' : '' }}>{{ __('common.Notice') }}</option>
+                                                        <option value="warning" {{ old('app_log_level', config('env.LOG_LEVEL')) == 'warning' ? 'selected' : '' }}>{{ __('common.Warning') }}</option>
+                                                        <option value="error" {{ old('app_log_level', config('env.LOG_LEVEL')) == 'error' ? 'selected' : '' }}>{{ __('common.Error') }}</option>
+                                                        <option value="critical" {{ old('app_log_level', config('env.LOG_LEVEL')) == 'critical' ? 'selected' : '' }}>{{ __('common.Critical') }}</option>
+                                                        <option value="alert" {{ old('app_log_level', config('env.LOG_LEVEL')) == 'alert' ? 'selected' : '' }}>{{ __('common.Alert') }}</option>
+                                                        <option value="emergency" {{ old('app_log_level', config('env.LOG_LEVEL')) == 'emergency' ? 'selected' : '' }}>{{ __('common.Emergency') }}</option>
                                                     </select>
                                                     @if ($errors->has('app_log_level'))
                                                         <span class="error-block">

@@ -99,6 +99,9 @@ class ShopifyCustomerAuthService
         $variables = ['input' => ['email' => $email, 'password' => $password]];
 
         $response = $this->api->storefrontApiRequest($query, $variables);
+        if (isset($data['errors'])) {
+            return null;
+        }
 
         if (!empty($response['data']['customerAccessTokenCreate']['customerAccessToken'])) {
             $tokenData = $response['data']['customerAccessTokenCreate']['customerAccessToken'];
@@ -141,6 +144,9 @@ class ShopifyCustomerAuthService
 
         try {
             $response = $this->api->storefrontApiRequest($query, $variables);
+            if (isset($data['errors'])) {
+                return false;
+            }
             $customer = data_get($response, 'data.customer');
 
             return $customer ?: false;
@@ -177,6 +183,9 @@ class ShopifyCustomerAuthService
         $variables = ['token' => $accessToken];
 
         $response = $this->api->storefrontApiRequest($query, $variables);
+        if (isset($data['errors'])) {
+            return null;
+        }
 
         if (!empty($response['data']['customerAccessTokenRenew']['customerAccessToken'])) {
             $tokenData = $response['data']['customerAccessTokenRenew']['customerAccessToken'];
@@ -187,5 +196,100 @@ class ShopifyCustomerAuthService
         }
 
         return null;
+    }
+
+    /**
+     * Sends a password reset email to the customer.
+     */
+    public function sendPasswordResetEmail(string $email)
+    {
+        $query = <<<'GRAPHQL'
+            mutation customerRecover($email: String!) {
+                customerRecover(email: $email) {
+                    customerUserErrors {
+                        field
+                        message
+                    }
+                }
+            }
+            GRAPHQL;
+
+        $variables = ['email' => $email];
+
+        $response = $this->api->storefrontApiRequest($query, $variables);
+        if (isset($data['errors'])) {
+            return [
+                'success' => false,
+                'message' => 'Unknown error occurred',
+            ];
+        }
+
+        if (!empty($response['data']['customerRecover']['customerUserErrors'])) {
+            return [
+                'success' => false,
+                'message' => $response['data']['customerRecover']['customerUserErrors']
+            ];
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Password reset email sent successfully.'
+        ];
+    }
+
+    /**
+     * Resets customer password using Shopify token.
+     */
+    public function resetPassword(string $resetUrl, string $newPassword)
+    {
+        $query = <<<'GRAPHQL'
+            mutation customerResetByUrl($resetUrl: URL!, $password: String!) {
+                customerResetByUrl(resetUrl: $resetUrl, password: $password) {
+                    customer {
+                        id
+                        email
+                    }
+                    customerAccessToken {
+                        accessToken
+                        expiresAt
+                    }
+                    customerUserErrors {
+                        field
+                        message
+                    }
+                }
+            }
+            GRAPHQL;
+
+        $variables = [
+            'resetUrl' => $resetUrl,
+            'password' => $newPassword,
+        ];
+
+        $response = $this->api->storefrontApiRequest($query, $variables);
+        return $response;
+
+        if (isset($data['errors'])) {
+            return [
+                'success' => false,
+                'message' => 'Unknown error occurred',
+            ];
+        }
+
+        $data = $response['data']['customerResetByUrl'] ?? null;
+
+        if (!empty($data['customerUserErrors'])) {
+            return [
+                'success' => false,
+                'message' => $data['customerUserErrors']
+            ];
+        }
+
+        return [
+            'success' => true,
+            'message' => 'Password has been reset successfully.',
+            'access_token' => $data['customerAccessToken']['accessToken'] ?? null,
+            'expires_at' => $data['customerAccessToken']['expiresAt'] ?? null,
+        ];
     }
 }
