@@ -49,15 +49,19 @@
                                 <div class="form-group">
                                     <!-- Calendar Navigation -->
                                     <div class="calendar-navigation">
-                                        <button type="button" id="prev-month" class="btn btn-outline-primary"><i class="fa-solid fa-less-than"></i></button>
-                                        <button type="button" id="today-button" class="btn btn-outline-primary">Today</button>
-                                        <button type="button" id="next-month" class="btn btn-outline-primary"><i class="fa-solid fa-greater-than"></i></button>
+                                        <button type="button" id="prev-month" class="btn btn-outline-primary"><i
+                                                class="fa-solid fa-less-than"></i></button>
+                                        <button type="button" id="today-button"
+                                            class="btn btn-outline-primary">Today</button>
+                                        <button type="button" id="next-month" class="btn btn-outline-primary"><i
+                                                class="fa-solid fa-greater-than"></i></button>
                                     </div>
-                                    
+
                                     <div id="calendar" class="calendar">
                                         <!-- Calendar will be generated dynamically -->
                                     </div>
-                                    <input type="hidden" name="date" id="selected-date" value="{{ $availabilityDate->date }}">
+                                    <input type="hidden" name="date" id="selected-date"
+                                        value="{{ $availabilityDate->date }}">
                                 </div>
                             </div>
 
@@ -68,14 +72,17 @@
                                     <div id="time-slots">
                                         @foreach ($availabilityDate->timeSlots as $index => $timeSlot)
                                             <div class="time-slot" id="time-slot-{{ $index }}">
-                                                <input type="time" name="time_slots[{{ $index }}][start_time]" value="{{ $timeSlot->start_time }}" required class="form-control">
-                                                <input type="time" name="time_slots[{{ $index }}][end_time]" value="{{ $timeSlot->end_time }}" required class="form-control">
-                                                <button type="button" class="btn btn-danger remove-time-slot" data-slot-id="{{ $timeSlot->id }}">&times;</button>
+                                                <input type="time" name="time_slots[{{ $index }}][start_time]"
+                                                    value="{{ $timeSlot->start_time }}" required class="form-control">
+                                                <input type="time" name="time_slots[{{ $index }}][end_time]"
+                                                    value="{{ $timeSlot->end_time }}" required class="form-control">
+                                                <button type="button" class="btn btn-danger remove-time-slot"
+                                                    data-slot-id="{{ $timeSlot->id }}">&times;</button>
                                             </div>
                                         @endforeach
                                     </div>
                                     <button type="button" id="add-time-slot" class="btn btn-primary">Add Time Slot</button>
-                                        
+
                                 </div>
                             </div>
                         </div>
@@ -94,7 +101,7 @@
         async function fetchUKBankHolidays(year) {
             const response = await fetch('https://www.gov.uk/bank-holidays.json');
             const data = await response.json();
-            
+
             // Combine all holidays from England and Wales (adjust region if needed)
             const events = data['england-and-wales'].events;
 
@@ -111,13 +118,14 @@
             const todayButton = document.getElementById('today-button');
             const prevMonthButton = document.getElementById('prev-month');
             const nextMonthButton = document.getElementById('next-month');
-            
+
             let currentDate = new Date();
             let month = currentDate.getMonth();
             let year = currentDate.getFullYear();
 
             // Log the selected date to check if it's set correctly
-            console.log('Selected Date:', selectedDateInput.value);  // This should log "2025-09-12" or the value from the DB
+            console.log('Selected Date:', selectedDateInput
+            .value); // This should log "2025-09-12" or the value from the DB
 
             // Generate the calendar for the current month
             await generateCalendar(month, year);
@@ -157,10 +165,12 @@
                 const lastDay = new Date(year, month + 1, 0);
                 const daysInMonth = lastDay.getDate();
                 const startingDay = firstDay.getDay();
-                const holidays = await fetchUKBankHolidays(year); 
+                const holidays = await fetchUKBankHolidays(year);
 
                 let calendarHTML = '<div class="calendar-header">' +
-                    '<span class="month-name">' + firstDay.toLocaleString('default', { month: 'long' }) + ' ' + year + '</span>' +
+                    '<span class="month-name">' + firstDay.toLocaleString('default', {
+                        month: 'long'
+                    }) + ' ' + year + '</span>' +
                     '</div><div class="calendar-grid">';
 
                 // Add empty cells before the first day
@@ -174,13 +184,14 @@
                     const dateStr = currentDay.toISOString().split('T')[0];
                     const today = new Date();
                     today.setHours(0, 0, 0, 0);
-                    const isPastDate = currentDay < today; 
+                    const isPastDate = currentDay < today;
 
                     // Disable past dates by adding 'disabled' class
                     const isHoliday = holidays.includes(dateStr);
                     const isDisabled = isPastDate || isHoliday ? 'disabled' : '';
 
-                    const currentDateString = `${year}-${(month + 1).toString().padStart(2, '0')}-${(day).toString().padStart(2, '0')}`; // Format: YYYY-MM-DD
+                    const currentDateString =
+                        `${year}-${(month + 1).toString().padStart(2, '0')}-${(day).toString().padStart(2, '0')}`; // Format: YYYY-MM-DD
 
                     // Check if this date matches the preselected date
                     const isSelected = (currentDateString === selectedDateInput.value) ? 'selected' : '';
@@ -201,13 +212,15 @@
                 // Handle date selection
                 const dateElements = document.querySelectorAll('.calendar-day');
                 dateElements.forEach((dayElement) => {
-                    dayElement.addEventListener('click', function () {
+                    dayElement.addEventListener('click', function() {
                         // Reset all dates
-                        document.querySelectorAll('.calendar-day').forEach((el) => el.classList.remove('selected'));
+                        document.querySelectorAll('.calendar-day').forEach((el) => el
+                            .classList.remove('selected'));
 
                         // Select this date
                         dayElement.classList.add('selected');
-                        selectedDateInput.value = dayElement.dataset.date; // Store selected date
+                        selectedDateInput.value = dayElement.dataset
+                        .date; // Store selected date
                     });
                 });
 
@@ -215,12 +228,14 @@
                 const todayString = new Date().toISOString().split('T')[0];
                 if (!selectedDateInput.value) {
                     selectedDateInput.value = todayString;
-                    document.querySelector(`.calendar-day[data-date="${todayString}"]`)?.classList.add('selected');
+                    document.querySelector(`.calendar-day[data-date="${todayString}"]`)?.classList.add(
+                        'selected');
                 } else {
                     // Preselect the date from DB
                     const selectedDateString = selectedDateInput.value.split(' ')[0]; // Normalize format
-                    console.log('Preselecting:', selectedDateString);  // Debug log
-                    document.querySelector(`.calendar-day[data-date="${selectedDateString}"]`)?.classList.add('selected');
+                    console.log('Preselecting:', selectedDateString); // Debug log
+                    document.querySelector(`.calendar-day[data-date="${selectedDateString}"]`)?.classList
+                        .add('selected');
                 }
             }
         });
@@ -271,7 +286,9 @@
             const startingDay = firstDay.getDay();
 
             let calendarHTML = '<div class="calendar-header">' +
-                '<span class="month-name">' + firstDay.toLocaleString('default', { month: 'long' }) + ' ' + year + '</span>' +
+                '<span class="month-name">' + firstDay.toLocaleString('default', {
+                    month: 'long'
+                }) + ' ' + year + '</span>' +
                 '</div><div class="calendar-grid">';
 
             // Add empty cells before the first day
@@ -308,13 +325,15 @@
             // Handle date selection
             const dateElements = document.querySelectorAll('.calendar-day');
             dateElements.forEach((dayElement) => {
-                dayElement.addEventListener('click', function () {
+                dayElement.addEventListener('click', function() {
                     // Reset all dates
-                    document.querySelectorAll('.calendar-day').forEach((el) => el.classList.remove('selected'));
+                    document.querySelectorAll('.calendar-day').forEach((el) => el.classList.remove(
+                        'selected'));
 
                     // Select this date
                     dayElement.classList.add('selected');
-                    document.getElementById('selected-date').value = dayElement.dataset.date; // Store selected date
+                    document.getElementById('selected-date').value = dayElement.dataset
+                    .date; // Store selected date
                 });
             });
 
@@ -323,8 +342,7 @@
             if (!document.getElementById('selected-date').value) {
                 document.getElementById('selected-date').value = todayString;
                 document.querySelector(`.calendar-day[data-date="${todayString}"]`)?.classList.add('selected');
-            }
-            else {
+            } else {
                 // Preselect the date from DB
                 const selectedDateString = document.getElementById('selected-date').value;
                 document.querySelector(`.calendar-day[data-date="${selectedDateString}"]`)?.classList.add('selected');
@@ -332,7 +350,7 @@
         }
 
         // Handle adding a new time slot
-        document.getElementById('add-time-slot').addEventListener('click', function () {
+        document.getElementById('add-time-slot').addEventListener('click', function() {
             let slotHtml = `
                 <div class="time-slot" id="time-slot-${slotCount}">
                     <input type="time" name="time_slots[${slotCount}][start_time]" required class="form-control">
@@ -345,49 +363,87 @@
         });
 
         // Handle removing a time slot (with confirmation)
+        // document.getElementById('time-slots').addEventListener('click', function(event) {
+        //     if (event.target.classList.contains('remove-time-slot')) {
+        //         const slotId = event.target.getAttribute('data-slot-id');
+
+        //         // Show confirmation dialog before deletion
+        //         const confirmation = confirm('Are you sure you want to delete this time slot?');
+
+        //         if (confirmation) {
+        //             // If this is a new slot (not saved to DB), just remove the HTML element
+        //             if (slotId.startsWith('new-')) {
+        //                 document.getElementById(`time-slot-${slotId.split('-')[1]}`).remove();
+        //             } else {
+        //                 // Send AJAX request to delete the time slot from the database
+        //                 deleteTimeSlot(slotId, event.target);
+        //             }
+        //         }
+        //     }
+        // });
         document.getElementById('time-slots').addEventListener('click', function(event) {
             if (event.target.classList.contains('remove-time-slot')) {
                 const slotId = event.target.getAttribute('data-slot-id');
-                
-                // Show confirmation dialog before deletion
-                const confirmation = confirm('Are you sure you want to delete this time slot?');
 
-                if (confirmation) {
-                    // If this is a new slot (not saved to DB), just remove the HTML element
-                    if (slotId.startsWith('new-')) {
-                        document.getElementById(`time-slot-${slotId.split('-')[1]}`).remove();
-                    } else {
-                        // Send AJAX request to delete the time slot from the database
-                        deleteTimeSlot(slotId, event.target);
+                // Use SweetAlert2 for confirmation
+                Swal.fire({
+                    title: 'Are you sure?',
+                    text: "You want to delete this time slot?",
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#3085d6',
+                    cancelButtonColor: '#d33',
+                    confirmButtonText: 'Yes, delete it!',
+                    cancelButtonText: 'Cancel'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        // If this is a new slot (not saved to DB), just remove the HTML element
+                        if (slotId.startsWith('new-')) {
+                            const el = document.getElementById(`time-slot-${slotId.split('-')[1]}`);
+                            if (el) el.remove();
+
+                            // Optional: show success notification
+                            Swal.fire('Deleted!', 'Time slot removed successfully.', 'success');
+                        } else {
+                            // Send AJAX request to delete the time slot from the database
+                            deleteTimeSlot(slotId, event.target);
+                        }
                     }
-                }
+                });
             }
         });
 
+
         // AJAX function to delete time slot from database
         function deleteTimeSlot(slotId, button) {
+            showLoader();
             const token = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-            
+
             fetch(`/admin/availability/time-slot/${slotId}`, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': token
-                },
-                body: JSON.stringify({ id: slotId })
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    button.closest('.time-slot').remove(); // Remove the HTML element
-                } else {
-                    alert('Failed to delete the time slot.');
-                }
-            })
-            .catch(error => {
-                alert('Error deleting time slot.');
-                console.error(error);
-            });
+                    method: 'DELETE',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': token
+                    },
+                    body: JSON.stringify({
+                        id: slotId
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    hideLoader();
+                    if (data.success) {
+                        button.closest('.time-slot').remove(); // Remove the HTML element
+                    } else {
+                        // Use notify.js to show error message
+                        $.notify(data.message || 'Failed to delete the time slot.', "error");
+                    }
+                })
+                .catch(error => {
+                    hideLoader();
+                    $.notify('Error deleting time slot.', "error");
+                    console.error(error);
+                });
         }
     </script>
 @endsection

@@ -3,16 +3,11 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Session;
-use Google\Client;
 use App\Models\ScheduledMeeting;
-use Google\Service\Calendar;
 use App\Services\BookingService;
 use App\Models\AvailabilityDate;
 use App\Models\TimeSlot;
 use \Carbon\Carbon;
-use App\Mail\BookingConfirmationMail;
 
 
 class BookingController extends Controller

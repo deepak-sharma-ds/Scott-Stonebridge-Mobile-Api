@@ -150,12 +150,25 @@ class ShopifyCustomerAuth
 
     protected function verifyToken(string $accessToken, $expiresAt): bool
     {
+        $log = Log::channel('shopify_customers_auth');
+        $log->info('Verifying Shopify customer token', [
+            'token' => $accessToken,
+            'expires_at' => $expiresAt,
+        ]);
         $authService = new ShopifyCustomerAuthService(app(APIShopifyService::class));
         $customer = $authService->verifyToken($accessToken, $expiresAt);
         if ($customer) {
             request()->merge(['shopify_customer_data' => $customer]);
+            $log->info('Shopify customer token verification successful', [
+                'token' => $accessToken,
+                'customer_id' => $customer['id'] ?? null,
+            ]);
             return true;
         }
+        $log->warning('Shopify customer token verification failed', [
+            'token' => $accessToken,
+            'expires_at' => $expiresAt,
+        ]);
         return false;
     }
 }

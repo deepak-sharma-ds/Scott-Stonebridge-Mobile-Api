@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AvailabilityDate;
+use App\Models\ScheduledMeeting;
 use App\Models\TimeSlot;
 use App\Services\BookingService;
 use Illuminate\Http\Request;
@@ -127,6 +128,10 @@ class AvailabilitySlotController extends Controller
     public function deleteDate($id)
     {
         $availabilityDate = AvailabilityDate::findOrFail($id);
+        $meetings = ScheduledMeeting::where('availability_date_id', $availabilityDate->id)->exists();
+        if ($meetings) {
+            return redirect()->route('admin.availability.index')->with('error', 'Cannot delete this date as it has booked meetings. Please reschedule or cancel the bookings first.');
+        }
         $availabilityDate->timeSlots()->delete();
         $availabilityDate->delete();
         return redirect()->route('admin.availability.index')->with('success', 'Availability slot deleted successfully.');
@@ -135,6 +140,16 @@ class AvailabilitySlotController extends Controller
     public function deleteTimeSlot(Request $request, $id)
     {
         $timeSlot = TimeSlot::findOrFail($id);
+
+        $meeting = ScheduledMeeting::where('time_slot_id', $timeSlot->id)
+            ->when($timeSlot->availability_date_id, fn($q) => $q->where('availability_date_id', $timeSlot->availability_date_id))
+            ->exists();
+        if ($meeting) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Cannot delete this slot as it has booked meetings. Please reschedule or cancel the bookings first.'
+            ]);
+        }
 
         // Check for booked meetings before deleting the slot
         $result = $this->bookingService->handleSlotBookingDeletion($timeSlot->id, $timeSlot->availability_date_id);

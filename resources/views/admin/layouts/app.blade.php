@@ -10,9 +10,9 @@
     <!-- CSRF Token -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ config('Site.title') ? config('Site.title') : 'Coniq Shopify' }}</title>
-    <link rel="icon" type="image/png" href="{{ asset('admin/images/favicon.png')}}">
+    <link rel="icon" type="image/png" href="{{ asset('admin/images/favicon.png') }}">
     <link href="{{ asset('/admin') }}/css/styles.css" rel="stylesheet" />
-    
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/style.min.css" rel="stylesheet" />
@@ -22,7 +22,6 @@
     <link href="{{ asset('/admin') }}/css/custom.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script src="{{ asset('js/deleteconfirm.js') }}"></script>
-
     <!-- CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
     <style>
@@ -144,6 +143,17 @@
             positionClass: 'toast-top-right',
             timeOut: 5000
         };
+    </script>
+    <script>
+        // Show the loader
+        function showLoader() {
+            document.getElementById('loaderOverlay').style.display = 'flex';
+        }
+
+        // Hide the loader
+        function hideLoader() {
+            document.getElementById('loaderOverlay').style.display = 'none';
+        }
     </script>
 </body>
 
