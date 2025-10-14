@@ -135,6 +135,7 @@ class BookingService
                 'status'               => 'confirmed',
                 'availability_date_id' => $availability_id,
                 'time_slot_id'         => $data['time_slot_id'],
+                'order_id'             => $data['order_id'] ?? null, // Shopify Order ID if available
             ]);
 
             $log->info('ScheduledMeeting record created in DB');

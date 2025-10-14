@@ -152,6 +152,11 @@ return [
             'path'      => storage_path('logs/shopify_customers_auth.log'),
             'level'  => 'debug',
         ],
+        'shopify_webhooks' => [
+            'driver' => 'single',
+            'path'      => storage_path('logs/shopify_webhooks.log'),
+            'level'  => 'debug',
+        ],
 
     ],
 

@@ -4,13 +4,13 @@ use App\Http\Controllers\ProfileController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\BookingController;
 use App\Http\Middleware\CustomCors;
-use App\Http\Controllers\Admin\DashboardController; 
+use App\Http\Controllers\Admin\DashboardController;
 use Milon\Barcode\Facades\DNS1D;
 use App\Http\Controllers\ShopifyController;
 
 
-require __DIR__.'/auth.php';
-require __DIR__.'/admin.php';
+require __DIR__ . '/auth.php';
+require __DIR__ . '/admin.php';
 
 
 Route::get('/', function () {
@@ -18,48 +18,52 @@ Route::get('/', function () {
 });
 
 
-Route::get('clear-all', function() {
+Route::get('clear-all', function () {
 	\Artisan::call('config:clear');
 	\Artisan::call('route:clear');
 	\Artisan::call('view:clear');
 	\Artisan::call('cache:clear');
 	\Artisan::call('optimize:clear');
 	\Artisan::call('config:cache');
-    \Artisan::call('route:cache');
-    echo 'success';
-});
-
-Route::get('route-cache', function() {
 	\Artisan::call('route:cache');
 	echo 'success';
 });
 
-Route::get('route-clear', function() {
+Route::get('route-cache', function () {
+	\Artisan::call('route:cache');
+	echo 'success';
+});
+
+Route::get('route-clear', function () {
 	\Artisan::call('route:clear');
 	echo 'success';
 });
 
-Route::get('config-cache', function() {
+Route::get('config-cache', function () {
 	\Artisan::call('config:cache');
 	echo 'success';
 });
 
-Route::get('config-clear', function() {
+Route::get('config-clear', function () {
 	\Artisan::call('config:clear');
 	echo 'success';
 });
 
 Route::prefix('admin')->name('admin.')->group(function () {
-    Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
-	
-    Route::middleware('auth')->group(function () {
-        Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-        Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-        Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-    });
+	Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
+
+	Route::middleware('auth')->group(function () {
+		Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+		Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+		Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+	});
+});
+
+Route::prefix('webhook')->group(function () {
+	Route::post('/shopify', [ShopifyController::class, 'handleAppointmentBookingWebhook']);
 });
 
 
-Route::get('/phpinfo',function(){
+Route::get('/phpinfo', function () {
 	return phpinfo();
 });
