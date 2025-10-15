@@ -35,7 +35,6 @@ class ShopifyCustomerAuth
 
     /**
      * Check if the provided customer access token is valid. Also attaches customer data to request.
-     * @return bool
      */
     // protected function verifyToken(string $customerAccessToken): bool
     // {

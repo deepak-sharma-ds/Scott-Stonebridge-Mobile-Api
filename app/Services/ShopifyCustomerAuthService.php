@@ -78,7 +78,6 @@ class ShopifyCustomerAuthService
 
     /**
      * Login customer and get access token
-     * @return array|null Token data or null on failure
      */
     public function loginCustomer($email, $password)
     {
@@ -134,7 +133,6 @@ class ShopifyCustomerAuthService
     /**
      * Verify token validity
      * Optionally check expiry time
-     * @return array|false Customer data or false if invalid
      */
     public function verifyToken($accessToken, $expiresAt = null)
     {
@@ -185,7 +183,6 @@ class ShopifyCustomerAuthService
 
     /**
      * Renew token if expired
-     * @return array|null New token data or null on failure
      */
     public function renewToken($accessToken)
     {
@@ -234,7 +231,6 @@ class ShopifyCustomerAuthService
 
     /**
      * Sends a password reset email to the customer.
-     * @return array
      */
     public function sendPasswordResetEmail(string $email)
     {
@@ -286,7 +282,6 @@ class ShopifyCustomerAuthService
 
     /**
      * Resets customer password using Shopify token.
-     * @return array
      */
     public function resetPassword(string $resetUrl, string $newPassword)
     {

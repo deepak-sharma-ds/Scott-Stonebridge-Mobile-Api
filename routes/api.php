@@ -8,7 +8,7 @@ use App\Http\Controllers\GoogleOAuthController;
 use App\Http\Controllers\Apis\ProductController;
 use App\Http\Controllers\Apis\HomeController;
 use App\Http\Controllers\Apis\AuthController;
-
+use App\Http\Controllers\Apis\CartController;
 
 // ||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 
@@ -49,5 +49,11 @@ Route::middleware(['disable.session'])->group(function () {
         // Products
         Route::post('/categories', [ProductController::class, 'getCategories']);
         Route::post('/categories/products', [ProductController::class, 'getProducts']);
+        Route::post('/products/details', [ProductController::class, 'getProductDetails']);
+        Route::post('/featured/product', [ProductController::class, 'getFeaturedProducts']);
+
+        Route::prefix('cart',)->group(function () {
+            Route::post('/create', [CartController::class, 'createCart'])->name('cart.create');
+        });
     });
 });

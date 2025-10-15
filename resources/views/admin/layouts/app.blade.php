@@ -13,17 +13,19 @@
     <link rel="icon" type="image/png" href="{{ asset('admin/images/favicon.png') }}">
     <link href="{{ asset('/admin') }}/css/styles.css" rel="stylesheet" />
 
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    {{-- <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script> --}}
     <link href="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/style.min.css" rel="stylesheet" />
-    <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
+    {{-- <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script> --}}
     <link href="{{ asset('/admin') }}/css/custom_styles.css" rel="stylesheet" />
     <link href="{{ asset('/admin') }}/css/selecttwo.css" rel="stylesheet" />
     <link href="{{ asset('/admin') }}/css/custom.css" rel="stylesheet" />
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="{{ asset('js/deleteconfirm.js') }}"></script>
+    {{-- <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="{{ asset('js/deleteconfirm.js') }}"></script> --}}
     <!-- CSS -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" />
+
     <style>
         /* Ensure visibility of toastr messages */
         #toast-container>.toast {
@@ -114,47 +116,33 @@
             @include('admin.elements.footer')
         </div>
     </div>
-    @include('admin.elements.js_scripts')
-    @yield('custom_js_scripts')
-    <!-- JS dependencies -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            document.querySelectorAll('form').forEach(function(form) {
-                form.addEventListener('submit', function() {
-                    const submitButtons = form.querySelectorAll('button[type="submit"]');
-                    submitButtons.forEach(function(btn) {
-                        btn.disabled = true;
-                        // btn.innerText = 'Submitting...'; // Optional: change button text
-                    });
+</body>
+
+<!-- JS dependencies -->
+@include('admin.elements.js_scripts')
+@yield('custom_js_scripts')
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('form').forEach(function(form) {
+            form.addEventListener('submit', function() {
+                const submitButtons = form.querySelectorAll('button[type="submit"]');
+                submitButtons.forEach(function(btn) {
+                    btn.disabled = true;
+                    // btn.innerText = 'Submitting...'; // Optional: change button text
                 });
             });
         });
-    </script>
+    });
+</script>
 
-    <script src="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.min.js"></script>
-
-    <!-- ✅ Then toastr -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
-    <script>
-        toastr.options = {
-            closeButton: false,
-            progressBar: true,
-            positionClass: 'toast-top-right',
-            timeOut: 5000
-        };
-    </script>
-    <script>
-        // Show the loader
-        function showLoader() {
-            document.getElementById('loaderOverlay').style.display = 'flex';
-        }
-
-        // Hide the loader
-        function hideLoader() {
-            document.getElementById('loaderOverlay').style.display = 'none';
-        }
-    </script>
-</body>
+<script>
+    toastr.options = {
+        closeButton: false,
+        progressBar: true,
+        positionClass: 'toast-top-right',
+        timeOut: 5000
+    };
+</script>
 
 </html>

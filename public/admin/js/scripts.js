@@ -3,9 +3,19 @@
     * Copyright 2013-2023 Start Bootstrap
     * Licensed under MIT (https://github.com/StartBootstrap/startbootstrap-sb-admin/blob/master/LICENSE)
     */
-    // 
+// 
 // Scripts
 // 
+
+// Show the loader
+function showLoader() {
+    document.getElementById('loaderOverlay').style.display = 'flex';
+}
+
+// Hide the loader
+function hideLoader() {
+    document.getElementById('loaderOverlay').style.display = 'none';
+}
 
 window.addEventListener('DOMContentLoaded', event => {
 
@@ -29,11 +39,11 @@ window.addEventListener('DOMContentLoaded', event => {
 $('#chooseFile').bind('change', function () {
     var filename = $("#chooseFile").val();
     if (/^\s*$/.test(filename)) {
-      $(".file-upload").removeClass('active');
-      $("#noFile").text("No file chosen..."); 
+        $(".file-upload").removeClass('active');
+        $("#noFile").text("No file chosen...");
     }
     else {
-      $(".file-upload").addClass('active');
-      $("#noFile").text(filename.replace("C:\\fakepath\\", "")); 
+        $(".file-upload").addClass('active');
+        $("#noFile").text(filename.replace("C:\\fakepath\\", ""));
     }
 });
