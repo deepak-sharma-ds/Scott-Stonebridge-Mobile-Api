@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Apis;
 use App\Http\Controllers\Controller;
 use App\Services\APIShopifyService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Validator;
 
 class CartController extends Controller
 {
@@ -61,26 +62,31 @@ class CartController extends Controller
 
               warnings {
                 code
-                field
                 message
+                target
               }
             }
           }
         GRAPHQL;
 
     $data = $this->shopify->storefrontApiRequest($query);
+    dd($data);
     return response()->json($data['data']['cartCreate']);
   }
 
   public function addToCart(Request $request)
   {
-    $request->validate([
+    $validator = Validator::make($request->all(), [
       'cartId' => 'required|string',
       'variantId' => 'required|string',
       'quantity' => 'required|integer|min:1',
     ]);
 
-    $query = <<<'GRAPHQL'
+    if ($validator->fails()) {
+      return response()->json(['errors' => $validator->errors()], 422);
+    }
+    try {
+      $query = <<<'GRAPHQL'
       mutation cartLinesAdd($cartId: ID!, $lines: [CartLineInput!]!) {
         cartLinesAdd(cartId: $cartId, lines: $lines) {
           cart {
@@ -114,76 +120,142 @@ class CartController extends Controller
             field
             message
           }
+          warnings {
+            code
+            message
+            target
+          }
         }
       }
       GRAPHQL;
 
-    $variables = [
-      'cartId' => $request->cartId,
-      'lines' => [
-        [
-          'merchandiseId' => $request->variantId,
-          'quantity' => $request->quantity,
+      $variables = [
+        'cartId' => $request->cartId,
+        'lines' => [
+          [
+            'merchandiseId' => $request->variantId,
+            'quantity' => (int) $request->quantity,
+          ]
         ]
-      ]
-    ];
+      ];
 
-    $data = $this->shopify->storefrontApiRequest($query, $variables);
-    return response()->json($data['data']['cartLinesAdd']);
+      $data = $this->shopify->storefrontApiRequest($query, $variables);
+      if (isset($data['errors'])) {
+        return response()->json([
+          'status' => 500,
+          'message' => 'Failed to fetch product details',
+          'errors' => $data['errors'],
+        ], 500);
+      }
+
+      $cartLinesAdd = data_get($data, 'data.cartLinesAdd');
+      if (!$cartLinesAdd) {
+        return response()->json([
+          'status' => 404,
+          'message' => 'Cart not found',
+        ], 404);
+      }
+
+      return response()->json([
+        'status' => 200,
+        'message' => 'Product has been added in cart successfully',
+        'data' => $cartLinesAdd,
+      ], 200);
+    } catch (\Throwable $th) {
+      dd($th);
+    }
   }
 
   public function updateToCart(Request $request)
   {
-    $request->validate([
+    $validator = Validator::make($request->all(), [
       'cartId' => 'required|string',
       'lineId' => 'required|string',
       'quantity' => 'required|integer|min:1',
     ]);
 
-    $query = <<<'GRAPHQL'
-      mutation cartLinesUpdate($cartId: ID!, $lines: [CartLineUpdateInput!]!) {
-        cartLinesUpdate(cartId: $cartId, lines: $lines) {
-          cart {
-            id
-            lines(first: 10) {
-              edges {
-                node {
-                  id
-                  quantity
+    if ($validator->fails()) {
+      return response()->json(['errors' => $validator->errors()], 422);
+    }
+
+    try {
+      $query = <<<'GRAPHQL'
+        mutation cartLinesUpdate($cartId: ID!, $lines: [CartLineUpdateInput!]!) {
+          cartLinesUpdate(cartId: $cartId, lines: $lines) {
+            cart {
+              id
+              lines(first: 10) {
+                edges {
+                  node {
+                    id
+                    quantity
+                  }
                 }
               }
             }
-          }
-          userErrors {
-            field
-            message
+            userErrors {
+              field
+              message
+            }
+            warnings {
+              code
+              message
+              target
+            }
           }
         }
-      }
-    GRAPHQL;
+      GRAPHQL;
 
-    $variables = [
-      'cartId' => $request->cartId,
-      'lines' => [
-        [
-          'id' => $request->lineId,
-          'quantity' => $request->quantity,
+      $variables = [
+        'cartId' => $request->cartId,
+        'lines' => [
+          [
+            'id' => $request->lineId,
+            'quantity' => (int) $request->quantity,
+          ]
         ]
-      ]
-    ];
+      ];
 
-    $data = $this->shopify->storefrontApiRequest($query, $variables);
-    return response()->json($data['data']['cartLinesUpdate']);
+      $data = $this->shopify->storefrontApiRequest($query, $variables);
+      if (isset($data['errors'])) {
+        return response()->json([
+          'status' => 500,
+          'message' => 'Failed to fetch product details',
+          'errors' => $data['errors'],
+        ], 500);
+      }
+      
+      $cartLinesUpdate = data_get($data, 'data.cartLinesUpdate');
+      if (!$cartLinesUpdate) {
+        return response()->json([
+          'status' => 404,
+          'message' => 'Cart not found',
+        ], 404);
+      }
+
+      return response()->json([
+        'status' => 200,
+        'message' => 'Product has been updated in cart successfully',
+        'data' => $cartLinesUpdate,
+      ], 200);
+    } catch (\Throwable $th) {
+      //throw $th;
+      dd($th);
+    }
   }
 
   public function removeToCart(Request $request)
   {
-    $request->validate([
+    $validator = Validator::make($request->all(), [
       'cartId' => 'required|string',
       'lineId' => 'required|string',
     ]);
+    if ($validator->fails()) {
+      return response()->json(['errors' => $validator->errors()], 422);
+    }
 
-    $query = <<<'GRAPHQL'
+    try {
+      $query = <<<'GRAPHQL'
       mutation cartLinesRemove($cartId: ID!, $lineIds: [ID!]!) {
         cartLinesRemove(cartId: $cartId, lineIds: $lineIds) {
           cart {
@@ -201,26 +273,47 @@ class CartController extends Controller
             field
             message
           }
+          warnings {
+            code
+            message
+            target
+          }
         }
       }
     GRAPHQL;
 
-    $variables = [
-      'cartId' => $request->cartId,
-      'lineIds' => [$request->lineId],
-    ];
+      $variables = [
+        'cartId' => $request->cartId,
+        'lineIds' => [$request->lineId],
+      ];
 
-    $data = $this->shopify->storefrontApiRequest($query, $variables);
-    return response()->json($data['data']['cartLinesRemove']);
+      $data = $this->shopify->storefrontApiRequest($query, $variables);
+      if (isset($data['errors'])) {
+        return response()->json([
+          'status' => 500,
+          'message' => 'Failed to fetch product details',
+          'errors' => $data['errors'],
+        ], 500);
+      }
+      dd($data);
+      return response()->json($data['data']['cartLinesRemove']);
+    } catch (\Throwable $th) {
+      //throw $th;
+      dd($th);
+    }
   }
 
   public function getCartDetails(Request $request)
   {
-    $request->validate([
+    $validator = Validator::make($request->all(), [
       'cartId' => 'required|string',
     ]);
+    if ($validator->fails()) {
+      return response()->json(['errors' => $validator->errors()], 422);
+    }
 
-    $query = <<<'GRAPHQL'
+    try {
+      $query = <<<'GRAPHQL'
       query cartQuery($cartId: ID!) {
         cart(id: $cartId) {
           id
@@ -262,11 +355,23 @@ class CartController extends Controller
       }
     GRAPHQL;
 
-    $variables = [
-      'cartId' => $request->cartId,
-    ];
+      $variables = [
+        'cartId' => $request->cartId,
+      ];
 
-    $data = $this->shopify->storefrontApiRequest($query, $variables);
-    return response()->json($data['data']['cart']);
+      $data = $this->shopify->storefrontApiRequest($query, $variables);
+      if (isset($data['errors'])) {
+        return response()->json([
+          'status' => 500,
+          'message' => 'Failed to fetch product details',
+          'errors' => $data['errors'],
+        ], 500);
+      }
+      dd($data);
+      return response()->json($data['data']['cart']);
+    } catch (\Throwable $th) {
+      //throw $th;
+      dd($th);
+    }
   }
 }

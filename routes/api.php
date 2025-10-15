@@ -54,6 +54,10 @@ Route::middleware(['disable.session'])->group(function () {
 
         Route::prefix('cart',)->group(function () {
             Route::post('/create', [CartController::class, 'createCart'])->name('cart.create');
+            Route::post('/add', [CartController::class, 'addToCart'])->name('cart.add');
+            Route::post('/update', [CartController::class, 'updateToCart'])->name('cart.update');
+            Route::post('/remove', [CartController::class, 'removeToCart'])->name('cart.remove');
+            Route::post('/details', [CartController::class, 'getCartDetails'])->name('cart.details');
         });
     });
 });
