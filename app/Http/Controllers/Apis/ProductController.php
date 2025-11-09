@@ -341,6 +341,7 @@ class ProductController extends Controller
       $sort = $request->get('sort', 'newest'); // default sort
       $tag = $request->get('tag', null); // optional tag filter
       $searchTerm = $request->get('search'); // optional search term
+      $filters = $request->get('filters', []);
 
       // Build filter query
       $conditions = [];
@@ -627,6 +628,25 @@ class ProductController extends Controller
       $products = array_map(fn($edge) => $edge['node'], $edges);
       $lastCursor = end($edges)['cursor'] ?? null;
       $hasMore = data_get($productsData, 'pageInfo.hasNextPage', false);
+
+      // Filter by availability (optional)
+      if (!empty($filters['availability'])) {
+        $availability = $filters['availability'];
+
+        $products = array_filter($products, function ($product) use ($availability) {
+          if (in_array('in_stock', $availability) && $product['availableForSale']) {
+            return true;
+          }
+          if (in_array('out_of_stock', $availability) && !$product['availableForSale']) {
+            return true;
+          }
+          return false;
+        });
+      }
+
+      // Reindex array (like ->values())
+      $products = array_values($products);
+
 
       return response()->json([
         'status' => 200,

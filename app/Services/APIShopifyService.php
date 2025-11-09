@@ -9,12 +9,14 @@ class APIShopifyService
     protected $baseUrl;
     protected $token;
     protected $storefrontAccessToken;
+    protected $currency;
 
     public function __construct()
     {
         $this->baseUrl = 'https://' . config('shopify.store_domain') . '/admin/api/' . config('shopify.api_version');
         $this->token = config('shopify.access_token');
         $this->storefrontAccessToken = config('shopify.storefront_access_token');
+        $this->currency = config('app.currency', 'GBP');
     }
 
     public function get($endpoint)
@@ -108,7 +110,6 @@ class APIShopifyService
 
     /**
      * Storefront/Customer API request service
-     * @return array
      */
     public function storefrontApiRequest($query, $variables = [])
     {
@@ -118,6 +119,10 @@ class APIShopifyService
             'X-Shopify-Storefront-Access-Token' => $this->storefrontAccessToken,
             'Content-Type' => 'application/json',
         ];
+
+        // if (!isset($variables['currencyCode'])) {
+        //     $variables['currencyCode'] = $this->currency;
+        // }
 
         $response = Http::withHeaders($headers)->post($url, [
             'query' => $query,
@@ -129,7 +134,6 @@ class APIShopifyService
 
     /**
      *  Admin/GraphQL API request service
-     * @return array
      */
     public function adminApiRequest($query, $variables = [])
     {

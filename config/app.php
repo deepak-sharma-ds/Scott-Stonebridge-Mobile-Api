@@ -72,6 +72,8 @@ return [
 
     'backend_url' => env('BACKEND_URL'),
 
+    'currency' => env('CURRENCY', 'GBP'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration

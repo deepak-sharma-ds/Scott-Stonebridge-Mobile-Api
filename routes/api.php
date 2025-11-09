@@ -58,6 +58,7 @@ Route::middleware(['disable.session'])->group(function () {
             Route::post('/update', [CartController::class, 'updateToCart'])->name('cart.update');
             Route::post('/remove', [CartController::class, 'removeToCart'])->name('cart.remove');
             Route::post('/details', [CartController::class, 'getCartDetails'])->name('cart.details');
+            Route::post('/buyer/identify', [CartController::class, 'cartBuyerIdentityUpdate'])->name('cart.buyer.identify');
         });
     });
 });

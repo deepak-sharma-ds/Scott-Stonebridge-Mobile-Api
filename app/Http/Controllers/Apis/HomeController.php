@@ -51,6 +51,10 @@ class HomeController extends Controller
         $mainMenu = $this->shopify->getMenuByHandle('main-menu');
         $footerMenu = $this->shopify->getMenuByHandle('footer-menu');
         $accountMenu = $this->shopify->getMenuByHandle('customer-account-menu');
+        /**
+         * $data['sections']['1632364695b0f88b4f'] => Horoscope
+         * $data['sections']['lookbook_slider_f4w4Mp'] => Top rated products
+         */
 
         if (isset($data['errors'])) {
             return response()->json(['error' => $data['errors']], 500);

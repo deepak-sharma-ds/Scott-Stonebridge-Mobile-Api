@@ -148,14 +148,45 @@ class ShopifyCustomerAuthService
         }
 
         $query = <<<'GRAPHQL'
-        query($token: String!) {
-            customer(customerAccessToken: $token) {
-                id
-                email
-                firstName
-                lastName
+            query($token: String!) {
+                customer(customerAccessToken: $token) {
+                    id
+                    email
+                    firstName
+                    lastName
+                    phone
+                    acceptsMarketing
+                    tags
+                    defaultAddress {
+                        id
+                        firstName
+                        lastName
+                        address1
+                        address2
+                        city
+                        province
+                        country
+                        zip
+                        phone
+                    }
+                    addresses(first: 10) {
+                        edges {
+                            node {
+                            id
+                            firstName
+                            lastName
+                            address1
+                            address2
+                            city
+                            province
+                            country
+                            zip
+                            phone
+                            }
+                        }
+                    }
+                }
             }
-        }
         GRAPHQL;
 
         $variables = ['token' => $accessToken];
