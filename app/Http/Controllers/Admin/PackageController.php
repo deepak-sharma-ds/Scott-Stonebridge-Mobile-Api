@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\PackageRequest;
 use App\Models\Package;
 use Illuminate\Http\Request;
 
@@ -28,16 +29,9 @@ class PackageController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(PackageRequest $request)
     {
-        $data = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'price' => 'required|numeric',
-            'currency' => 'required|string',
-            'shopify_tag' => 'nullable|string',
-            'cover_image' => 'nullable|image|max:2048'
-        ]);
+        $data = $request->validated();
 
         if ($request->hasFile('cover_image')) {
             $data['cover_image'] = $request->file('cover_image')->store('covers', 'public');
@@ -67,16 +61,9 @@ class PackageController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Package $package)
+    public function update(PackageRequest $request, Package $package)
     {
-        $data = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'price' => 'required|numeric',
-            'currency' => 'required|string',
-            'shopify_tag' => 'nullable|string',
-            'cover_image' => 'nullable|image|max:2048'
-        ]);
+        $data = $request->validated();
 
         if ($request->hasFile('cover_image')) {
             $data['cover_image'] = $request->file('cover_image')->store('covers', 'public');

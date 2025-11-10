@@ -21,14 +21,14 @@
     <div class="col-md-4 mb-3">
         <label for="currency" class="form-label">Currency</label>
         <input type="text" name="currency" id="currency" value="{{ old('currency', $package->currency ?? 'GBP') }}"
-            class="form-control" maxlength="3">
+            class="form-control" maxlength="3" readonly>
     </div>
 </div>
 
 <div class="mb-3">
     <label for="shopify_tag" class="form-label">Shopify Tag</label>
     <input type="text" name="shopify_tag" id="shopify_tag"
-        value="{{ old('shopify_tag', $package->shopify_tag ?? '') }}" class="form-control">
+        value="{{ old('shopify_tag', str_replace('-', ' ', $package->shopify_tag ?? '')) }}" class="form-control">
     <small class="text-muted">Tag used to link with Shopify customers</small>
 </div>
 

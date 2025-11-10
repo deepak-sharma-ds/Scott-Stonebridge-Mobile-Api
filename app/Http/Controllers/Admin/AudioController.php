@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AudioRequest;
 use App\Models\Audio;
 use App\Models\Package;
 use Illuminate\Http\Request;
@@ -31,14 +32,9 @@ class AudioController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(AudioRequest $request)
     {
-        $data = $request->validate([
-            'package_id' => 'required|exists:packages,id',
-            'title' => 'required|string|max:255',
-            'file' => 'required|file|mimes:mp3,wav',
-            'duration_seconds' => 'nullable|integer'
-        ]);
+        $data = $request->validated();
 
         $data['file_path'] = $request->file('file')->store('audios', 'private'); // or 's3'
         $data['order_index'] = Audio::where('package_id', $data['package_id'])->max('order_index') + 1;
@@ -68,14 +64,9 @@ class AudioController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, Audio $audio)
+    public function update(AudioRequest $request, Audio $audio)
     {
-        $data = $request->validate([
-            'package_id' => 'required|exists:packages,id',
-            'title' => 'required|string|max:255',
-            'file' => 'nullable|file|mimes:mp3,wav',
-            'duration_seconds' => 'nullable|integer'
-        ]);
+        $data = $request->validated();
 
         if ($request->hasFile('file')) {
             $data['file_path'] = $request->file('file')->store('audios', 'private'); // or 's3'
