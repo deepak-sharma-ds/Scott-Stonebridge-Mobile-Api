@@ -27,16 +27,40 @@
                     <div class="sb-nav-link-icon"><i class="fas fa-calendar"></i></div>
                     Availability Slots
                 </a>
-                <a class="nav-link {{ request()->routeIs('packages.*') ? 'active' : '' }}"
-                    href="{{ route('packages.index') }}">
-                    <div class="sb-nav-link-icon"><i class="fa-solid fa-box"></i></div>
-                    Packages
-                </a>
-                <a class="nav-link {{ request()->routeIs('audios.*') ? 'active' : '' }}"
-                    href="{{ route('audios.index') }}">
-                    <div class="sb-nav-link-icon"><i class="fa-solid fa-audio-description"></i></div>
-                    Audios
-                </a>
+                @role('Admin')
+                    <div class="sb-sidenav-menu-heading">Audio Subscriptions</div>
+
+                    @php
+                        $isAudioSectionActive = request()->routeIs('packages.*') || request()->routeIs('audios.*');
+                    @endphp
+
+                    <a class="nav-link {{ $isAudioSectionActive ? '' : 'collapsed' }}" href="#"
+                        data-bs-toggle="collapse" data-bs-target="#collapseAudioSubscriptions"
+                        aria-expanded="{{ $isAudioSectionActive ? 'true' : 'false' }}"
+                        aria-controls="collapseAudioSubscriptions">
+                        <div class="sb-nav-link-icon"><i class="fa-solid fa-gear"></i></div>
+                        Audio Subscriptions
+                        <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                    </a>
+
+                    <div class="collapse {{ $isAudioSectionActive ? 'show' : '' }}" id="collapseAudioSubscriptions"
+                        data-bs-parent="#sidenavAccordion">
+
+                        <nav class="sb-sidenav-menu-nested nav">
+                            <a class="nav-link {{ request()->routeIs('packages.*') ? 'active' : '' }}"
+                                href="{{ route('packages.index') }}">
+                                <div class="sb-nav-link-icon"><i class="fa-solid fa-box"></i></div>Packages
+                            </a>
+
+                            <a class="nav-link {{ request()->routeIs('audios.*') ? 'active' : '' }}"
+                                href="{{ route('audios.index') }}">
+                                <div class="sb-nav-link-icon"><i class="fa-solid fa-audio-description"></i></div>Audios
+                            </a>
+                        </nav>
+                    </div>
+                @endrole
+
+
                 @role('Admin')
                     <div class="sb-sidenav-menu-heading">Configurations</div>
                     @php
