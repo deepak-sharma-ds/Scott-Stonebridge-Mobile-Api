@@ -38,7 +38,7 @@
                         data-bs-toggle="collapse" data-bs-target="#collapseAudioSubscriptions"
                         aria-expanded="{{ $isAudioSectionActive ? 'true' : 'false' }}"
                         aria-controls="collapseAudioSubscriptions">
-                        <div class="sb-nav-link-icon"><i class="fa-solid fa-gear"></i></div>
+                        <div class="sb-nav-link-icon"><i class="fa-brands fa-audible"></i></div>
                         Audio Subscriptions
                         <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
                     </a>
@@ -49,7 +49,7 @@
                         <nav class="sb-sidenav-menu-nested nav">
                             <a class="nav-link {{ request()->routeIs('packages.*') ? 'active' : '' }}"
                                 href="{{ route('packages.index') }}">
-                                <div class="sb-nav-link-icon"><i class="fa-solid fa-box"></i></div>Packages
+                                <div class="sb-nav-link-icon"><i class="fa-solid fa-boxes-packing"></i></div>Packages
                             </a>
 
                             <a class="nav-link {{ request()->routeIs('audios.*') ? 'active' : '' }}"
