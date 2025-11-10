@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Admin\AudioController;
+use App\Http\Controllers\Admin\AudioStreamController;
 use App\Http\Controllers\Admin\ConfigurationsController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\Admin\UserController;
@@ -9,8 +11,7 @@ use App\Http\Controllers\Admin\BookingController;
 use App\Http\Controllers\Admin\AvailableSlotController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\AvailabilitySlotController;
-
-
+use App\Http\Controllers\Admin\PackageController;
 
 Route::post('/configurations/make-slug', [ConfigurationsController::class, 'make_slug'])->name('configurations.make_slug');
 Route::post('/configurations/upload-files', [ConfigurationsController::class, 'upload_files'])->name('configurations.upload_files');
@@ -53,6 +54,13 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
 	Route::get('google-calendar/auth', [BookingController::class, 'adminGoogleAuth'])->name('admin.google.auth');
 	Route::put('booking/cancel', [BookingController::class, 'cancel'])->name('admin.booking.cancel');
 	Route::get('get-time-slots', [BookingController::class, 'getTimeSlots'])->name('admin.get.time-slots');
+
+	Route::resource('packages', PackageController::class);
+	Route::resource('audios', AudioController::class);
+
+	Route::get('/stream/audio/{id}', [AudioStreamController::class, 'stream'])
+		->name('audio.stream');
+	// ->middleware('auth'); // or your custom auth for Shopify tag
 
 
 });

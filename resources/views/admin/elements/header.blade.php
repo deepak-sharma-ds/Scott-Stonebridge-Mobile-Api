@@ -26,7 +26,17 @@
                     href="{{ url('/admin/availability') }}">
                     <div class="sb-nav-link-icon"><i class="fas fa-calendar"></i></div>
                     Availability Slots
-                </a>       
+                </a>
+                <a class="nav-link {{ request()->routeIs('packages.*') ? 'active' : '' }}"
+                    href="{{ route('packages.index') }}">
+                    <div class="sb-nav-link-icon"><i class="fa-solid fa-box"></i></div>
+                    Packages
+                </a>
+                <a class="nav-link {{ request()->routeIs('audios.*') ? 'active' : '' }}"
+                    href="{{ route('audios.index') }}">
+                    <div class="sb-nav-link-icon"><i class="fa-solid fa-audio-description"></i></div>
+                    Audios
+                </a>
                 @role('Admin')
                     <div class="sb-sidenav-menu-heading">Configurations</div>
                     @php
