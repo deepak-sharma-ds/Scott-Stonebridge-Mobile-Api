@@ -31,15 +31,19 @@ class PackageController extends Controller
      */
     public function store(PackageRequest $request)
     {
-        $data = $request->validated();
+        try {
+            $data = $request->validated();
 
-        if ($request->hasFile('cover_image')) {
-            $data['cover_image'] = $request->file('cover_image')->store('covers', 'public');
+            if ($request->hasFile('cover_image')) {
+                $data['cover_image'] = $request->file('cover_image')->store('covers', 'public');
+            }
+
+            Package::create($data);
+
+            return redirect()->route('packages.index')->with('success', 'Package created successfully');
+        } catch (\Throwable $th) {
+            return back()->withInput()->with('error', 'An error occurred: ' . $th->getMessage());
         }
-
-        Package::create($data);
-
-        return redirect()->route('packages.index')->with('success', 'Package created successfully');
     }
 
     /**
@@ -63,14 +67,18 @@ class PackageController extends Controller
      */
     public function update(PackageRequest $request, Package $package)
     {
-        $data = $request->validated();
+        try {
+            $data = $request->validated();
 
-        if ($request->hasFile('cover_image')) {
-            $data['cover_image'] = $request->file('cover_image')->store('covers', 'public');
+            if ($request->hasFile('cover_image')) {
+                $data['cover_image'] = $request->file('cover_image')->store('covers', 'public');
+            }
+
+            $package->update($data);
+            return redirect()->route('packages.index')->with('success', 'Package updated');
+        } catch (\Throwable $th) {
+            return back()->withInput()->with('error', 'An error occurred: ' . $th->getMessage());
         }
-
-        $package->update($data);
-        return redirect()->route('packages.index')->with('success', 'Package updated');
     }
 
     /**
