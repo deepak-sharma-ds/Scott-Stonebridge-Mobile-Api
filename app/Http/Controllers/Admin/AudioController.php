@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AudioRequest;
+use App\Jobs\ConvertAudioToHls;
 use App\Models\Audio;
 use App\Models\Package;
 use Illuminate\Http\Request;
@@ -36,13 +37,32 @@ class AudioController extends Controller
     {
         $data = $request->validated();
 
-        $data['file_path'] = $request->file('file')->store('audios', 'private'); // or 's3'
+        // 1️⃣ Store uploaded audio file in the private disk (safe, not web-accessible)
+        $data['file_path'] = $request->file('file')->store('audios', 'private');
+
+        // 2️⃣ Determine next order index within the same package
         $data['order_index'] = Audio::where('package_id', $data['package_id'])->max('order_index') + 1;
 
-        Audio::create($data);
+        // 3️⃣ Initially mark as not converted yet
+        $data['is_hls_ready'] = false;
 
-        return redirect()->route('audios.index')->with('success', 'Audio added successfully');
+        // 4️⃣ Create audio record
+        $audio = Audio::create($data);
+
+        // 5️⃣ Dispatch background HLS conversion job
+        // This will generate HLS + AES-128 encrypted segments and playlist
+        ConvertAudioToHls::dispatch(
+            $audio->id,
+            'private',                // source disk (matches store() above)
+            $data['file_path']        // relative file path inside that disk
+        );
+
+        // 6️⃣ Return success response
+        return redirect()
+            ->route('audios.index')
+            ->with('success', 'Audio added successfully. Conversion started in background.');
     }
+
 
     /**
      * Display the specified resource.
@@ -68,13 +88,37 @@ class AudioController extends Controller
     {
         $data = $request->validated();
 
+        // 1️⃣ If a new audio file is uploaded
         if ($request->hasFile('file')) {
-            $data['file_path'] = $request->file('file')->store('audios', 'private'); // or 's3'
+            // Delete old private file if exists (prevent orphaned unprotected files)
+            if ($audio->file_path && Storage::disk('private')->exists($audio->file_path)) {
+                Storage::disk('private')->delete($audio->file_path);
+            }
+
+            // Store new uploaded file in private disk (never public)
+            $data['file_path'] = $request->file('file')->store('audios', 'private');
+
+            // Reset HLS-related fields to reprocess
+            $data['is_hls_ready'] = false;
+            $data['hls_path'] = null;
+
+            // Dispatch conversion job (background HLS + AES encryption)
+            ConvertAudioToHls::dispatch(
+                $audio->id,
+                'private',
+                $data['file_path']
+            );
         }
 
+        // 2️⃣ Update record with new data
         $audio->update($data);
-        return redirect()->route('audios.index')->with('success', 'Audio updated');
+
+        // 3️⃣ Redirect back with success
+        return redirect()
+            ->route('audios.index')
+            ->with('success', 'Audio updated successfully' . ($request->hasFile('file') ? ' and conversion restarted.' : '.'));
     }
+
 
     /**
      * Remove the specified resource from storage.

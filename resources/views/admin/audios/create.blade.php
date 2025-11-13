@@ -19,7 +19,16 @@
         @endif
 
         <form action="{{ route('audios.store') }}" method="POST" enctype="multipart/form-data" class="card p-4 shadow-sm">
+            @csrf
+
+            {{-- Include shared form fields --}}
             @include('admin.audios._form', ['audio' => new \App\Models\Audio()])
+
+            {{-- Conversion Status Placeholder --}}
+            {{-- <div class="mt-3">
+                <h6 class="text-muted mb-1">Conversion Status:</h6>
+                <span class="badge bg-secondary">Pending Upload</span>
+            </div> --}}
         </form>
     </div>
 @endsection

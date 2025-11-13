@@ -13,6 +13,8 @@ class Audio extends Model
         'package_id',
         'title',
         'file_path',
+        'hls_path',
+        'is_hls_ready',
         'duration_seconds',
         'order_index',
         'status'

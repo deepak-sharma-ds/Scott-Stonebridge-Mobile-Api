@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
+use App\Models\Package;
+use App\Models\CustomerEntitlement;
 
 class ShopifyController extends Controller
 {
@@ -120,5 +122,36 @@ class ShopifyController extends Controller
                 'error' => $th->getMessage(),
             ], 500);
         }
+    }
+
+    public function orderPaid(Request $request)
+    {
+        // $hmacHeader = $request->header('X-Shopify-Hmac-Sha256');
+        // $data = $request->getContent();
+        // $calculated = base64_encode(hash_hmac('sha256', $data, config('services.shopify.secret'), true));
+
+        // if (!hash_equals($calculated, $hmacHeader)) {
+        //     logger()->warning('Invalid Shopify webhook HMAC');
+        //     return response('Invalid signature', 401);
+        // }
+
+        $payload = $request->all();
+
+        $customer = data_get($payload, 'customer', []);
+        $customerId = data_get($customer, 'id');
+        $email = data_get($customer, 'email');
+        $tagsCsv = data_get($customer, 'tags', '');
+
+        $tags = array_filter(array_map('trim', explode(',', $tagsCsv)));
+        foreach ($tags as $tag) {
+            if (Package::where('shopify_tag', $tag)->exists()) {
+                CustomerEntitlement::updateOrCreate(
+                    ['shopify_customer_id' => $customerId, 'package_tag' => $tag],
+                    ['email' => $email]
+                );
+            }
+        }
+
+        return response('ok', 200);
     }
 }

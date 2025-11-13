@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\AudioAccessController;
+use App\Http\Controllers\HlsController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('clear-all', function () {
@@ -36,3 +38,10 @@ Route::get('config-clear', function () {
 Route::get('/phpinfo', function () {
 	return phpinfo();
 });
+
+
+Route::get('/secure/hls/{audio}/{token}/playlist.m3u8', [HlsController::class, 'playlist'])->name('hls.playlist');
+Route::get('/secure/hls/{audio}/{token}/segments/{segment}', [HlsController::class, 'segment'])->name('hls.segment');
+Route::get('/secure/hls/{audio}/{token}/key', [HlsController::class, 'key'])->name('hls.key');
+
+Route::get('/access/{shopifyCustomerId}/{packageTag}', [AudioAccessController::class, 'show'])->name('access.show');

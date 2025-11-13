@@ -59,11 +59,12 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
 	Route::resource('packages', PackageController::class);
 	Route::resource('audios', AudioController::class);
 
-	Route::get('/stream/audio/{id}', [AudioStreamController::class, 'stream'])
-		->name('audio.stream');
+	// Route::get('/stream/audio/{id}', [AudioStreamController::class, 'stream'])
+	// 	->name('audio.stream');
 	// ->middleware('auth'); // or your custom auth for Shopify tag
-
-
+	Route::get('/media/hls/{audio}/{file?}', [AudioStreamController::class, 'stream'])
+		->where('file', '.*')
+		->name('audio.stream');
 });
 
 Route::prefix('admin')->name('admin.')->group(function () {
