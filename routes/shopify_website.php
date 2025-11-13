@@ -4,6 +4,7 @@ use App\Http\Controllers\BookingController;
 use App\Http\Controllers\ShopifyController;
 use App\Http\Controllers\ShopifyPackageController;
 use App\Http\Controllers\GoogleOAuthController;
+use App\Http\Controllers\PlaySessionController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -23,5 +24,11 @@ Route::prefix('shopify')->group(function () {
         // Audio subscription Module APIs
         Route::post('/packages', [ShopifyPackageController::class, 'index']);
         Route::post('/packages/{id}', [ShopifyPackageController::class, 'show']);
+
+
+        // Route::prefix('webhook')->group(function () {
+        //     Route::post('/order-paid', [ShopifyController::class, 'orderPaid']);
+        // });
+        Route::post('/play-session', [PlaySessionController::class, 'store']);
     });
 });

@@ -23,3 +23,6 @@ Comment_Code
 
 <!-- ✅ Toastr -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
+
+<!-- ✅ Audio HLS Encryptions -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>

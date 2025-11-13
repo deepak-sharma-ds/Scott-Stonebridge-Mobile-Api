@@ -60,8 +60,8 @@
                                         <tr>
                                             <td>{{ $audio->package->title ?? '—' }}</td>
                                             <td>{{ $audio->title }}</td>
-                                            <td style="max-width:220px;">
-                                                @if ($audio->id)
+                                            <td style="max-width:300px;">
+                                                {{-- @if ($audio->id)
                                                     <audio controls preload="none" style="width: 200px; height: 30px;">
                                                         <source src="{{ route('audio.stream', $audio->id) }}"
                                                             type="audio/mpeg"
@@ -70,7 +70,32 @@
                                                     </audio>
                                                 @else
                                                     <span class="text-muted">No file</span>
+                                                @endif --}}
+                                                @if ($audio->is_hls_ready && $audio->hls_path)
+                                                    <video id="audio-player-{{ $audio->id }}" controls
+                                                        style="width: 300px; height: 40px;"></video>
+
+                                                    <script>
+                                                        document.addEventListener('DOMContentLoaded', function() {
+                                                            const audio{{ $audio->id }} = document.getElementById('audio-player-{{ $audio->id }}');
+                                                            const src = "{{ route('audio.stream', ['audio' => $audio->id, 'file' => 'playlist.m3u8']) }}";
+
+                                                            if (Hls.isSupported()) {
+                                                                const hls = new Hls();
+                                                                hls.loadSource(src);
+                                                                hls.attachMedia(audio{{ $audio->id }});
+                                                            } else if (audio{{ $audio->id }}.canPlayType('application/vnd.apple.mpegurl')) {
+                                                                audio{{ $audio->id }}.src = src;
+                                                            } else {
+                                                                audio{{ $audio->id }}.outerHTML =
+                                                                    '<span class="text-danger">HLS not supported in this browser.</span>';
+                                                            }
+                                                        });
+                                                    </script>
+                                                @else
+                                                    <span class="text-muted">Processing or not available</span>
                                                 @endif
+
                                             </td>
 
                                             <td>{{ $audio->duration_seconds ?? '-' }}</td>
@@ -104,4 +129,7 @@
             {!! $audios->appends(request()->query())->links('pagination::bootstrap-5') !!}
         </div>
     </div>
+@endsection
+
+@section('custom_js_scripts')
 @endsection
