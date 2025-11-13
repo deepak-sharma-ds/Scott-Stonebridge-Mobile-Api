@@ -176,7 +176,7 @@ class ConvertAudioToHls implements ShouldQueue
             try {
                 $playlist = file_get_contents($playlistPath);
                 // $keyUrl = url("/admin/media/hls/{$audioId}/enc.key");
-                $keyUrl = route('hls.serve', ['audio' => $audioId, 'file' => 'enc.key']);
+                $keyUrl = route('audio.stream', ['audio' => $audioId, 'file' => 'enc.key']);
                 $playlist = str_replace('enc.keyuri', $keyUrl, $playlist);
                 file_put_contents($playlistPath, $playlist);
 
