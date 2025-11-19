@@ -67,6 +67,12 @@ class ShopifyController extends Controller
                 'availability_date' => $data['availability_date'] ?? now()->toDateString(),
                 'time_slot_id' => $data['time_slot_id'] ?? null,
             ];
+            if (empty($bookingData['time_slot_id'])) {
+                return response()->json([
+                    'status' => 200,
+                    'message' => 'Ignored product ID'
+                ], 200);
+            }
 
             // Optional: Validate required fields
             $validator = Validator::make($bookingData, [

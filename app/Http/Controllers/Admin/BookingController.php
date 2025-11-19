@@ -25,8 +25,10 @@ use Google_Service_Calendar;
 use Google_Service_Calendar_Event;
 use Google_Service_Calendar_EventDateTime;
 use App\Models\AvailabilityDate;
+use App\Models\GoogleToken;
 use App\Models\TimeSlot;
 use \Carbon\Carbon;
+use Illuminate\Support\Facades\Crypt;
 
 class BookingController extends Controller
 {
@@ -80,106 +82,6 @@ class BookingController extends Controller
     {
         $booking = ScheduledMeeting::findOrFail($id);
         return view('admin.booking_inquiries.view', compact('booking'));
-    }
-
-    public function rescheduleOld(Request $request)
-    {
-        // Validate new inputs
-        $data = $request->validate([
-            'booking_id' => 'required|exists:scheduled_meetings,id',
-            'availability_date' => 'required|date',
-            'time_slot_id' => 'required|exists:time_slots,id',
-        ]);
-
-        // Find booking
-        $booking = ScheduledMeeting::findOrFail($data['booking_id']);
-
-        // Find availability date record
-        $availability = AvailabilityDate::where('date', $data['availability_date'])->first();
-        if (!$availability) {
-            return back()->withErrors(['availability_date' => 'Selected date is not available.'])->withInput();
-        }
-
-        $availability_id = $availability->id;
-        $timeSlotId = $data['time_slot_id'];
-
-        // Double booking prevention on admin side
-        $exists = ScheduledMeeting::where('availability_date_id', $availability_id)
-            ->where('time_slot_id', $timeSlotId)
-            ->where('id', '!=', $booking->id)  // allow booking to change itself
-            ->where('status', '!=', 'closed')
-            ->exists();
-
-        if ($exists) {
-            return back()->withErrors(['time_slot_id' => 'This time slot is already taken. Please choose another.'])->withInput();
-        }
-
-        try {
-            // Initialize Google client with stored admin credentials/token
-            $client = new Google_Client();
-            $client->setAuthConfig(storage_path('app/credentials.json'));
-            $client->addScope(Google_Service_Calendar::CALENDAR);
-            $client->setAccessType('offline');
-            $client->setPrompt('consent');
-
-            // Load stored admin token
-            if (!Storage::disk('local')->exists('admin_google_token.json')) {
-                return back()->withErrors(['api_error' => 'Calendar service not configured properly.']);
-            }
-            $tokenJson = Storage::disk('local')->get('admin_google_token.json');
-            $token = json_decode($tokenJson, true);
-            $client->setAccessToken($token);
-
-            // Refresh token if expired
-            if ($client->isAccessTokenExpired()) {
-                if ($client->getRefreshToken()) {
-                    $newToken = $client->fetchAccessTokenWithRefreshToken($client->getRefreshToken());
-                    $client->setAccessToken($newToken);
-                    Storage::disk('local')->put('admin_google_token.json', json_encode($newToken));
-                } else {
-                    return back()->withErrors(['api_error' => 'Calendar service requires re-authentication by admin.']);
-                }
-            }
-
-            // retrieve time slot and availability for new date/time
-            $timeSlot = TimeSlot::findOrFail($timeSlotId);
-
-            $date = Carbon::parse($availability->date)->format('Y-m-d');
-            $startTime = Carbon::parse($timeSlot->start_time)->format('H:i:s');
-            $endTime = Carbon::parse($timeSlot->end_time)->format('H:i:s');
-
-            $startDateTime = Carbon::parse("$date $startTime");
-            $endDateTime = Carbon::parse("$date $endTime");
-
-            $calendarService = new Google_Service_Calendar($client);
-
-            // fetch the event
-            $event = $calendarService->events->get('primary', $booking->event_id);
-
-            // update times
-            $event->setStart(new Google_Service_Calendar_EventDateTime([
-                'dateTime' => $startDateTime->toRfc3339String(),
-                'timeZone' => 'Asia/Kolkata'
-            ]));
-            $event->setEnd(new Google_Service_Calendar_EventDateTime([
-                'dateTime' => $endDateTime->toRfc3339String(),
-                'timeZone' => 'Asia/Kolkata'
-            ]));
-
-            $updatedEvent = $calendarService->events->update('primary', $booking->event_id, $event);
-
-            // update scheduled meeting record
-            $booking->availability_date_id = $availability_id;
-            $booking->time_slot_id = $timeSlotId;
-            $booking->datetime = $startDateTime;
-            $booking->status = 'rescheduled';
-            $booking->save();
-
-            return redirect()->route('admin.scheduled-meetings')
-                ->with('success', 'Meeting rescheduled successfully!');
-        } catch (\Exception $e) {
-            return back()->withErrors(['api_error' => 'Error rescheduling event: ' . $e->getMessage()]);
-        }
     }
 
     public function reschedule(Request $request)
@@ -288,30 +190,92 @@ class BookingController extends Controller
      */
     private function getGoogleCalendarService(): Google_Service_Calendar
     {
-        $client = new Google_Client();
-        $client->setAuthConfig(storage_path('app/credentials.json'));
-        $client->addScope(Google_Service_Calendar::CALENDAR);
-        $client->setAccessType('offline');
-        $client->setPrompt('consent');
+        $log = Log::channel('appointment_slots');
 
-        if (!Storage::disk('local')->exists('admin_google_token.json')) {
-            Log::channel('appointment_slots')->warning('Google token not found');
+        /**
+         * ======================================================
+         * 1. Load encrypted Google token from DB
+         * ======================================================
+         */
+        $tokenRecord = GoogleToken::first();
+        if (!$tokenRecord) {
+            $log->warning('Google token not found in database');
             throw new \Exception('Google token not found');
         }
 
-        $token = json_decode(Storage::disk('local')->get('admin_google_token.json'), true);
-        $client->setAccessToken($token);
-        Log::channel('appointment_slots')->info('Google token loaded');
+        $accessToken = Crypt::decryptString($tokenRecord->access_token);
+        $refreshToken = $tokenRecord->refresh_token
+            ? Crypt::decryptString($tokenRecord->refresh_token)
+            : null;
 
-        if ($client->isAccessTokenExpired() && $client->getRefreshToken()) {
-            $newToken = $client->fetchAccessTokenWithRefreshToken($client->getRefreshToken());
+        /**
+         * ======================================================
+         * 2. Initialize Google Client
+         * ======================================================
+         */
+        $client = new Google_Client();
+        $client->setClientId(config('google.client_id') ?: env('GOOGLE_CLIENT_ID'));
+        $client->setClientSecret(config('google.client_secret') ?: env('GOOGLE_CLIENT_SECRET'));
+        $client->setRedirectUri(config('google.redirect_uri'));
+        $client->addScope(Google_Service_Calendar::CALENDAR);
+        $client->setAccessType('offline');
+
+        // Build token array for Google client
+        $tokenArray = [
+            'access_token'  => $accessToken,
+            'refresh_token' => $refreshToken,
+            'created'       => $tokenRecord->created_at_timestamp,
+            'expires_in'    => null,
+        ];
+
+        $client->setAccessToken($tokenArray);
+
+        $log->info('Google token loaded from DB');
+
+        /**
+         * ======================================================
+         * 3. Refresh if needed
+         * ======================================================
+         */
+        if ($client->isAccessTokenExpired()) {
+
+            if (!$refreshToken) {
+                $log->error('Refresh token missing — admin must reauthenticate.');
+                throw new \Exception('Google Calendar authentication expired');
+            }
+
+            $log->warning('Google token expired — refreshing…');
+
+            $newToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
             $client->setAccessToken($newToken);
-            Storage::disk('local')->put('admin_google_token.json', json_encode($newToken));
-            Log::channel('appointment_slots')->info('Google token refreshed');
+
+            // Compute new expiry
+            $created = $newToken['created'] ?? time();
+            $expires = ($newToken['expires_in'] ?? 3600) + $created;
+
+            // Update database record
+            $tokenRecord->update([
+                'access_token'          => Crypt::encryptString($newToken['access_token']),
+                'refresh_token'         => isset($newToken['refresh_token'])
+                    ? Crypt::encryptString($newToken['refresh_token'])
+                    : $tokenRecord->refresh_token,
+                'expires_at'            => \Carbon\Carbon::createFromTimestamp($expires),
+                'token_type'            => $newToken['token_type'] ?? $tokenRecord->token_type,
+                'scope'                 => $newToken['scope'] ?? $tokenRecord->scope,
+                'created_at_timestamp'  => $created,
+            ]);
+
+            $log->info('Google token refreshed and updated in DB');
         }
 
+        /**
+         * ======================================================
+         * 4. Return Calendar Service
+         * ======================================================
+         */
         return new Google_Service_Calendar($client);
     }
+
 
     /**
      * Build Google Calendar Event

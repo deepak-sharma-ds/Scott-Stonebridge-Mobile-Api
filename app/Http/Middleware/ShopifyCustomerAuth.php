@@ -30,6 +30,13 @@ class ShopifyCustomerAuth
             return response()->json(['error' => 'Invalid token'], 401);
         }
 
+        // Trim the request params
+        $request->merge(
+            array_map(function ($value) {
+                return is_string($value) ? trim($value) : $value;
+            }, $request->all())
+        );
+
         return $next($request);
     }
 

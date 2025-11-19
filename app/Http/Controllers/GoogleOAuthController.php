@@ -13,46 +13,86 @@ class GoogleOAuthController extends Controller
     {
         $client = new Google_Client();
 
-        // Load credentials from storage_path('app/credentials.json')
-        $client->setAuthConfig(storage_path('app/credentials.json'));
+        // Load credentials from config
+        $client->setClientId(config('google.client_id') ?: env('GOOGLE_CLIENT_ID'));
+        $client->setClientSecret(config('google.client_secret') ?: env('GOOGLE_CLIENT_SECRET'));
+        $client->setRedirectUri(config('google.redirect_uri'));
+        // least privilege — use events scope if possible
 
         // Add required scopes
-        $client->addScope('https://www.googleapis.com/auth/calendar');
+        $client->addScope(config('google.scopes') ?: env('GOOGLE_SCOPES'));
 
         // Offline access to get refresh token
         $client->setAccessType('offline');
 
         // Prompt consent to always get refresh token
-        $client->setPrompt('consent');
-
-        // Set redirect URI from environment config
-        $client->setRedirectUri(config('google.redirect_uri'));
+        // $client->setPrompt('consent');
 
         return $client;
     }
 
     // API route to get Google Auth URL
-    public function getAuthUrl(Request $request)
+    public function getAuthUrl()
     {
         $client = $this->getClient();
 
-        $state = $request->query('state');
-        if ($state) {
-            $client->setState($state);
-        }
+        // 🔒 Generate random nonce
+        $nonce = bin2hex(random_bytes(16));
+        cache()->put("google_oauth_nonce_{$nonce}", true, 300); // 5 minutes
 
-        $authUrl = $client->createAuthUrl();
-        \Log::info('Generated Google OAuth URL', ['authUrl' => $authUrl]);
+        // Get optional formData passed from frontend — this is your original flow
+        $payload = request()->query('state') ?? null;
 
-        return response()->json(['auth_url' => $authUrl]);
+        // Wrap payload + nonce together
+        $state = json_encode([
+            'nonce'   => $nonce,
+            'payload' => $payload,
+        ]);
+
+        $client->setState($state);
+
+        return response()->json([
+            'auth_url' => $client->createAuthUrl(),
+        ]);
     }
+
+
 
     public function handleCallback(Request $request, BookingService $bookingService)
     {
         Log::info('handleCallback started', ['query' => $request->query()]);
 
+        // 🔒 1. Validate OAuth state (CSRF protection)
+        $stateRaw = $request->query('state');
+
+        if (!$stateRaw) {
+            Log::error('Missing OAuth state');
+            return redirect(config('app.frontend_url') . '?error=invalid_state');
+        }
+
+        $decodedState = json_decode($stateRaw, true);
+
+        // Backwards compatibility with old flow (payload-only state)
+        if (!isset($decodedState['nonce'])) {
+            Log::warning("State missing nonce — backward compatibility mode");
+            $stateRaw = $stateRaw; // use original payload
+        } else {
+            $nonce = $decodedState['nonce'];
+
+            if (!cache()->has("google_oauth_nonce_{$nonce}")) {
+                Log::error("State nonce mismatch / expired", ['nonce' => $nonce]);
+                return redirect(config('app.frontend_url') . '?error=state_mismatch');
+            }
+
+            // Remove nonce immediately to prevent reuse
+            cache()->forget("google_oauth_nonce_{$nonce}");
+
+            // Extract original payload (your form JSON)
+            $stateRaw = $decodedState['payload'];
+        }
+
+        // 🔄 2. Handle authorization code
         $code = $request->query('code');
-        $state = $request->query('state'); // form data JSON string
 
         if (!$code) {
             Log::error('Authorization code missing');
@@ -69,42 +109,41 @@ class GoogleOAuthController extends Controller
         }
 
         if (isset($token['error'])) {
-            Log::error('Error in token response', ['error' => $token['error_description'] ?? 'Unknown error']);
+            Log::error('Token error', ['error' => $token['error_description'] ?? 'Unknown']);
             return response()->json(['error' => $token['error_description'] ?? 'Unknown error'], 400);
         }
 
+        // (Optional) Save temporarily for debugging — otherwise not used
         session(['google_access_token' => $token]);
-        Log::info('Access token fetched and saved in session');
 
-        if (!$state) {
-            Log::warning('State parameter missing, redirecting to frontend');
-            return redirect(config('app.frontend_url'));
-        }
-
-        $formData = json_decode($state, true);
+        // 🔄 3. Extract your original formData (slot + user info)
+        $formData = json_decode($stateRaw, true);
 
         if (!is_array($formData)) {
-            Log::error('Failed to decode state JSON or invalid format', ['state' => $state]);
+            Log::error('Invalid state payload JSON', ['payload' => $stateRaw]);
             return redirect(config('app.frontend_url'));
         }
 
+        // Pass the token forward to BookingService (if you need it)
         $formData['google_token'] = $token;
 
         Log::info('Calling BookingService->bookMeeting', ['formData' => $formData]);
 
+        // 4. Create booking + Google event
         try {
             $result = $bookingService->bookMeeting($formData);
         } catch (\Exception $e) {
-            Log::error('Exception thrown in bookMeeting', ['exception' => $e->getMessage()]);
+            Log::error('Error in booking flow', ['exception' => $e->getMessage()]);
             return redirect(config('app.frontend_url') . '?error=' . urlencode('Internal server error during booking'));
         }
 
+        // 5. Handle result
         if (!empty($result['success'])) {
             Log::info('Booking successful', ['meeting_link' => $result['meeting_link']]);
             return redirect(config('app.frontend_url') . '?meeting_link=' . urlencode($result['meeting_link']));
-        } else {
-            Log::error('Booking failed', ['message' => $result['message'] ?? 'Unknown error']);
-            return redirect(config('app.frontend_url') . '?error=' . urlencode($result['message'] ?? 'Booking failed'));
         }
+
+        Log::error('Booking failed', ['message' => $result['message'] ?? 'Unknown']);
+        return redirect(config('app.frontend_url') . '?error=' . urlencode($result['message'] ?? 'Booking failed'));
     }
 }

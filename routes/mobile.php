@@ -7,6 +7,7 @@ use App\Http\Controllers\Apis\HomeController;
 use App\Http\Controllers\Apis\AuthController;
 use App\Http\Controllers\Apis\CartController;
 use App\Http\Controllers\Apis\OrdertController;
+use App\Http\Controllers\Apis\ProfileController;
 
 /**
  * Shopify APIs for Mobile App Development
@@ -47,8 +48,27 @@ Route::middleware(['disable.session'])->group(function () {
         });
 
         Route::prefix('orders',)->group(function () {
+            // Shows all orders
             Route::post('/', [OrdertController::class, 'index'])->name('order.index');
+            // Shows all details of selected order
             Route::post('/details', [OrdertController::class, 'getOrderDetails'])->name('order.details');
+        });
+
+        Route::prefix('profile',)->group(function () {
+            // Get customer profile + addresses
+            Route::get('/', [ProfileController::class, 'index'])->name('profile.index');
+
+            // Update profile details
+            Route::post('/update', [ProfileController::class, 'updateProfile'])->name('profile.update');
+
+            // Add an address
+            Route::post('/address/add', [ProfileController::class, 'addAddress'])->name('profile.address.add');
+
+            // Update address
+            Route::post('/address/update', [ProfileController::class, 'updateAddress'])->name('profile.address.update');
+
+            // Delete address
+            Route::post('/address/delete', [ProfileController::class, 'deleteAddress'])->name('profile.address.delete');
         });
     });
 });
