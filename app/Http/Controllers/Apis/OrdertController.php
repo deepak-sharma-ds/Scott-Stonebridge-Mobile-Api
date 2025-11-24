@@ -20,7 +20,8 @@ class OrdertController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'limit' => 'sometimes|integer|min:1',
-            'after' => 'sometimes|string|nullable'
+            'after' => 'sometimes|string|nullable',
+            'filter' => 'required|string'
         ]);
 
         if ($validator->fails()) {
@@ -34,6 +35,7 @@ class OrdertController extends Controller
         $limit = (int) $request->get('limit', 20);
         $after = $request->get('after') ?? null;
         $accessToken = $request->bearerToken();
+        $filter = $request->filter;
 
         $query = <<<'GRAPHQL'
             query customerOrders($accessToken: String!, $limit: Int!, $after: String) {

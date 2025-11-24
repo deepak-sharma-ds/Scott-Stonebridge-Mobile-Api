@@ -147,25 +147,74 @@ class BookingController extends Controller
 
                 $booking->event_id = $createdEvent->getId();
                 $booking->meeting_link = $createdEvent->getHangoutLink();
-            } else {
-                // Update existing event
-                $log->info('Updating existing calendar event for rescheduled booking', ['booking_id' => $booking->id]);
-                $event = $calendarService->events->get('primary', $booking->event_id);
-                $event->setStart(new Google_Service_Calendar_EventDateTime([
-                    'dateTime' => $startDateTime->toRfc3339String(),
-                    'timeZone' => 'Asia/Kolkata'
-                ]));
-                $event->setEnd(new Google_Service_Calendar_EventDateTime([
-                    'dateTime' => $endDateTime->toRfc3339String(),
-                    'timeZone' => 'Asia/Kolkata'
-                ]));
-
-                $calendarService->events->update('primary', $booking->event_id, $event, ['sendUpdates' => 'all']);
-                $log->info('Updated Google Calendar event', [
-                    'booking_id' => $booking->id,
-                    'event_id' => $booking->event_id
-                ]);
             }
+            // else {
+            //     // Update existing event
+            //     $log->info('Updating existing calendar event for rescheduled booking', ['booking_id' => $booking->id]);
+            //     $event = $calendarService->events->get('primary', $booking->event_id);
+            //     $event->setStart(new Google_Service_Calendar_EventDateTime([
+            //         'dateTime' => $startDateTime->toRfc3339String(),
+            //         'timeZone' => 'Asia/Kolkata'
+            //     ]));
+            //     $event->setEnd(new Google_Service_Calendar_EventDateTime([
+            //         'dateTime' => $endDateTime->toRfc3339String(),
+            //         'timeZone' => 'Asia/Kolkata'
+            //     ]));
+
+            //     $calendarService->events->update('primary', $booking->event_id, $event, ['sendUpdates' => 'all']);
+            //     $log->info('Updated Google Calendar event', [
+            //         'booking_id' => $booking->id,
+            //         'event_id' => $booking->event_id
+            //     ]);
+            // }
+            else {
+                $log->info('Rescheduling existing calendar event', [
+                    'booking_id' => $booking->id,
+                    'event_id'   => $booking->event_id
+                ]);
+
+                try {
+                    // Try to fetch the existing event
+                    $event = $calendarService->events->get('primary', $booking->event_id);
+
+                    // Update existing event
+                    $event->setStart(new Google_Service_Calendar_EventDateTime([
+                        'dateTime' => $startDateTime->toRfc3339String(),
+                        'timeZone' => 'Asia/Kolkata'
+                    ]));
+                    $event->setEnd(new Google_Service_Calendar_EventDateTime([
+                        'dateTime' => $endDateTime->toRfc3339String(),
+                        'timeZone' => 'Asia/Kolkata'
+                    ]));
+
+                    $calendarService->events->update('primary', $booking->event_id, $event, ['sendUpdates' => 'all']);
+                    $log->info('Updated existing Google event', ['event_id' => $booking->event_id]);
+                } catch (\Google_Service_Exception $e) {
+                    // If event is deleted or missing → Google returns 404
+                    if ($e->getCode() == 404) {
+                        $log->warning('Event missing — creating new', [
+                            'booking_id' => $booking->id,
+                            'old_event_id' => $booking->event_id
+                        ]);
+
+                        // Create new event
+                        $newEvent = $calendarService->events->insert(
+                            'primary',
+                            $this->buildCalendarEvent($booking, $startDateTime, $endDateTime),
+                            ['conferenceDataVersion' => 1, 'sendUpdates' => 'all']
+                        );
+
+                        // Update DB with new event id/link
+                        $booking->event_id = $newEvent->getId();
+                        $booking->meeting_link = $newEvent->getHangoutLink();
+
+                        $log->info('Created new Google event', ['event_id' => $booking->event_id]);
+                    } else {
+                        throw $e; // unexpected error → rethrow
+                    }
+                }
+            }
+
 
             // Update booking record
             $booking->availability_date_id = $availability->id;
@@ -340,5 +389,66 @@ class BookingController extends Controller
             'success' => true,
             'time_slots' => $slotsFormatted
         ]);
+    }
+
+    public function adminGoogleAuth(Request $request)
+    {
+        try {
+
+            // Extract code and state parameters sent by Google
+            $code = $request->query('code');
+            $state = $request->query('state');
+
+            if (!$code) {
+                return response()->json(['error' => 'Authorization code missing'], 400);
+            }
+
+            // Initialize Google Client
+            $client = new \Google_Client();
+            $client->setClientId(config('google.client_id') ?: env('GOOGLE_CLIENT_ID'));
+            $client->setClientSecret(config('google.client_secret') ?: env('GOOGLE_CLIENT_SECRET'));
+            $client->setRedirectUri(config('google.redirect_uri'));
+            $client->addScope(config('google.scopes'));
+            $client->setAccessType('offline');
+            $client->setPrompt('consent');
+
+            try {
+                $token = $client->fetchAccessTokenWithAuthCode($code);
+            } catch (\Exception $e) {
+                Log::error('Admin OAuth Token Fetch Failed', ['exception' => $e->getMessage()]);
+                return response()->json(['error' => 'Failed to fetch admin token'], 500);
+            }
+
+            if (isset($token['error'])) {
+                return response()->json(['error' => $token['error_description'] ?? 'Unknown error'], 400);
+            }
+
+            // Store token inside DB securely
+            $created  = $token['created'] ?? time();
+            $expiresIn = $token['expires_in'] ?? 3600;
+            $expiresAt = \Carbon\Carbon::createFromTimestamp($created + $expiresIn);
+
+            \App\Models\GoogleToken::updateOrCreate(
+                ['id' => 1],
+                [
+                    'access_token'          => Crypt::encryptString($token['access_token']),
+                    'refresh_token'         => isset($token['refresh_token'])
+                        ? Crypt::encryptString($token['refresh_token'])
+                        : null,
+                    'expires_at'            => $expiresAt,
+                    'token_type'            => $token['token_type'] ?? null,
+                    'scope'                 => $token['scope'] ?? null,
+                    'created_at_timestamp'  => $created,
+                ]
+            );
+
+            return response()->json([
+                'message' => 'Admin Google Calendar token stored successfully',
+                'token_info' => $token
+            ]);
+        } catch (\Throwable $th) {
+            //throw $th;
+            dd($th);
+        }
     }
 }

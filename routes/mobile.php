@@ -8,6 +8,7 @@ use App\Http\Controllers\Apis\AuthController;
 use App\Http\Controllers\Apis\CartController;
 use App\Http\Controllers\Apis\OrdertController;
 use App\Http\Controllers\Apis\ProfileController;
+use App\Http\Controllers\Apis\WishlistController;
 
 /**
  * Shopify APIs for Mobile App Development
@@ -69,6 +70,18 @@ Route::middleware(['disable.session'])->group(function () {
 
             // Delete address
             Route::post('/address/delete', [ProfileController::class, 'deleteAddress'])->name('profile.address.delete');
+        });
+
+        Route::prefix('wishlist')->group(function () {
+
+            // Get Wishlist (Storefront)
+            Route::post('/', [WishlistController::class, 'index'])->name('wishlist.index');
+
+            // Add to wishlist (Admin)
+            Route::post('/add', [WishlistController::class, 'add'])->name('wishlist.add');
+
+            // Remove from wishlist (Admin)
+            Route::post('/remove', [WishlistController::class, 'remove'])->name('wishlist.remove');
         });
     });
 });
