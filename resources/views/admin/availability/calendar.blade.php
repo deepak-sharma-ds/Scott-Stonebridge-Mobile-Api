@@ -3,78 +3,6 @@
 @section('content')
     <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet" />
 
-    <div class="container">
-
-        <div class="row page-titles mx-0 mb-3">
-            <div class="col-sm-6 p-0">
-                <div class="welcome-text">
-                    <h4>Availability Calendar</h4>
-                </div>
-            </div>
-            <div class="col-sm-6 p-0 justify-content-sm-end mt-2 mt-sm-0 d-flex">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Dashboard</a></li>
-                    <li class="breadcrumb-item active">Availability Calendar</li>
-                </ol>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-xl-12">
-                <div class="container-fluid py-4">
-                    <div class="card shadow-lg border-0 p-4"
-                        style="border-radius: 20px; background: linear-gradient(145deg,#ffffff,#eef2ff);">
-                        <div class="row">
-                            <div id="calendar"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-
-
-    <!-- Offcanvas Sidebar for editing a date -->
-    <div class="offcanvas offcanvas-end" tabindex="-1" id="availabilityOffcanvas"
-        aria-labelledby="availabilityOffcanvasLabel">
-        <div class="offcanvas-header" style="background: linear-gradient(135deg,#4e73df,#1cc88a); color: #fff;">
-            <h5 id="availabilityOffcanvasLabel" class="fw-bold">Availability</h5>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"
-                aria-label="Close"></button>
-        </div>
-        <div class="offcanvas-body">
-            <div id="offcanvasContent">
-                <div class="mb-2">
-                    <strong id="selectedDateLabel"></strong>
-                </div>
-
-                <div id="existingSlots" class="mb-3">
-                    <!-- existing slots will be injected here -->
-                </div>
-
-                <div class="mb-2">
-                    <label class="form-label">Add New Slot</label>
-                    <div class="d-flex gap-2">
-                        <input type="time" id="new_slot_start" class="form-control" />
-                        <input type="time" id="new_slot_end" class="form-control" />
-                        <button id="addNewSlotBtn" class="btn btn-primary">Add</button>
-                    </div>
-                </div>
-
-                <div class="mt-3">
-                    <button id="saveSlotsBtn" class="btn btn-success">Save</button>
-                    <button id="deleteDateBtn" class="btn btn-danger">Delete Date</button>
-                    <button class="btn btn-secondary" data-bs-dismiss="offcanvas">Close</button>
-                </div>
-
-                <div id="offcanvasAlerts" class="mt-3"></div>
-            </div>
-        </div>
-    </div>
-
-    <meta name="csrf-token" content="{{ csrf_token() }}">
-
     <style>
         /* small visual improvements */
         #calendar {
@@ -221,6 +149,78 @@
             }
         }
     </style>
+
+    <div class="container">
+
+        <div class="row page-titles mx-0 mb-3">
+            <div class="col-sm-6 p-0">
+                <div class="welcome-text">
+                    <h4>Availability Calendar</h4>
+                </div>
+            </div>
+            <div class="col-sm-6 p-0 justify-content-sm-end mt-2 mt-sm-0 d-flex">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Dashboard</a></li>
+                    <li class="breadcrumb-item active">Availability Calendar</li>
+                </ol>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-xl-12">
+                <div class="container-fluid py-4">
+                    <div class="card shadow-lg border-0 p-4"
+                        style="border-radius: 20px; background: linear-gradient(145deg,#ffffff,#eef2ff);">
+                        <div class="row">
+                            <div id="calendar"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+
+    <!-- Offcanvas Sidebar for editing a date -->
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="availabilityOffcanvas"
+        aria-labelledby="availabilityOffcanvasLabel">
+        <div class="offcanvas-header" style="background: linear-gradient(135deg,#4e73df,#1cc88a); color: #fff;">
+            <h5 id="availabilityOffcanvasLabel" class="fw-bold">Availability</h5>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="offcanvas"
+                aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body">
+            <div id="offcanvasContent">
+                <div class="mb-2">
+                    <strong id="selectedDateLabel"></strong>
+                </div>
+
+                <div id="existingSlots" class="mb-3">
+                    <!-- existing slots will be injected here -->
+                </div>
+
+                <div class="mb-2">
+                    <label class="form-label">Add New Slot</label>
+                    <div class="d-flex gap-2">
+                        <input type="time" id="new_slot_start" class="form-control" />
+                        <input type="time" id="new_slot_end" class="form-control" />
+                        <button id="addNewSlotBtn" class="btn btn-primary">Add</button>
+                    </div>
+                </div>
+
+                <div class="mt-3">
+                    <button id="saveSlotsBtn" class="btn btn-success">Save</button>
+                    <button id="deleteDateBtn" class="btn btn-danger">Delete Date</button>
+                    <button class="btn btn-secondary" data-bs-dismiss="offcanvas">Close</button>
+                </div>
+
+                <div id="offcanvasAlerts" class="mt-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <meta name="csrf-token" content="{{ csrf_token() }}">
 @endsection
 
 @section('custom_js_scripts')
@@ -283,7 +283,7 @@
                 if (opening) return; // block second trigger
                 opening = true;
                 console.log('Opening offcanvas for date:', date);
-                
+
                 document.getElementById('selectedDateLabel').innerText = (new Date(date)).toDateString();
                 document.getElementById('existingSlots').innerHTML = '<p>Loading...</p>';
                 document.getElementById('new_slot_start').value = '';
