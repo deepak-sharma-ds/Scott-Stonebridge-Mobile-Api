@@ -155,7 +155,7 @@
                                 <div class="day-header">
                                     <h5 class="fw-bold text-primary m-0">{{ $day }}</h5>
 
-                                    <button class="btn btn-light btn-sm day-toggle" data-bs-toggle="collapse"
+                                    <button type="button" class="btn btn-light btn-sm day-toggle" data-bs-toggle="collapse"
                                         data-bs-target="#collapse-{{ $day }}">
                                         <i class="fa-solid fa-chevron-down"></i>
                                     </button>
