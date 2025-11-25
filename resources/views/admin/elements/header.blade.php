@@ -22,11 +22,44 @@
                     <div class="sb-nav-link-icon"><i class="fa-solid fa-book"></i></div>
                     Booking Inquiries
                 </a>
-                <a class="nav-link {{ request()->routeIs('admin.availability.index') ? 'active' : '' }}"
-                    href="{{ url('/admin/availability') }}">
+                {{-- <a class="nav-link {{ request()->routeIs('admin.availability_templates.index') ? 'active' : '' }}"
+                    href="{{ url('/admin/availability-templates') }}">
                     <div class="sb-nav-link-icon"><i class="fas fa-calendar"></i></div>
                     Availability Slots
-                </a>
+                </a> --}}
+                @role('Admin')
+                    @php
+                        $isAvailibilityActive = request()->routeIs('admin.availability_templates.*') || request()->routeIs('admin.availability.*');
+                    @endphp
+
+                    <a class="nav-link {{ $isAvailibilityActive ? '' : 'collapsed' }}" href="#"
+                        data-bs-toggle="collapse" data-bs-target="#collapseAvailabilityCalendar"
+                        aria-expanded="{{ $isAvailibilityActive ? 'true' : 'false' }}"
+                        aria-controls="collapseAvailabilityCalendar">
+                        <div class="sb-nav-link-icon"><i class="fa-solid fa-calendar-days"></i></div>
+                        Availability & Calendar
+                        <div class="sb-sidenav-collapse-arrow"><i class="fas fa-angle-down"></i></div>
+                    </a>
+
+                    <div class="collapse {{ $isAvailibilityActive ? 'show' : '' }}" id="collapseAvailabilityCalendar"
+                        data-bs-parent="#sidenavAccordion">
+
+                        <nav class="sb-sidenav-menu-nested nav">
+                            <a class="nav-link {{ request()->routeIs('admin.availability_templates.*') ? 'active' : '' }}"
+                                href="{{ route('admin.availability_templates.index') }}">
+                                <div class="sb-nav-link-icon"><i class="fa-solid fa-layer-group"></i></div>Availibility
+                                Template
+                            </a>
+
+                            <a class="nav-link {{ request()->routeIs('admin.availability.*') ? 'active' : '' }}"
+                                href="{{ route('admin.availability.calendar') }}">
+                                <div class="sb-nav-link-icon"><i class="fa-solid fa-calendar-check"></i></div>Availibility
+                                Calendar
+                            </a>
+                        </nav>
+                    </div>
+                @endrole
+
                 @role('Admin')
                     <div class="sb-sidenav-menu-heading">Audio Subscriptions</div>
 

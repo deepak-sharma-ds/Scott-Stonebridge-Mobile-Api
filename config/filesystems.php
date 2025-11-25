@@ -63,6 +63,14 @@ return [
             'visibility' => 'private',
         ],
 
+        'graphql' => [
+            'driver' => 'local',
+            'root' => base_path('app/GraphQL'),
+            'visibility' => 'private',
+            'serve' => false,  // do NOT expose GraphQL files over HTTP
+            'throw' => true,   // fail fast if query file missing
+        ],
+
     ],
 
     /*

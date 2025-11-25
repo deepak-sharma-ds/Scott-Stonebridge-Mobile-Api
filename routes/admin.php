@@ -2,6 +2,8 @@
 
 use App\Http\Controllers\Admin\AudioController;
 use App\Http\Controllers\Admin\AudioStreamController;
+use App\Http\Controllers\Admin\AvailabilityCalendarController;
+use App\Http\Controllers\Admin\AvailabilityGenerationController;
 use App\Http\Controllers\Admin\ConfigurationsController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\Admin\UserController;
@@ -11,6 +13,7 @@ use App\Http\Controllers\Admin\BookingController;
 use App\Http\Controllers\Admin\AvailableSlotController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\AvailabilitySlotController;
+use App\Http\Controllers\Admin\AvailabilityTemplateController;
 use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\ProfileController;
 
@@ -43,9 +46,33 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
 	/* Store */
 	Route::name('admin.')->group(function () {
 		// Time Availability
-		Route::resource('availability', AvailabilitySlotController::class);
-		Route::post('availability/delete-date/{id}', [AvailabilitySlotController::class, 'deleteDate'])->name('availability.delete-date');
-		Route::delete('/availability/time-slot/{id}', [AvailabilitySlotController::class, 'deleteTimeSlot']);
+		// Route::resource('availability', AvailabilitySlotController::class);
+		// Route::post('availability/delete-date/{id}', [AvailabilitySlotController::class, 'deleteDate'])->name('availability.delete-date');
+		// Route::delete('/availability/time-slot/{id}', [AvailabilitySlotController::class, 'deleteTimeSlot']);
+
+
+		// Availability Templates (New Flow)
+		Route::get('availability-templates', [AvailabilityTemplateController::class, 'index'])->name('availability_templates.index');
+		Route::get('availability-templates/create', [AvailabilityTemplateController::class, 'create'])->name('availability_templates.create');
+		Route::post('availability-templates', [AvailabilityTemplateController::class, 'store'])->name('availability_templates.store');
+		Route::delete('availability-templates/{id}', [AvailabilityTemplateController::class, 'destroy'])->name('availability_templates.destroy');
+
+		// Generate Availability
+		Route::get('availability/generate', [AvailabilityGenerationController::class, 'showForm'])->name('availability.generate.form');
+		Route::post('availability/generate', [AvailabilityGenerationController::class, 'generate'])->name('availability.generate');
+
+
+		// Calendar UI
+		Route::get('availability/calendar', [AvailabilityCalendarController::class, 'index'])->name('availability.calendar');
+		Route::get('availability/calendar/events', [AvailabilityCalendarController::class, 'events'])->name('availability.calendar.events');
+
+		// CRUD for date
+		Route::get('availability/calendar/day/{date}', [AvailabilityCalendarController::class, 'day'])->where('date', '\d{4}-\d{2}-\d{2}')->name('availability.calendar.day'); // date: YYYY-mm-dd
+		Route::post('availability/calendar/day/{date}', [AvailabilityCalendarController::class, 'storeDay'])->where('date', '\d{4}-\d{2}-\d{2}')->name('availability.calendar.day.store');
+		Route::delete('availability/calendar/day/{date}', [AvailabilityCalendarController::class, 'deleteDay'])->where('date', '\d{4}-\d{2}-\d{2}')->name('availability.calendar.day.delete');
+
+		// Delete slot
+		Route::delete('availability/calendar/slot/{id}', [AvailabilityCalendarController::class, 'deleteSlot'])->where('id', '[0-9]+')->name('availability.calendar.slot.delete');
 	});
 
 	// Booking Inquiries

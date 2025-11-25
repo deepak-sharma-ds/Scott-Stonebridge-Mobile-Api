@@ -5,11 +5,15 @@ namespace App\Http\Controllers\Apis;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Services\APIShopifyService;
+use App\Facades\Shopify;
+use App\Traits\ShopifyResponseFormatter;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Validator;
 
 class ProductController extends Controller
 {
+  use ShopifyResponseFormatter;
+
   protected $storeUrl;
   protected $accessToken;
   protected $shopify;
@@ -257,7 +261,7 @@ class ProductController extends Controller
   /**
    * Get all categories (collections)
    */
-  public function getCategories(Request $request)
+  public function getCategoriesOld(Request $request)
   {
     $limit = (int) $request->get('limit', 20);
     $after = $request->get('after') ?? null;  // cursor for pagination
@@ -312,6 +316,42 @@ class ProductController extends Controller
       ]
     ], 200);
   }
+  /**
+   * Get all categories (collections)
+   */
+  public function getCategories(Request $request)
+  {
+    $request->validate([
+      'limit' => 'sometimes|integer|min:1|max:250',
+      'after' => 'sometimes|string|nullable',
+    ]);
+
+    try {
+      $vars = [
+        'limit' => (int) $request->get('limit', 20),
+        'after' => $request->get('after'),
+      ];
+
+      $response = Shopify::query(
+        'storefront',
+        'collections/get_collections',
+        $vars
+      );
+
+      // Pass the MAIN "data" object, not the inner node
+      $parsed = $this->parseEdges(
+        data_get($response, 'data'),   // ← IMPORTANT
+        'collections'
+      );
+
+      return $this->success('Collections fetched successfully', $parsed);
+    } catch (\Throwable $e) {
+      return $this->fail('Failed to fetch collections', $e->getMessage());
+    }
+  }
+
+
+
 
   /**
    * Get products by category (collection handle)

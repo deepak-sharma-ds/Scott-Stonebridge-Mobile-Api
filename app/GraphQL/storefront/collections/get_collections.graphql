@@ -1,0 +1,19 @@
+query ($limit: Int!, $after: String) {
+  collections(first: $limit, after: $after) {
+    edges {
+      node {
+        id
+        title
+        handle
+        image {
+          originalSrc
+          altText
+        }
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}
