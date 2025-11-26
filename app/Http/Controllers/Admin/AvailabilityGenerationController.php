@@ -24,14 +24,28 @@ class AvailabilityGenerationController extends Controller
 
     public function generate(Request $request)
     {
+        // $request->validate([
+        //     'mode' => 'required|in:current_week,week_of_month,entire_month,custom_range',
+        //     'month' => 'nullable|integer|min:1|max:12',
+        //     'year' => 'nullable|integer|min:1970|max:3100',
+        //     'week_number' => 'nullable|integer|min:1|max:5',
+        //     'custom_start' => 'nullable|date',
+        //     'custom_end' => 'nullable|date|after_or_equal:custom_start',
+        // ]);
+
         $request->validate([
             'mode' => 'required|in:current_week,week_of_month,entire_month,custom_range',
-            'month' => 'nullable|integer|min:1|max:12',
-            'year' => 'nullable|integer|min:1970|max:2100',
-            'week_number' => 'nullable|integer|min:1|max:5',
-            'custom_start' => 'nullable|date',
-            'custom_end' => 'nullable|date|after_or_equal:custom_start',
+
+            // Week of month
+            'month'       => 'required_if:mode,week_of_month,entire_month|nullable|integer|between:1,12',
+            'year'        => 'required_if:mode,week_of_month,entire_month|nullable|integer|min:1970|max:3100',
+            'week_number' => 'required_if:mode,week_of_month|nullable|integer|between:1,5',
+
+            // Custom range
+            'custom_start' => 'required_if:mode,custom_range|nullable|date',
+            'custom_end'   => 'required_if:mode,custom_range|nullable|date|after_or_equal:custom_start',
         ]);
+
 
         $mode = $request->mode;
         $userId = Auth::id();

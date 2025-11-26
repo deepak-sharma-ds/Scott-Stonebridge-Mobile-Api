@@ -25,7 +25,7 @@
                     <div>
                         <a href="{{ route('admin.availability_templates.create') }}" class="btn btn-primary">Edit
                             Templates</a>
-                        <a href="{{ route('admin.availability.generate.form') }}" class="btn btn-success">Generate Slots</a>
+                        <a href="{{ route('admin.availability_templates.generate.form') }}" class="btn btn-success">Generate Slots</a>
                     </div>
                 </div>
 

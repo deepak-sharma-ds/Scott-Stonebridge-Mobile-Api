@@ -58,8 +58,8 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
 		Route::delete('availability-templates/{id}', [AvailabilityTemplateController::class, 'destroy'])->name('availability_templates.destroy');
 
 		// Generate Availability
-		Route::get('availability/generate', [AvailabilityGenerationController::class, 'showForm'])->name('availability.generate.form');
-		Route::post('availability/generate', [AvailabilityGenerationController::class, 'generate'])->name('availability.generate');
+		Route::get('availability/generate', [AvailabilityGenerationController::class, 'showForm'])->name('availability_templates.generate.form');
+		Route::post('availability/generate', [AvailabilityGenerationController::class, 'generate'])->name('availability_templates.generate');
 
 
 		// Calendar UI
