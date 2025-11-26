@@ -74,7 +74,9 @@
         <!-- HEADER -->
         <div class="row page-titles mx-0 mb-3">
             <div class="col-sm-6 p-0">
-                <h4>Generate Availability Slots</h4>
+                <div class="welcome-text">
+                    <h4>Generate Availability Slots</h4>
+                </div>
             </div>
             <div class="col-sm-6 p-0 d-flex justify-content-sm-end mt-2 mt-sm-0">
                 <ol class="breadcrumb">
