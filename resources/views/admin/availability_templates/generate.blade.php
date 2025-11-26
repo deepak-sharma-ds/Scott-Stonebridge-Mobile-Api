@@ -30,7 +30,7 @@
             border-radius: 22px;
             background: linear-gradient(145deg, #ffffff, #eef2ff);
             padding: 35px !important;
-            max-width: 850px;
+            /* max-width: 850px; */
             /* margin: 0 auto; */
             box-shadow: 0 8px 18px rgba(0, 0, 0, 0.06);
         }
@@ -87,10 +87,10 @@
         </div>
 
 
-        <div class="card p-4 shadow-lg border-0 animate-card card-hover"
+        <div class="card p-4 shadow-lg border-0 animate-card card-hover generate-card"
             style="border-radius:22px;background:linear-gradient(145deg,#ffffff,#eef2ff);">
 
-            <div class="generate-card">
+            <div class="">
 
                 <div class="text-center mb-4">
                     <h3 class="fw-bold text-primary mb-1">Generate Availability From Templates</h3>
