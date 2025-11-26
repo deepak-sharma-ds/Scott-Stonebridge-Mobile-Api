@@ -3,6 +3,7 @@
 namespace App\Console\Commands;
 
 use App\Models\AvailabilityTemplate;
+use App\Models\Configuration;
 use App\Services\AvailabilityGenerator;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
@@ -37,7 +38,12 @@ class GenerateAvailabilityFromTemplates extends Command
      */
     public function handle()
     {
-        $userId = $this->option('user_id'); // if null run for all users with templates
+        if (! (int) Configuration::getConfig('Availability.auto_generate')) {
+            $this->info("Auto-generation of availability is disabled. Exiting!");
+            return 0;
+        }
+
+        $userId = $this->option('user_id') ?? config('env.ADMIN_USER_ID'); // if null run for all users with templates
 
         $month = $this->option('month') ?? now()->month;
         $year = $this->option('year') ?? now()->year;

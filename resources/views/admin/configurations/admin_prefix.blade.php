@@ -170,6 +170,28 @@
 
 											@elseif($inputType == 'datetime')
 												<input type="{{ $inputType }}" class=" form-control" id="min-date" inline="true" name="Configuration[{{ $i }}][value]" id="Configuration.{{ $i }}.Value" class="form-control" value="{{ $configuration->value }}" {{ $disabled }}>
+											
+											@elseif($inputType == 'switch')
+												<!-- Hidden value when unchecked -->
+												<input type="hidden" name="Configuration[{{ $i }}][value]" value="0">
+
+												<div class="form-check form-switch">
+													<input 
+														class="form-check-input" 
+														type="checkbox"
+														id="Configuration_{{ $i }}_Value"
+														name="Configuration[{{ $i }}][value]" 
+														value="1"
+														data-bs-trigger="hover"
+														data-bs-placement="right"
+														data-title="{{ $configuration->description }}"
+														{{ $configuration->value == 1 ? 'checked' : '' }}
+														{{ $disabled }}
+													>
+													<label class="form-check-label fw-semibold" for="Configuration_{{ $i }}_Value">
+														{{ $configuration->title }}
+													</label>
+												</div>
 
 											@else
 												<input type="{{ $inputType }}" name="Configuration[{{ $i }}][value]" id="Configuration.{{ $i }}.Value" class="form-control" value="{{ $configuration->value }}" {{ $disabled }}>

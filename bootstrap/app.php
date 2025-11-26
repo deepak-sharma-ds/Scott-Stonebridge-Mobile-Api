@@ -32,6 +32,7 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withSchedule(function (Illuminate\Console\Scheduling\Schedule $schedule) {
         // $schedule->command('app:generate-weekly-appoinment-slots')->weeklyOn(0, '00:00'); // Every Sunday midnight
+        $schedule->command('app:generate-availability')->dailyAt('01:00');
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //
