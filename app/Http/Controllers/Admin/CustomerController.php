@@ -17,6 +17,7 @@ class CustomerController extends Controller
      */
     public function index(Request $request)
     {
+        abort(403, 'Manage User is under development.');
         $request->validate([
             'limit' => 'sometimes|integer|min:1|max:50',
             'after' => 'sometimes|string|nullable',
