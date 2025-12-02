@@ -9,6 +9,7 @@ use App\Models\PlaySession;
 use App\Models\CustomerEntitlement;
 use App\Models\Package;
 use App\Models\Audio;
+use App\Models\PlaybackSession;
 
 class PlaySessionController extends Controller
 {
@@ -48,5 +49,28 @@ class PlaySessionController extends Controller
             'token' => $rawToken,
             'playlist_url' => route('hls.playlist', ['audio' => $audioId, 'token' => $rawToken])
         ]);
+    }
+
+    public function save(Request $request)
+    {
+        $request->validate([
+            'customer_id' => 'required|integer',
+            'audio_id' => 'required|integer',
+            'package_tag' => 'required|string',
+            'position' => 'required|numeric|min:0',
+        ]);
+
+        PlaybackSession::updateOrCreate(
+            [
+                'customer_id' => $request->customer_id,
+                'audio_id' => $request->audio_id,
+                'package_tag' => $request->package_tag,
+            ],
+            [
+                'last_position_seconds' => (float)$request->position,
+            ]
+        );
+
+        return response()->json(['status' => 200, 'message' => 'Progress saved']);
     }
 }

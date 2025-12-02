@@ -22,11 +22,11 @@
                     <div class="sb-nav-link-icon"><i class="fa-solid fa-book"></i></div>
                     Booking Inquiries
                 </a>
-                {{-- <a class="nav-link {{ request()->routeIs('admin.availability_templates.index') ? 'active' : '' }}"
-                    href="{{ url('/admin/availability-templates') }}">
-                    <div class="sb-nav-link-icon"><i class="fas fa-calendar"></i></div>
-                    Availability Slots
-                </a> --}}
+                <a class="nav-link {{ request()->routeIs('admin.customers.index') ? 'active' : '' }}"
+                    href="{{ url('/admin/customers') }}">
+                    <div class="sb-nav-link-icon"><i class="fas fa-user"></i></div>
+                    Manage Users
+                </a>
                 @role('Admin')
                     @php
                         $isAvailibilityActive = request()->routeIs('admin.availability_templates.*') || request()->routeIs('admin.availability.*');

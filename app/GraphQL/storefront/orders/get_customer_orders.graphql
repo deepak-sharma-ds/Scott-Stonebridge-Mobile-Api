@@ -1,0 +1,74 @@
+query getCustomerOrders($accessToken: String!, $limit: Int!, $after: String) {
+  customer(customerAccessToken: $accessToken) {
+    id
+
+    orders(first: $limit, after: $after) {
+      edges {
+        cursor
+        node {
+          id
+          name
+          orderNumber
+          processedAt
+          financialStatus
+          fulfillmentStatus
+
+          totalPriceV2 {
+            amount
+            currencyCode
+          }
+          subtotalPriceV2 {
+            amount
+            currencyCode
+          }
+          totalTaxV2 {
+            amount
+            currencyCode
+          }
+
+          lineItems(first: 250) {
+            edges {
+              node {
+                title
+                quantity
+
+                discountedTotalPrice {
+                  amount
+                  currencyCode
+                }
+
+                variant {
+                  id
+                  title
+
+                  image {
+                    url
+                  }
+
+                  product {
+                    title
+                    handle
+                  }
+                }
+              }
+            }
+          }
+
+          shippingAddress {
+            name
+            address1
+            city
+            province
+            country
+            zip
+          }
+        }
+      }
+
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

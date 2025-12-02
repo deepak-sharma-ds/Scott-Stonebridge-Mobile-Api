@@ -1,0 +1,50 @@
+query($id: ID!) {
+  customer(id: $id) {
+    id
+    firstName
+    lastName
+    email
+    phone
+    numberOfOrders
+    amountSpent {
+      amount
+      currencyCode
+    }
+    createdAt
+    updatedAt
+    note
+    verifiedEmail
+    validEmailAddress
+    tags
+    lifetimeDuration
+    defaultAddress {
+      id
+      address1
+      city
+      province
+      country
+      zip
+      phone
+      provinceCode
+      countryCodeV2
+    }
+    addresses {
+      id
+      firstName
+      lastName
+      address1
+      city
+      province
+      country
+      zip
+      phone
+      name
+      provinceCode
+      countryCodeV2
+    }
+    image {
+      src
+    }
+    canDelete
+  }
+}

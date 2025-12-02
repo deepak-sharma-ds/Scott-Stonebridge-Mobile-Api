@@ -4,11 +4,19 @@ namespace App\Http\Controllers\Apis;
 
 use App\Http\Controllers\Controller;
 use App\Services\APIShopifyService;
+use App\Facades\Shopify;
+use App\Http\Requests\Customer\AddCustomerAddressRequest;
+use App\Http\Requests\Customer\DeleteCustomerAddressRequest;
+use App\Http\Requests\Customer\UpdateCustomerAddressRequest;
+use App\Http\Requests\Customer\UpdateCustomerProfileRequest;
+use App\Traits\ShopifyResponseFormatter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class ProfileController extends Controller
 {
+    use ShopifyResponseFormatter;
+
     protected $shopify;
     protected $customerAccessToken;
 
@@ -17,387 +25,231 @@ class ProfileController extends Controller
         $this->shopify = $shopify;
         $this->customerAccessToken = $request->bearerToken();
     }
+
     /**
      * Get customer profile + addresses
      */
     public function index(Request $request)
     {
         try {
-
-            $customerAccessToken = $this->customerAccessToken;
-
-            $query = <<<'GRAPHQL'
-                query getCustomer($customerAccessToken: String!) {
-                    customer(customerAccessToken: $customerAccessToken) {
-                        id
-                        firstName
-                        lastName
-                        email
-                        phone
-                        addresses(first: 100) {
-                            edges {
-                                node {
-                                    id
-                                    address1
-                                    address2
-                                    city
-                                    company
-                                    country
-                                    firstName
-                                    lastName
-                                    phone
-                                    province
-                                    zip
-                                }
-                            }
-                        }
-                    }
-                }
-                GRAPHQL;
-
-            $variables = [
-                "customerAccessToken" => $customerAccessToken
+            $vars = [
+                'customerAccessToken' => $this->customerAccessToken,
             ];
 
-            $data = $this->shopify->storefrontApiRequest($query, $variables);
-            if (isset($data['errors'])) {
-                return response()->json([
-                    'status' => 500,
-                    'message' => 'Failed to fetch customer details',
-                    'errors' => $data['errors'],
-                ], 500);
+            // -----------------------------------------------------
+            // Shopify query (Storefront API) using new architecture
+            // -----------------------------------------------------
+            $response = Shopify::query(
+                'storefront',
+                'customer/get_customer_profile',
+                $vars
+            );
+
+            $customer = data_get($response, 'data.customer');
+
+            if (!$customer) {
+                return $this->fail('Customer not found');
             }
 
-            $getCustomer = data_get($data, 'data.getCustomer');
-            if (!$getCustomer) {
-                return response()->json([
-                    'status' => 404,
-                    'message' => 'Cart not found',
-                ], 404);
-            }
+            // -----------------------------------------------------
+            // Refine Nested Edges (addresses)
+            // -----------------------------------------------------
+            $customer = $this->refineNestedEdges($customer);
 
-            return response()->json([
-                'status' => 200,
-                'message' => 'Customer details found successfully',
-                'data' => $getCustomer,
-            ], 200);
-        } catch (\Throwable $th) {
-            return response()->json([
-                'status' => 500,
-                'message' => 'Something went wrong.',
-                'error' => $th->getMessage()
-            ], 500);
+            return $this->success('Customer details fetched successfully', $customer);
+        } catch (\Throwable $e) {
+            return $this->fail('Something went wrong.', $e->getMessage());
         }
     }
 
     /**
      * Update customer profile (Storefront)
      */
-    public function updateProfile(Request $request)
+    public function updateProfile(UpdateCustomerProfileRequest $request)
     {
         try {
+            $validated = $request->validated();
 
-            $customerAccessToken = $this->customerAccessToken;
-
-            // Validate request
-            $validator = Validator::make($request->all(), [
-                'firstName' => ['required', 'string', 'max:100'],
-                'lastName' => ['required', 'string', 'max:100'],
-                'email' => ['required', 'string', 'email', 'max:255'],
-                'phone' => ['required', 'string', 'max:100'],
-            ]);
-
-            if ($validator->fails()) {
-                response()->json([
-                    'success' => 422,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors(),
-                ], 422);
-            }
-            $validated = $validator->validated();
-
-            $query = <<<'GRAPHQL'
-                mutation updateCustomer(
-                    $customerAccessToken: String!,
-                    $customer: CustomerUpdateInput!
-                ) {
-                    customerUpdate(customerAccessToken: $customerAccessToken, customer: $customer) {
-                        customer {
-                            id
-                            firstName
-                            lastName
-                            email
-                            phone
-                        }
-                        customerUserErrors {
-                            field
-                            message
-                        }
-                    }
-                }
-                GRAPHQL;
-
-            $variables = [
-                "customerAccessToken" => $customerAccessToken,
-                "customer" => [
-                    "firstName" => $validated['first_name'],
-                    "lastName"  => $validated['last_name'],
-                    "email"     => $validated['email'],
-                    "phone"     => $validated['phone'],
-                ]
+            $vars = [
+                'customerAccessToken' => $this->customerAccessToken,
+                'customer' => [
+                    'firstName' => $validated['firstName'],
+                    'lastName'  => $validated['lastName'],
+                    'email'     => $validated['email'],
+                    'phone'     => $validated['phone'],
+                ],
             ];
 
-            $data = $this->shopify->storefrontApiRequest($query, $variables);
-            if (isset($data['errors'])) {
-                return response()->json([
-                    'status' => 500,
-                    'message' => 'Failed to update customer details',
-                    'errors' => $data['errors'],
-                ], 500);
+            // -----------------------------------------------------
+            // GraphQL Call using new architecture
+            // -----------------------------------------------------
+            $response = Shopify::query(
+                'storefront',
+                'customer/update_customer_profile',
+                $vars
+            );
+
+            $result = data_get($response, 'data.customerUpdate');
+
+            if (!$result) {
+                return $this->fail('Failed to update customer details');
             }
 
-            $updateCustomer = data_get($data, 'data.updateCustomer');
-            if (!$updateCustomer) {
-                return response()->json([
-                    'status' => 404,
-                    'message' => 'Customer not found!',
-                ], 404);
+            // Check for Shopify validation errors
+            $errors = data_get($result, 'customerUserErrors', []);
+            if (!empty($errors)) {
+                return $this->fail('Failed to update customer details', $errors);
             }
 
-            return response()->json([
-                'status' => 200,
-                'message' => 'Customer details update successfully',
-                'data' => $updateCustomer,
-            ], 200);
-        } catch (\Throwable $th) {
-            return response()->json([
-                'status' => 500,
-                'message' => 'Something went wrong.',
-                'error' => $th->getMessage()
-            ], 500);
+            $customer = data_get($result, 'customer');
+
+            return $this->success('Customer details updated successfully', $customer);
+        } catch (\Throwable $e) {
+            return $this->fail('Something went wrong.', $e->getMessage());
         }
     }
+
 
     /**
      * Add customer address
      */
-    public function addAddress(Request $request)
+    public function addAddress(AddCustomerAddressRequest $request)
     {
         try {
-
-            $customerAccessToken = $this->customerAccessToken;
-
-            // Validate request
-            $validator = Validator::make($request->all(), [
-                'address1'   => ['required', 'string', 'max:150'],
-                'address2'   => ['nullable', 'string', 'max:150'],
-                'city'       => ['required', 'string', 'max:100'],
-                'company'    => ['nullable', 'string', 'max:100'],
-                'country'    => ['required', 'string', 'max:100'],
-                'firstName'  => ['required', 'string', 'max:100'],
-                'lastName'   => ['required', 'string', 'max:100'],
-                'phone'      => ['nullable', 'string', 'max:20'],
-                'province'   => ['nullable', 'string', 'max:100'],
-                'zip'        => ['required', 'string', 'max:20'],
-            ]);
-
-
-            if ($validator->fails()) {
-                response()->json([
-                    'success' => 422,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors(),
-                ], 422);
-            }
-            $validated = $validator->validated();
-
-            $query = <<<'GRAPHQL'
-            mutation customerAddressCreate(
-                $customerAccessToken: String!,
-                $address: MailingAddressInput!
-            ) {
-                customerAddressCreate(customerAccessToken: $customerAccessToken, address: $address) {
-                    customerAddress {
-                        id
-                        address1
-                        address2
-                        city
-                        company
-                        country
-                        firstName
-                        lastName
-                        phone
-                        province
-                        zip
-                    }
-                    customerUserErrors {
-                        message
-                    }
-                }
-            }
-            GRAPHQL;
-
-            $variables = [
-                "customerAccessToken" => $customerAccessToken,
-                "address" => [
-                    "address1"   => $validated['address1'],
-                    "address2"   => $validated['address2'],
-                    "city"       => $validated['city'],
-                    "company"    => $validated['company'],
-                    "country"    => $validated['country'],
-                    "firstName"  => $validated['firstName'],
-                    "lastName"   => $validated['lastName'],
-                    "phone"      => $validated['phone'],
-                    "province"   => $validated['province'],
-                    "zip"        => $validated['zip'],
-                ]
+            $vars = [
+                'customerAccessToken' => $this->customerAccessToken,
+                'address' => [
+                    'address1'  => $request->address1,
+                    'address2'  => $request->address2,
+                    'city'      => $request->city,
+                    'company'   => $request->company,
+                    'country'   => $request->country,
+                    'firstName' => $request->firstName,
+                    'lastName'  => $request->lastName,
+                    'phone'     => $request->phone,
+                    'province'  => $request->province,
+                    'zip'       => $request->zip,
+                ],
             ];
 
-            $data = $this->shopify->storefrontApiRequest($query, $variables);
-            if (isset($data['errors'])) {
-                return response()->json([
-                    'status' => 500,
-                    'message' => 'Failed to create customer address',
-                    'errors' => $data['errors'],
-                ], 500);
+            // -----------------------------------------------------
+            // Shopify GraphQL Request
+            // -----------------------------------------------------
+            $response = Shopify::query(
+                'storefront',
+                'customer/add_customer_address',
+                $vars
+            );
+
+            $result = data_get($response, 'data.customerAddressCreate');
+
+            if (!$result) {
+                return $this->fail('Failed to create address!');
             }
 
-            $customerAddressCreate = data_get($data, 'data.customerAddressCreate');
-            if (!$customerAddressCreate) {
-                return response()->json([
-                    'status' => 404,
-                    'message' => 'Failed to create address!',
-                ], 404);
+            // Shopify user-level input errors
+            if (!empty($result['customerUserErrors'])) {
+                return $this->fail('Failed to create customer address', $result['customerUserErrors']);
             }
 
-            return response()->json([
-                'status' => 200,
-                'message' => 'Address created successfully',
-                'data' => $customerAddressCreate,
-            ], 200);
-        } catch (\Throwable $th) {
-            return response()->json([
-                'status' => 500,
-                'message' => 'Something went wrong.',
-                'error' => $th->getMessage()
-            ], 500);
+            return $this->success('Address created successfully', [
+                'address' => $result['customerAddress'] ?? null,
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fail('Something went wrong.', $e->getMessage());
         }
     }
+
 
     /**
      * Update customer address
      */
-    public function updateAddress(Request $request)
+    public function updateAddress(UpdateCustomerAddressRequest $request)
     {
         try {
-
-            $customerAccessToken = $this->customerAccessToken;
-
-            // Validate request
-            $validator = Validator::make($request->all(), [
-                'address_id'    => ['required'],
-                'address1'      => ['required', 'string', 'max:150'],
-                'address2'      => ['nullable', 'string', 'max:150'],
-                'city'          => ['required', 'string', 'max:100'],
-                'company'       => ['nullable', 'string', 'max:100'],
-                'country'       => ['required', 'string', 'max:100'],
-                'firstName'     => ['required', 'string', 'max:100'],
-                'lastName'      => ['required', 'string', 'max:100'],
-                'phone'         => ['nullable', 'string', 'max:20'],
-                'province'      => ['nullable', 'string', 'max:100'],
-                'zip'           => ['required', 'string', 'max:20'],
-            ]);
-
-
-            if ($validator->fails()) {
-                response()->json([
-                    'success' => 422,
-                    'message' => 'Validation failed',
-                    'errors' => $validator->errors(),
-                ], 422);
-            }
-            $validated = $validator->validated();
-
-            $query = <<<'GRAPHQL'
-                mutation customerAddressUpdate(
-                    $customerAccessToken: String!,
-                    $id: ID!,
-                    $address: MailingAddressInput!
-                ) {
-                    customerAddressUpdate(customerAccessToken: $customerAccessToken, id: $id, address: $address) {
-                        customerAddress {
-                            id
-                            address1
-                            address2
-                            city
-                            company
-                            country
-                            firstName
-                            lastName
-                            phone
-                            province
-                            zip
-                        }
-                        customerUserErrors {
-                            message
-                        }
-                    }
-                }
-                GRAPHQL;
-
-            $variables = [
-                "customerAccessToken" => $customerAccessToken,
-                "id" => $validated['address_id'],
-                "address" => [
-                    "address1" => $validated['address1'],
-                    "address2" => $validated['address2'],
-                    "city"     => $validated['city'],
-                    "company"  => $validated['company'],
-                    "country"  => $validated['country'],
-                    "firstName"  => $validated['firstName'],
-                    "lastName"  => $validated['lastName'],
-                    "phone"    => $validated['phone'],
-                    "province"    => $validated['province'],
-                    "zip"      => $validated['zip'],
-                ]
+            $vars = [
+                'customerAccessToken' => $this->customerAccessToken,
+                'id' => $request->address_id,
+                'address' => [
+                    'address1'  => $request->address1,
+                    'address2'  => $request->address2,
+                    'city'      => $request->city,
+                    'company'   => $request->company,
+                    'country'   => $request->country,
+                    'firstName' => $request->firstName,
+                    'lastName'  => $request->lastName,
+                    'phone'     => $request->phone,
+                    'province'  => $request->province,
+                    'zip'       => $request->zip,
+                ],
             ];
 
-            return $this->shopify->storefrontApiRequest($query, $variables);
-        } catch (\Throwable $th) {
-            return response()->json([
-                'status' => 500,
-                'message' => 'Something went wrong.',
-                'error' => $th->getMessage()
-            ], 500);
+            $response = Shopify::query(
+                'storefront',
+                'customer/update_customer_address',
+                $vars
+            );
+
+            $result = data_get($response, 'data.customerAddressUpdate');
+
+            if (!$result) {
+                return $this->fail('Failed to update address');
+            }
+
+            // Shopify-level user errors
+            $userErrors = data_get($result, 'customerUserErrors', []);
+            if (!empty($userErrors)) {
+                return $this->fail('Failed to update address', $userErrors);
+            }
+
+            $address = data_get($result, 'customerAddress');
+
+            // return normalized address
+            return $this->success('Address updated successfully', [
+                'address' => $address,
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fail('Something went wrong.', $e->getMessage());
         }
     }
 
     /**
      * Delete customer address
      */
-    public function deleteAddress(Request $request)
+    public function deleteAddress(DeleteCustomerAddressRequest $request)
     {
-        $customerAccessToken = $this->customerAccessToken;
+        try {
+            $vars = [
+                'customerAccessToken' => $this->customerAccessToken,
+                'id' => $request->address_id,
+            ];
 
-        $query = <<<'GRAPHQL'
-        mutation customerAddressDelete(
-            $customerAccessToken: String!,
-            $id: ID!
-        ) {
-            customerAddressDelete(customerAccessToken: $customerAccessToken, id: $id) {
-                deletedCustomerAddressId
-                customerUserErrors {
-                    message
-                }
+            // -----------------------------------------------------
+            // Shopify GraphQL Request
+            // -----------------------------------------------------
+            $response = Shopify::query(
+                'storefront',
+                'customer/delete_customer_address',
+                $vars
+            );
+
+            $result = data_get($response, 'data.customerAddressDelete');
+
+            if (!$result) {
+                return $this->fail('Failed to delete customer address');
             }
+
+            // Shopify validation errors
+            $userErrors = data_get($result, 'customerUserErrors', []);
+            if (!empty($userErrors)) {
+                return $this->fail('Failed to delete customer address', $userErrors);
+            }
+
+            return $this->success('Address deleted successfully', [
+                'deletedAddressId' => $result['deletedCustomerAddressId'] ?? null,
+            ]);
+        } catch (\Throwable $e) {
+            return $this->fail('Something went wrong.', $e->getMessage());
         }
-        GRAPHQL;
-
-        $variables = [
-            "customerAccessToken" => $customerAccessToken,
-            "id" => $request->address_id
-        ];
-
-        return $this->shopify->storefrontApiRequest($query, $variables);
     }
 }

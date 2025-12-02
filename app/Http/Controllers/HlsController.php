@@ -24,6 +24,12 @@ class HlsController extends Controller
         if (!$session) abort(403, 'Invalid or expired session');
         // Optional: check IP/user-agent
         // if ($session->ip && $session->ip !== $request->ip()) abort(403,'IP mismatch');
+
+        // Auto-extend session TTL while user is active
+        // Extend by 30 minutes on each validated request (segments/playlist/key)
+        $session->expires_at = now()->addMinutes(30);
+        $session->save();
+
         return $session;
     }
 

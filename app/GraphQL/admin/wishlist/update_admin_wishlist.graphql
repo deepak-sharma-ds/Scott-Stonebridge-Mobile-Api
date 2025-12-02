@@ -1,0 +1,30 @@
+mutation updateAdminWishlist($customerId: ID!, $value: String!) {
+  customerUpdate(
+    input: {
+      id: $customerId
+      metafields: [
+        {
+          namespace: "wishlist"
+          key: "items"
+          type: "json"
+          value: $value
+        }
+      ]
+    }
+  ) {
+    customer {
+      id
+      metafields(first: 250, namespace: "wishlist") {
+        edges {
+          node {
+            key
+            value
+          }
+        }
+      }
+    }
+    userErrors {
+      message
+    }
+  }
+}

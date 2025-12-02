@@ -14,6 +14,7 @@ use App\Http\Controllers\Admin\AvailableSlotController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\AvailabilitySlotController;
 use App\Http\Controllers\Admin\AvailabilityTemplateController;
+use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\ProfileController;
 
@@ -73,6 +74,19 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
 
 		// Delete slot
 		Route::delete('availability/calendar/slot/{id}', [AvailabilityCalendarController::class, 'deleteSlot'])->where('id', '[0-9]+')->name('availability.calendar.slot.delete');
+
+		// Manage Customers/Users
+		Route::prefix('customers')->group(function () {
+			Route::get('/', [CustomerController::class, 'index'])->name('customers.index');
+			Route::get('/details/{id}', [CustomerController::class, 'show'])->name('customers.show');
+
+			Route::post('/{id}/suspend', [CustomerController::class, 'suspend'])->name('customers.suspend');
+			Route::post('/{id}/unsuspend', [CustomerController::class, 'unsuspend'])->name('customers.unsuspend');
+
+			Route::delete('/{id}', [CustomerController::class, 'destroy'])->name('customers.destroy');
+
+			Route::get('/export-data', [CustomerController::class, 'exportCsv'])->name('customers.export');
+		});
 	});
 
 	// Booking Inquiries
@@ -83,6 +97,8 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
 	Route::put('booking/cancel', [BookingController::class, 'cancel'])->name('admin.booking.cancel');
 	Route::get('get-time-slots', [BookingController::class, 'getTimeSlots'])->name('admin.get.time-slots');
 
+
+	// Audio & Packages
 	Route::resource('packages', PackageController::class);
 	Route::resource('audios', AudioController::class);
 

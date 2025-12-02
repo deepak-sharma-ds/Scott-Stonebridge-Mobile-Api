@@ -1,0 +1,21 @@
+mutation suspendCustomer($ownerId: ID!, $value: String!) {
+  metafieldsSet(metafields: [
+    {
+      ownerId: $ownerId,
+      namespace: "admin",
+      key: "suspended",
+      type: "single_line_text_field",
+      value: $value
+    }
+  ]) {
+    metafields {
+      id
+      key
+      value
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}

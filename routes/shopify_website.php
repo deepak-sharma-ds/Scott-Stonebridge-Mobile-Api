@@ -27,8 +27,9 @@ Route::prefix('shopify')->group(function () {
 
 
         // Route::prefix('webhook')->group(function () {
-        //     Route::post('/order-paid', [ShopifyController::class, 'orderPaid']);
+        //     Route::post('/order-paid', [ShopifyController::class, 'orderPaid']); // this route moved to webhook.php
         // });
         Route::post('/play-session', [PlaySessionController::class, 'store']);
+        Route::post('/audio-save-progress', [PlaySessionController::class, 'save']);
     });
 });

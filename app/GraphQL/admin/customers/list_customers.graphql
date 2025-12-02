@@ -1,0 +1,54 @@
+query($first: Int!, $after: String, $query: String) {
+  customers(first: $first, after: $after, query: $query) {
+    edges {
+      cursor
+      node {
+        id
+        firstName
+        lastName
+        email
+        phone
+        createdAt
+        updatedAt
+        numberOfOrders
+        state
+        amountSpent {
+          amount
+          currencyCode
+        }
+        verifiedEmail
+        taxExempt
+        tags
+        addresses {
+          id
+          firstName
+          lastName
+          address1
+          city
+          province
+          country
+          zip
+          phone
+          name
+          provinceCode
+          countryCodeV2
+        }
+        defaultAddress {
+          id
+          address1
+          city
+          province
+          country
+          zip
+          phone
+          provinceCode
+          countryCodeV2
+        }
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

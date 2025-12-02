@@ -1,0 +1,44 @@
+query getFeaturedProducts($tag: String!, $limit: Int!, $after: String) {
+  collectionByHandle(handle: $tag) {
+    id
+    title
+
+    products(first: $limit, after: $after) {
+      edges {
+        cursor
+        node {
+          id
+          title
+          handle
+          description
+
+          images(first: 250) {
+            edges {
+              node {
+                url
+                altText
+              }
+            }
+          }
+
+          variants(first: 250) {
+            edges {
+              node {
+                sku
+                price {
+                  amount
+                  currencyCode
+                }
+              }
+            }
+          }
+        }
+      }
+
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}
