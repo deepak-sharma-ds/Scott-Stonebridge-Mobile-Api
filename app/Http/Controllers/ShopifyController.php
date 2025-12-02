@@ -132,32 +132,53 @@ class ShopifyController extends Controller
 
     public function orderPaid(Request $request)
     {
-        // $hmacHeader = $request->header('X-Shopify-Hmac-Sha256');
-        // $data = $request->getContent();
-        // $calculated = base64_encode(hash_hmac('sha256', $data, config('services.shopify.secret'), true));
+        $log = Log::channel('shopify_webhooks');
+        $log->info('================== START: handleAppointmentBookingWebhook ==================');
+        try {
+            // $hmacHeader = $request->header('X-Shopify-Hmac-Sha256');
+            // $data = $request->getContent();
+            // $calculated = base64_encode(hash_hmac('sha256', $data, config('services.shopify.secret'), true));
 
-        // if (!hash_equals($calculated, $hmacHeader)) {
-        //     logger()->warning('Invalid Shopify webhook HMAC');
-        //     return response('Invalid signature', 401);
-        // }
+            // if (!hash_equals($calculated, $hmacHeader)) {
+            //     logger()->warning('Invalid Shopify webhook HMAC');
+            //     return response('Invalid signature', 401);
+            // }
 
-        $payload = $request->all();
+            $payload = $request->all();
 
-        $customer = data_get($payload, 'customer', []);
-        $customerId = data_get($customer, 'id');
-        $email = data_get($customer, 'email');
-        $tagsCsv = data_get($customer, 'tags', '');
-
-        $tags = array_filter(array_map('trim', explode(',', $tagsCsv)));
-        foreach ($tags as $tag) {
-            if (Package::where('shopify_tag', $tag)->exists()) {
-                CustomerEntitlement::updateOrCreate(
-                    ['shopify_customer_id' => $customerId, 'package_tag' => $tag],
-                    ['email' => $email]
-                );
+            $customer = data_get($payload, 'customer', []);
+            if (empty($customer)) {
+                $log->warning('No customer data in order paid webhook.');
+                return response()->json([
+                    'status' => 400,
+                    'message' => 'No customer data'
+                ], 400);
             }
-        }
+            $customerId = data_get($customer, 'id');
+            $email = data_get($customer, 'email');
+            $tagsCsv = data_get($customer, 'tags', '');
 
-        return response('ok', 200);
+            $tags = array_filter(array_map('trim', explode(',', $tagsCsv)));
+            foreach ($tags as $tag) {
+                if (Package::where('shopify_tag', $tag)->exists()) {
+                    CustomerEntitlement::updateOrCreate(
+                        ['shopify_customer_id' => $customerId, 'package_tag' => $tag],
+                        ['email' => $email]
+                    );
+                }
+            }
+
+            return response()->json([
+                'status' => 200,
+                'message' => 'Audio access granted',
+            ], 200);
+        } catch (\Throwable $th) {
+            $log->error('Exception in handleAppointmentBookingWebhook:', ['error' => $th->getMessage()]);
+            return response()->json([
+                'status' => 500,
+                'message' => 'Exception occurred',
+                'error' => $th->getMessage(),
+            ], 500);
+        }
     }
 }
