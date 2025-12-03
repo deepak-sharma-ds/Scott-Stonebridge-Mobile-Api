@@ -18,6 +18,11 @@
 
                 <video id="player-{{ $a['id'] }}" controls controlsList="nodownload" style="width:100%;max-width:640px;">
                 </video>
+                @if ($a['download_url'])
+                    <a href="{{ $a['download_url'] }}" class="btn btn-success" download>
+                        Download Audio
+                    </a>
+                @endif
 
                 {{-- Queue initialization (executed later when initPlayer exists) --}}
                 <script>
@@ -38,8 +43,8 @@
 
     <script>
         /* ============================================================
-               PLAYBACK ENGINE (initPlayer)
-               ============================================================ */
+                   PLAYBACK ENGINE (initPlayer)
+                   ============================================================ */
         function initPlayer(payload, videoElementId) {
             const audioItem = payload.audio;
             const customerId = payload.customer_id;
@@ -100,7 +105,7 @@
 
             } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
                 console.log('dsfgdfsgs');
-                
+
                 // Safari native HLS
                 video.src = audioItem.playlist_url;
                 if (audioItem.last_position_seconds > 2) {

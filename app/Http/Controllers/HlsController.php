@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Controller;
 use App\Models\Audio;
+use App\Models\CustomerEntitlement;
 use App\Models\PlaySession;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -93,5 +94,44 @@ class HlsController extends Controller
             'Content-Length' => strlen($key),
             'Cache-Control' => 'no-store, no-cache, must-revalidate',
         ]);
+    }
+
+    public function download($audioId, $customerId, $signature)
+    {
+        try {
+            $audio = Audio::findOrFail($audioId);
+
+            // Validate signature
+            $expected = hash_hmac('sha256', $audioId . '-' . $customerId, env('APP_KEY'));
+            if (!hash_equals($expected, $signature)) {
+                abort(403, 'Invalid download signature');
+            }
+
+            // Validate entitlement
+            $ent = CustomerEntitlement::where('shopify_customer_id', $customerId)
+                ->where('package_tag', $audio->package->shopify_tag ?? null)
+                ->first();
+
+            if (!$ent) abort(403);
+
+            // Check if downloads allowed
+            if (!$ent->is_download_allowed) {
+                abort(403, 'Download not allowed for this customer.');
+            }
+
+            // Path to original MP3 (not HLS)
+            $path = $audio->file_path;
+            if (!Storage::disk('private')->exists($path)) {
+                abort(404, 'File not found');
+            }
+
+            return Storage::disk('private')->download(
+                $path,
+                $audio->title . '.mp3',
+                ['Content-Type' => 'audio/mpeg']
+            );
+        } catch (\Throwable $th) {
+            abort(500);
+        }
     }
 }

@@ -21,6 +21,8 @@ class AudioAccessController extends Controller
 
         if (!$ent) abort(403, 'Unauthorized');
 
+        $canDownload = $ent->is_download_allowed;
+
         $package = Package::with('audios')->where('shopify_tag', $packageTag)->firstOrFail();
 
         $progressMap = PlaybackSession::where('customer_id', $shopifyCustomerId)
@@ -28,7 +30,7 @@ class AudioAccessController extends Controller
             ->pluck('last_position_seconds', 'audio_id')
             ->toArray();
 
-        $audios = $package->audios->map(function ($audio) use ($request, $shopifyCustomerId, $progressMap) {
+        $audios = $package->audios->map(function ($audio) use ($request, $shopifyCustomerId, $progressMap, $canDownload) {
             $raw = Str::random(64);
             $hashed = hash('sha256', $raw);
             PlaySession::where('audio_id', $audio->id)->where('user_id', $shopifyCustomerId)->forceDelete();
@@ -45,6 +47,13 @@ class AudioAccessController extends Controller
                 'title' => $audio->title,
                 'playlist_url' => route('hls.playlist', ['audio' => $audio->id, 'token' => $raw]),
                 'last_position_seconds' => (float)($progressMap[$audio->id] ?? 0),
+                'download_url' => $canDownload
+                    ? route('audio.download', [
+                        'audioId' => $audio->id,
+                        'customerId' => $shopifyCustomerId,
+                        'signature' => hash_hmac('sha256', $audio->id . '-' . $shopifyCustomerId, env('APP_KEY'))
+                    ])
+                    : null,
             ];
         });
 
