@@ -1,13 +1,7 @@
 @extends('admin.layouts.app')
 
-@section('content')
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+@section('custom_css_links')
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/litepicker/dist/css/litepicker.css" />
-    <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/bundle.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
-        rel="stylesheet">
 
     <style>
         /* ====== ROOT & TYPOGRAPHY ====== */
@@ -495,7 +489,9 @@
             padding: 2rem;
         }
     </style>
+@endsection
 
+@section('content')
     <div class="dashboard-wrapper">
         <!-- Floating particles -->
         <div class="particle" style="left: 10%; animation-delay: 0s;"></div>
@@ -683,6 +679,9 @@
 @endsection
 
 @section('custom_js_scripts')
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/bundle.js"></script>
+
     <script>
         let from = null;
         let to = null;

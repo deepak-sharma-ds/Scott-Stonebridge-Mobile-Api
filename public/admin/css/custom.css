@@ -2,13 +2,16 @@
     background: #179fd9;
     border-color: #179fd9;
 }
+
 .btn-primary:hover {
     background: #26316f;
 }
+
 .form-group,
 .col-form-label {
     margin-bottom: 15px;
 }
+
 .col-form-label {
     font-weight: 500;
 }
@@ -17,6 +20,7 @@
 .form-group.row .col-form-label {
     margin-bottom: 0;
 }
+
 .form-group small {
     opacity: 0.75;
     margin-top: 10px;
@@ -24,21 +28,24 @@
 
 .page-link.active,
 .datatable-pagination a.active,
-.active > .page-link,
-.datatable-pagination .active > a {
+.active>.page-link,
+.datatable-pagination .active>a {
     background: #179fd9;
     border-color: #179fd9;
 }
+
 .page-link,
 .datatable-pagination a {
     color: #179fd9;
 }
+
 .card-header {
     padding: 20px var(--bs-card-cap-padding-x);
     display: flex;
     align-items: center;
     justify-content: space-between;
 }
+
 .card-header h4 {
     margin-bottom: 0;
     font-weight: 600;
@@ -66,45 +73,57 @@
     max-width: 160px;
     height: 38px;
 }
+
 .prod-p-card {
     height: 100%;
 }
+
 .bg-light-info {
     background: #d8f4f7;
     color: #3ec9d6;
 }
+
 .bg-light-success {
     background: #d1f4e0;
     color: #17c666;
 }
+
 .bg-light-primary {
     background: #e3e1fc;
     color: #7267ef;
 }
+
 .prod-p-card h6 {
     font-size: 20px;
 }
+
 .prod-p-card h3 {
     font-size: 40px;
 }
+
 .prod-p-card p:last-child {
     margin-bottom: 0;
 }
+
 .prod-p-card .btn-info {
     color: #fff;
 }
+
 .recent-signup {
     margin-top: 20px;
 }
+
 .recent-signup h6 {
     font-size: 24px;
     font-weight: 700;
     color: #26316f;
 }
+
 .recent-signup ul {
     padding-left: 20px;
     margin-top: 20px;
 }
+
 .recent-signup ul li {
     margin-bottom: 10px;
 }
@@ -147,11 +166,453 @@ label.error {
 }
 
 @keyframes spin {
-    0%   { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+        transform: rotate(0deg);
+    }
+
+    100% {
+        transform: rotate(360deg);
+    }
 }
 
+/* New Design setup using Antigravity */
 
+/* ====== DESIGN SYSTEM - CSS VARIABLES ====== */
+:root {
+    --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    --gradient-success: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    --gradient-warning: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+    --color-primary: #667eea;
+    --color-secondary: #764ba2;
+    --color-accent: #f5576c;
+    --shadow-sm: 0 2px 8px rgba(102, 126, 234, 0.1);
+    --shadow-md: 0 4px 16px rgba(102, 126, 234, 0.15);
+    --shadow-lg: 0 8px 32px rgba(102, 126, 234, 0.2);
+    --shadow-xl: 0 16px 48px rgba(102, 126, 234, 0.25);
+}
 
+/* ====== GLOBAL STYLES ====== */
+* {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
 
+body {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    background-attachment: fixed !important;
+    min-height: 100vh;
+    position: relative;
+    overflow-x: hidden;
+}
 
+/* Animated background overlay */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background:
+        radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.15) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+    animation: backgroundPulse 15s ease-in-out infinite;
+    pointer-events: none;
+    z-index: 0;
+}
+
+@keyframes backgroundPulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
+}
+
+/* ====== NAVBAR MODERN DESIGN ====== */
+.sb-topnav {
+    background: rgba(30, 41, 59, 0.95) !important;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+    z-index: 1030;
+}
+
+.navbar a.navbar-brand img {
+    width: 100%;
+    height: 60px;
+    object-fit: contain;
+    filter: brightness(1.1);
+    transition: transform 0.3s ease;
+}
+
+.navbar a.navbar-brand img:hover {
+    transform: scale(1.05);
+}
+
+.sb-topnav .nav-link {
+    color: rgba(255, 255, 255, 0.9) !important;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.sb-topnav .nav-link:hover {
+    color: #fff !important;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+}
+
+#sidebarToggle {
+    color: rgba(255, 255, 255, 0.9) !important;
+    font-size: 1.2rem;
+    transition: all 0.3s ease;
+}
+
+#sidebarToggle:hover {
+    color: #fff !important;
+    transform: scale(1.1);
+}
+
+/* ====== SIDEBAR MODERN DESIGN ====== */
+.sb-sidenav {
+    background: rgba(30, 41, 59, 0.98) !important;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.sb-sidenav .main-profile {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.2) 0%, rgba(118, 75, 162, 0.2) 100%);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: 2rem 1.5rem;
+    margin-bottom: 1rem;
+}
+
+.sb-sidenav .main-profile .name {
+    color: #fff;
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.sb-sidenav .main-profile .email {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.85rem;
+}
+
+.sb-sidenav-menu-heading {
+    color: rgba(255, 255, 255, 0.5) !important;
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 1rem 1.5rem 0.5rem;
+}
+
+.sb-sidenav .nav-link {
+    color: rgba(255, 255, 255, 0.8) !important;
+    padding: 0.75rem 1.5rem;
+    transition: all 0.3s ease;
+    border-left: 3px solid transparent;
+    font-weight: 500;
+}
+
+.sb-sidenav .nav-link:hover {
+    color: #fff !important;
+    background: rgba(102, 126, 234, 0.15);
+    border-left-color: var(--color-primary);
+    padding-left: 1.75rem;
+}
+
+.sb-sidenav .nav-link.active {
+    color: #fff !important;
+    background: rgba(102, 126, 234, 0.25);
+    border-left-color: var(--color-primary);
+    box-shadow: inset 0 0 20px rgba(102, 126, 234, 0.2);
+}
+
+.sb-sidenav .sb-nav-link-icon {
+    color: rgba(255, 255, 255, 0.7);
+    margin-right: 0.75rem;
+    transition: transform 0.3s ease;
+}
+
+.sb-sidenav .nav-link:hover .sb-nav-link-icon {
+    transform: scale(1.1);
+    color: var(--color-primary);
+}
+
+.sb-sidenav-menu-nested {
+    background: rgba(0, 0, 0, 0.2);
+}
+
+.sb-sidenav-menu-nested .nav-link {
+    padding-left: 3rem;
+    font-size: 0.9rem;
+}
+
+/* ====== MAIN CONTENT AREA ====== */
+#layoutSidenav_content {
+    background: transparent;
+    position: relative;
+    z-index: 1;
+}
+
+main {
+    min-height: calc(100vh - 56px);
+    position: relative;
+}
+
+/* ====== GLASS CARD GLOBAL ====== */
+.card,
+.glass-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: var(--shadow-md);
+    transition: all 0.3s ease;
+}
+
+.card:hover,
+.glass-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+}
+
+/* ====== BUTTONS MODERN DESIGN ====== */
+.btn-primary {
+    background: var(--gradient-primary);
+    border: none;
+    color: white;
+    font-weight: 600;
+    padding: 0.625rem 1.5rem;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    opacity: 0.9;
+}
+
+.btn-success {
+    background: var(--gradient-success);
+    border: none;
+    color: white;
+    font-weight: 600;
+    padding: 0.625rem 1.5rem;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-success:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    opacity: 0.9;
+}
+
+.btn-info {
+    background: linear-gradient(135deg, #667eea 0%, #4facfe 100%);
+    border: none;
+    color: white;
+    font-weight: 600;
+    padding: 0.625rem 1.5rem;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+    box-shadow: var(--shadow-sm);
+}
+
+.btn-info:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+    opacity: 0.9;
+}
+
+/* ====== FORM CONTROLS ====== */
+.form-control,
+.form-select {
+    border: 2px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 0.625rem 1rem;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+    outline: none;
+}
+
+/* ====== TABLES MODERN DESIGN ====== */
+.table {
+    background: white;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.table thead {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+}
+
+.table thead th {
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.5px;
+    color: #475569;
+    border: none;
+    padding: 1rem;
+}
+
+.table tbody tr {
+    transition: all 0.3s ease;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.table tbody tr:hover {
+    background: rgba(102, 126, 234, 0.05);
+    transform: scale(1.01);
+}
+
+.table tbody td {
+    padding: 1rem;
+    vertical-align: middle;
+    color: #334155;
+    font-weight: 500;
+}
+
+/* ====== PAGE HEADERS ====== */
+.page-titles,
+.page-header {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(20px);
+    border-radius: 16px;
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.page-titles h4,
+.page-header h1,
+.page-header h4 {
+    color: #ffffff;
+    font-weight: 800;
+    margin: 0;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+/* ====== TOASTR MODERN DESIGN ====== */
+#toast-container>.toast {
+    background: rgba(51, 51, 51, 0.95) !important;
+    backdrop-filter: blur(10px);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    font-weight: 500;
+    color: #fff !important;
+}
+
+#toast-container>.toast-success {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+}
+
+#toast-container>.toast-error {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%) !important;
+}
+
+#toast-container>.toast-info {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%) !important;
+}
+
+#toast-container>.toast-warning {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%) !important;
+    color: #fff !important;
+}
+
+/* ====== LOADER MODERN DESIGN ====== */
+#loaderOverlay {
+    background: rgba(102, 126, 234, 0.95);
+    backdrop-filter: blur(10px);
+}
+
+.loader {
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-top: 4px solid white;
+}
+
+/* ====== DROPDOWN MENUS ====== */
+.dropdown-menu {
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 12px;
+    box-shadow: var(--shadow-lg);
+    padding: 0.5rem;
+}
+
+.dropdown-item {
+    border-radius: 8px;
+    padding: 0.625rem 1rem;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.dropdown-item:hover {
+    background: rgba(102, 126, 234, 0.1);
+    color: var(--color-primary);
+}
+
+/* ====== ANIMATIONS ====== */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.container,
+.container-fluid {
+    animation: fadeIn 0.5s ease-out;
+}
+
+/* ====== RESPONSIVE ====== */
+@media (max-width: 768px) {
+    .sb-sidenav .main-profile {
+        padding: 1.5rem 1rem;
+    }
+}
+
+/* ====== SCROLLBAR STYLING ====== */
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(102, 126, 234, 0.5);
+    border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(102, 126, 234, 0.7);
+}
