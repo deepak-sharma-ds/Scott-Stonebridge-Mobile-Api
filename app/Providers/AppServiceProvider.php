@@ -6,6 +6,7 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Pagination\Paginator;
 use App\Models\Configuration;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Support\Facades\Blade;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -28,6 +29,9 @@ class AppServiceProvider extends ServiceProvider
         Paginator::useBootstrapFive(); // Use Bootstrap 5
 
         $this->configHandler();
+
+        Blade::component('components.admin.card', 'admin.card');
+        Blade::component('components.admin.chart', 'admin.chart');
     }
 
     /*

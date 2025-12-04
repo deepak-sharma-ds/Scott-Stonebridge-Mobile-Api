@@ -47,3 +47,5 @@ Route::get('/download/audio/{audioId}/{customerId}/{signature}', [HlsController:
 
 
 Route::get('/access/{shopifyCustomerId}/{packageTag}', [AudioAccessController::class, 'show'])->name('access.show');
+
+Route::get('/test/test/test/test', [AudioAccessController::class, 'test'])->name('test.test');

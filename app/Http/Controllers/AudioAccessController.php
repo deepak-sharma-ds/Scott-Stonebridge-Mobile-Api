@@ -70,4 +70,9 @@ class AudioAccessController extends Controller
 
         return view('audios.access', compact('package', 'audios', 'customerId'));
     }
+
+    public function test()
+    {
+        return 'test successful';
+    }
 }

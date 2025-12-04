@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin\AnalyticsController;
 use App\Http\Controllers\Admin\AudioController;
 use App\Http\Controllers\Admin\AudioStreamController;
 use App\Http\Controllers\Admin\AvailabilityCalendarController;
@@ -16,6 +17,7 @@ use App\Http\Controllers\Admin\AvailabilitySlotController;
 use App\Http\Controllers\Admin\AvailabilityTemplateController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\PackageController;
+use App\Http\Controllers\Admin\ReportingController;
 use App\Http\Controllers\ProfileController;
 
 Route::post('/configurations/make-slug', [ConfigurationsController::class, 'make_slug'])->name('configurations.make_slug');
@@ -86,6 +88,24 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
 			Route::delete('/{id}', [CustomerController::class, 'destroy'])->name('customers.destroy');
 
 			Route::get('/export-data', [CustomerController::class, 'exportCsv'])->name('customers.export');
+		});
+
+		// Analytics
+		Route::name('analytics.')->prefix('analytics')->group(function () {
+			Route::get('/dashboard', [AnalyticsController::class, 'dashboard'])->name('dashboard');
+			Route::get('/top-products', [AnalyticsController::class, 'topProducts'])->name('top.products');
+			Route::get('/activity', [AnalyticsController::class, 'activityTrends'])->name('activity');
+
+			Route::get('/sales-timeseries', [AnalyticsController::class, 'salesTimeseries'])->name('sales.timeseries');		});
+
+		// Reporting
+		Route::name('reporting.')->prefix('reporting')->group(function () {
+			Route::get('/export/searches', [ReportingController::class, 'exportSearches'])->name('export.searches');
+			Route::get('/export/downloads', [ReportingController::class, 'exportDownloads'])->name('export.downloads');
+			Route::get('/sales', [ReportingController::class, 'salesReport'])->name('sales.report');
+
+			Route::get('/sales/export', [ReportingController::class, 'exportSales'])->name('sales.export'); // implement
+			Route::get('/activities/export', [ReportingController::class, 'exportActivities'])->name('activities.export');
 		});
 	});
 
