@@ -23,5 +23,4 @@ return [
     'GOOGLE_ADMIN_REDIRECT_URI' => env('GOOGLE_ADMIN_REDIRECT_URI', 'https://scottmobileapp.24livehost.com/admin/google-calendar/auth'),
 
     'FFMPEG_PATH' => env('FFMPEG_PATH', 'ffmpeg')
-
 ];

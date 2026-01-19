@@ -125,85 +125,117 @@ class ProductController extends Controller
   // Search products by title or other fields
   public function searchProducts(Request $request)
   {
-    $queryString = $request->get('query');
+    try {
+      $queryString = $request->get('query');
 
-    if (!$queryString) {
-      return response()->json([
-        'error' => 'Query parameter is required.'
-      ], 400);
-    }
+      if (!$queryString) {
+        return response()->json([
+          'error' => 'Query parameter is required.'
+        ], 400);
+      }
 
-    $limit = (int) $request->get('limit', 20);
-    $after = $request->get('after');
+      $limit = (int) $request->get('limit', 20);
+      $after = $request->get('after');
 
-    $query = <<<'GRAPHQL'
+      $query = <<<'GRAPHQL'
         query ($queryString: String!, $limit: Int!, $after: String) {
-        products(first: $limit, after: $after, query: $queryString) {
-            edges {
-            cursor
-            node {
-                id
-                title
-                handle
-                description
-                images(first: 1) {
-                edges {
-                    node {
-                    url
-                    altText
+          products(first: $limit, after: $after, query: $queryString) {
+              edges {
+                cursor
+                node {
+                  id
+                  title
+                  handle
+                  descriptionHtml
+                  description
+                  vendor
+                  productType
+                  tags
+                  options {
+                    id
+                    name
+                    values
+                  }
+                  images(first: 250) {
+                    edges {
+                        node {
+                          url
+                          altText
+                        }
                     }
-                }
-                }
-                variants(first: 1) {
-                edges {
-                    node {
-                    price
-                    sku
+                  }
+                  variants(first: 250) {
+                    edges {
+                        node {
+                        id
+                        title
+                        sku
+                        availableForSale
+                        price
+                        compareAtPrice
+                        image {
+                          url
+                          altText
+                        }
+                        selectedOptions {
+                          name
+                          value
+                        }
+                      }
                     }
+                  }
+                  options {
+                    name
+                    values
+                  }
+                  createdAt
+                  updatedAt
                 }
-                }
-            }
-            }
-            pageInfo {
-            hasNextPage
-            }
-        }
+              }
+              pageInfo {
+                hasNextPage
+              }
+          }
         }
         GRAPHQL;
 
-    $variables = [
-      'queryString' => $queryString,
-      'limit' => $limit,
-      'after' => $after,
-    ];
+      $variables = [
+        'queryString' => $queryString,
+        'limit' => $limit,
+        'after' => $after,
+      ];
 
-    if (!$after) {
-      unset($variables['after']);
-    }
+      if (!$after) {
+        unset($variables['after']);
+      }
 
-    $data = $this->shopifyGraphQLRequest($query, $variables);
+      $data = $this->shopifyGraphQLRequest($query, $variables);
 
-    $productsData = $data['products'] ?? null;
-    if (!$productsData) {
+      $productsData = $data['products'] ?? null;
+      if (!$productsData) {
+        return response()->json([
+          'products' => [],
+          'next_cursor' => null,
+          'has_more' => false,
+        ]);
+      }
+
+      $products = array_map(function ($edge) {
+        return $edge['node'];
+      }, $productsData['edges']);
+
+      $lastCursor = end($productsData['edges'])['cursor'] ?? null;
+      $hasMore = $productsData['pageInfo']['hasNextPage'] ?? false;
+
       return response()->json([
-        'products' => [],
-        'next_cursor' => null,
-        'has_more' => false,
+        'products' => $products,
+        'next_cursor' => $hasMore ? $lastCursor : null,
+        'has_more' => $hasMore,
       ]);
+    } catch (\Throwable $th) {
+      //throw $th;
+      dd($th->getMessage());
     }
-
-    $products = array_map(function ($edge) {
-      return $edge['node'];
-    }, $productsData['edges']);
-
-    $lastCursor = end($productsData['edges'])['cursor'] ?? null;
-    $hasMore = $productsData['pageInfo']['hasNextPage'] ?? false;
-
-    return response()->json([
-      'products' => $products,
-      'next_cursor' => $hasMore ? $lastCursor : null,
-      'has_more' => $hasMore,
-    ]);
   }
 
   // Get product details by product ID (GraphQL)
@@ -254,6 +286,61 @@ class ProductController extends Controller
     if (!isset($data['product'])) {
       return response()->json(['error' => 'Product not found'], 404);
     }
+
+    $products = array_map(function ($edge) {
+      $product = $edge['node'];
+
+      $product['variants'] = array_map(function ($variantEdge) {
+        $variant = $variantEdge['node'];
+
+        // ---- Inventory aggregation
+        $totalAvailable = 0;
+
+        foreach (
+          $variant['inventoryItem']['inventoryLevels']['edges'] ?? []
+          as $level
+        ) {
+          foreach ($level['node']['quantities'] as $qty) {
+            if ($qty['name'] === 'available') {
+              $totalAvailable += (int) $qty['quantity'];
+            }
+          }
+        }
+
+        // ---- Weight normalization (to grams)
+        $weight = $variant['inventoryItem']['measurement']['weight'] ?? null;
+        $weightGrams = 0;
+
+        if ($weight) {
+          $weightGrams = match ($weight['unit']) {
+            'POUNDS' => $weight['value'] * 453.592,
+            'OUNCES' => $weight['value'] * 28.3495,
+            'KILOGRAMS' => $weight['value'] * 1000,
+            default => $weight['value'],
+          };
+        }
+
+        return [
+          'id' => $variant['id'],
+          'title' => $variant['title'],
+          'sku' => $variant['sku'],
+          'price' => (float) $variant['price'],
+          'compare_at_price' => $variant['compareAtPrice']
+            ? (float) $variant['compareAtPrice']
+            : null,
+          'available_for_sale' => $variant['availableForSale'],
+          'total_available' => $totalAvailable,
+          'in_stock' => $totalAvailable > 0,
+          'weight_grams' => (int) round($weightGrams),
+          'image' => $variant['image']['url'] ?? null,
+          'options' => collect($variant['selectedOptions'])
+            ->pluck('value', 'name')
+            ->toArray(),
+        ];
+      }, $product['variants']['edges']);
+
+      return $product;
+    }, $productsData['edges']);
 
     return response()->json($data['product']);
   }

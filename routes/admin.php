@@ -96,7 +96,8 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
 			Route::get('/top-products', [AnalyticsController::class, 'topProducts'])->name('top.products');
 			Route::get('/activity', [AnalyticsController::class, 'activityTrends'])->name('activity');
 
-			Route::get('/sales-timeseries', [AnalyticsController::class, 'salesTimeseries'])->name('sales.timeseries');		});
+			Route::get('/sales-timeseries', [AnalyticsController::class, 'salesTimeseries'])->name('sales.timeseries');
+		});
 
 		// Reporting
 		Route::name('reporting.')->prefix('reporting')->group(function () {
@@ -125,9 +126,6 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
 	// Route::get('/stream/audio/{id}', [AudioStreamController::class, 'stream'])
 	// 	->name('audio.stream');
 	// ->middleware('auth'); // or your custom auth for Shopify tag
-	Route::get('/media/hls/{audio}/{file?}', [AudioStreamController::class, 'stream'])
-		->where('file', '.*')
-		->name('audio.stream');
 });
 
 Route::prefix('admin')->name('admin.')->group(function () {
@@ -139,3 +137,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 		Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 	});
 });
+
+Route::get('/admin/media/hls/{audio}/{file?}', [AudioStreamController::class, 'stream'])
+		->where('file', '.*')
+		->name('audio.stream');

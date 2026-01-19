@@ -44,8 +44,8 @@ class ShopifyPackageController extends Controller
     public function show($id)
     {
         try {
-            $package = Package::with('audios')->findOrFail($id);
-
+            // $package = Package::with('audios')->findOrFail($id);
+            $package = Package::with('audios')->where('shopify_tag', $id)->firstOrFail();
             // Convert the resource to an array
             $packageData = (new PackageResource($package))->toArray(request());
 

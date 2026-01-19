@@ -212,33 +212,77 @@ class CartController extends Controller
 
     try {
       $query = <<<'GRAPHQL'
-        mutation cartLinesUpdate($cartId: ID!, $lines: [CartLineUpdateInput!]!, $currencyCode: CurrencyCode!) {
-          @inContext(currency: $currencyCode) {
-            cartLinesUpdate(cartId: $cartId, lines: $lines) {
-              cart {
-                id
-                lines(first: 10) {
-                  edges {
-                    node {
-                      id
-                      quantity
+        mutation($cartId: ID!, $lines: [CartLineUpdateInput!]!) {
+          cartLinesUpdate(
+            cartId: $cartId, lines: $lines
+          ) {
+            cart {
+              id
+              lines(first: 10) {
+                edges {
+                  node {
+                    id
+                    quantity
+                    merchandise {
+                      ... on ProductVariant {
+                        id
+                        title
+                        sku
+                        availableForSale
+                        quantityAvailable
+                        image {
+                          url
+                          altText
+                        }
+                        product {
+                          id
+                          title
+                          handle
+                        }
+                        priceV2 {
+                          amount
+                          currencyCode
+                        }
+                        compareAtPriceV2  {
+                          amount
+                          currencyCode
+                        }
+                      }
                     }
                   }
                 }
               }
-              userErrors {
-                field
-                message
+              cost {
+                totalAmount {
+                  amount
+                  currencyCode
+                }
+                subtotalAmount {
+                  amount
+                  currencyCode
+                }
+                totalTaxAmount {
+                  amount
+                  currencyCode
+                }
+                totalDutyAmount {
+                  amount
+                  currencyCode
+                }
               }
-              warnings {
-                code
-                message
-                target
-              }
+            }
+            userErrors {
+              field
+              message
+            }
+            warnings {
+              code
+              message
+              target
             }
           }
         }
-      GRAPHQL;
+        GRAPHQL;
 
       $variables = [
         'cartId' => $request->cartId,
@@ -372,7 +416,7 @@ class CartController extends Controller
             checkoutUrl
             createdAt
             updatedAt
-            lines(first: 20) {
+            lines(first: 250) {
               edges {
                 node {
                   id
@@ -381,16 +425,23 @@ class CartController extends Controller
                     ... on ProductVariant {
                       id
                       title
+                      sku
+                      availableForSale
+                      quantityAvailable
+                      image {
+                        url
+                        altText
+                      }
                       product {
                         id
                         title
                         handle
                       }
-                      priceV2 {
+                      price {
                         amount
                         currencyCode
                       }
-                      compareAtPriceV2  {
+                      compareAtPrice  {
                         amount
                         currencyCode
                       }
@@ -443,6 +494,9 @@ class CartController extends Controller
         'subtotal_currency' => $cart['estimatedCost']['subtotalAmount']['currencyCode'],
         'total' => $cart['estimatedCost']['totalAmount']['amount'],
         'total_currency' => $cart['estimatedCost']['totalAmount']['currencyCode'],
+        'total_items' => collect($cart['lines']['edges'] ?? [])
+          ->sum(fn($edge) => (int) $edge['node']['quantity']),
+        'unique_items' => count($cart['lines']['edges'] ?? []),
         'items' => collect($cart['lines']['edges'] ?? [])->map(function ($edge) {
           $node = $edge['node'];
           $variant = $node['merchandise'];
@@ -450,18 +504,44 @@ class CartController extends Controller
           return [
             'line_id' => $node['id'],
             'quantity' => $node['quantity'],
+
             'variant_id' => $variant['id'],
             'variant_title' => $variant['title'],
+            'sku' => $variant['sku'] ?? null,
+
+            'available_for_sale' => $variant['availableForSale'] ?? false,
+            'quantity_available' => $variant['quantityAvailable'] ?? null,
+
+            'image' => [
+              'url' =>
+              data_get($variant, 'image.url')
+                ?? data_get($variant, 'product.featuredImage.url')
+                ?? data_get($variant, 'product.images.edges.0.node.url'),
+              'alt' =>
+              data_get($variant, 'image.altText')
+                ?? data_get($variant, 'product.featuredImage.altText')
+                ?? data_get($variant, 'product.images.edges.0.node.altText'),
+            ],
+
             'product' => [
               'id' => $variant['product']['id'],
               'title' => $variant['product']['title'],
               'handle' => $variant['product']['handle'],
             ],
-            'price' => $variant['priceV2']['amount'],
-            'compare_at_price' => $variant['compareAtPriceV2']['amount'] ?? null,
-            'currency' => $variant['priceV2']['currencyCode'],
-            'discount_amount' => isset($variant['compareAtPriceV2'])
-              ? round(max(0, (float)$variant['compareAtPriceV2']['amount'] - (float)$variant['priceV2']['amount']))
+
+            'price' => $variant['price']['amount'],
+            'currency' => $variant['price']['currencyCode'],
+            'compare_at_price' => data_get($variant, 'compareAtPrice.amount'),
+
+            'discount_amount' => data_get($variant, 'compareAtPrice.amount')
+              ? round(
+                max(
+                  0,
+                  (float)$variant['compareAtPrice']['amount']
+                    - (float)$variant['price']['amount']
+                ),
+                2
+              )
               : 0,
           ];
         })->values(),

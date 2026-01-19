@@ -246,4 +246,34 @@ class AuthController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Logout customer and revoke access token
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function logout(Request $request)
+    {
+        $accessToken = $request->bearerToken();
+
+        if (!$accessToken) {
+            return response()->json([
+                'status' => 401,
+                'message' => 'Access token missing',
+            ], 401);
+        }
+
+        $loggedOut = $this->authService->logoutCustomer($accessToken);
+
+        if (!$loggedOut) {
+            return response()->json([
+                'status' => 400,
+                'message' => 'Failed to logout',
+            ], 400);
+        }
+
+        return response()->json([
+            'status' => 200,
+            'message' => 'Logout successful',
+        ], 200);
+    }
 }

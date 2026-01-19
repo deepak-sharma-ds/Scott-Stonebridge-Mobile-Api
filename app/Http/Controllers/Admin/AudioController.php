@@ -7,17 +7,22 @@ use App\Http\Requests\AudioRequest;
 use App\Jobs\ConvertAudioToHls;
 use App\Models\Audio;
 use App\Models\Package;
-use Illuminate\Http\Request;
+use App\Services\AudioService;
 use Illuminate\Support\Facades\Storage;
 
 class AudioController extends Controller
 {
+    public function __construct(
+        private AudioService $audioService
+    ) {}
+
     /**
      * Display a listing of the resource.
      */
     public function index()
     {
-        $audios = Audio::with('package')->paginate(10);
+        // Optimized: Eager loads package to prevent N+1 queries
+        $audios = $this->audioService->getPaginatedAudios(10);
         return view('admin.audios.index', compact('audios'));
     }
 
@@ -26,7 +31,8 @@ class AudioController extends Controller
      */
     public function create()
     {
-        $packages = Package::pluck('title', 'id');
+        // Only load necessary fields for dropdown
+        $packages = Package::select('id', 'title')->orderBy('title')->get()->pluck('title', 'id');
         return view('admin.audios.create', compact('packages'));
     }
 
@@ -35,41 +41,43 @@ class AudioController extends Controller
      */
     public function store(AudioRequest $request)
     {
-        $data = $request->validated();
+        try {
+            $data = $request->validated();
 
-        // 1️⃣ Store uploaded audio file in the private disk (safe, not web-accessible)
-        $data['file_path'] = $request->file('file')->store('audios', 'private');
+            // Store uploaded audio file in private disk
+            $data['file_path'] = $request->file('file')->store('audios', 'private');
 
-        // 2️⃣ Determine next order index within the same package
-        $data['order_index'] = Audio::where('package_id', $data['package_id'])->max('order_index') + 1;
+            // Set next order index (handled by service)
+            $data['is_hls_ready'] = false;
 
-        // 3️⃣ Initially mark as not converted yet
-        $data['is_hls_ready'] = false;
+            // Create audio via service
+            $audio = $this->audioService->createAudio($data);
 
-        // 4️⃣ Create audio record
-        $audio = Audio::create($data);
+            // Dispatch background HLS conversion job
+            ConvertAudioToHls::dispatch(
+                $audio->id,
+                'private',
+                $data['file_path']
+            );
 
-        // 5️⃣ Dispatch background HLS conversion job
-        // This will generate HLS + AES-128 encrypted segments and playlist
-        ConvertAudioToHls::dispatch(
-            $audio->id,
-            'private',                // source disk (matches store() above)
-            $data['file_path']        // relative file path inside that disk
-        );
-
-        // 6️⃣ Return success response
-        return redirect()
-            ->route('audios.index')
-            ->with('success', 'Audio added successfully. Conversion started in background.');
+            return redirect()
+                ->route('audios.index')
+                ->with('success', 'Audio added successfully. Conversion started in background.');
+        } catch (\Throwable $e) {
+            report($e);
+            return back()
+                ->withInput()
+                ->with('error', 'Failed to create audio. Please try again.');
+        }
     }
-
 
     /**
      * Display the specified resource.
      */
-    public function show(string $id)
+    public function show(Audio $audio)
     {
-        //
+        $audio->load('package:id,title,shopify_tag');
+        return view('admin.audios.show', compact('audio'));
     }
 
     /**
@@ -77,7 +85,7 @@ class AudioController extends Controller
      */
     public function edit(Audio $audio)
     {
-        $packages = Package::pluck('title', 'id');
+        $packages = Package::select('id', 'title')->orderBy('title')->get()->pluck('title', 'id');
         return view('admin.audios.edit', compact('audio', 'packages'));
     }
 
@@ -86,46 +94,63 @@ class AudioController extends Controller
      */
     public function update(AudioRequest $request, Audio $audio)
     {
-        $data = $request->validated();
+        try {
+            $data = $request->validated();
+            $fileUpdated = false;
 
-        // 1️⃣ If a new audio file is uploaded
-        if ($request->hasFile('file')) {
-            // Delete old private file if exists (prevent orphaned unprotected files)
-            if ($audio->file_path && Storage::disk('private')->exists($audio->file_path)) {
-                Storage::disk('private')->delete($audio->file_path);
+            // Handle new file upload
+            if ($request->hasFile('file')) {
+                // Delete old file
+                if ($audio->file_path && Storage::disk('private')->exists($audio->file_path)) {
+                    Storage::disk('private')->delete($audio->file_path);
+                }
+
+                // Store new file
+                $data['file_path'] = $request->file('file')->store('audios', 'private');
+                $data['is_hls_ready'] = false;
+                $data['hls_path'] = null;
+                $fileUpdated = true;
+
+                // Restart conversion
+                ConvertAudioToHls::dispatch(
+                    $audio->id,
+                    'private',
+                    $data['file_path']
+                );
             }
 
-            // Store new uploaded file in private disk (never public)
-            $data['file_path'] = $request->file('file')->store('audios', 'private');
+            // Update via service
+            $this->audioService->updateAudio($audio, $data);
 
-            // Reset HLS-related fields to reprocess
-            $data['is_hls_ready'] = false;
-            $data['hls_path'] = null;
+            $message = $fileUpdated 
+                ? 'Audio updated successfully and conversion restarted.'
+                : 'Audio updated successfully.';
 
-            // Dispatch conversion job (background HLS + AES encryption)
-            ConvertAudioToHls::dispatch(
-                $audio->id,
-                'private',
-                $data['file_path']
-            );
+            return redirect()
+                ->route('audios.index')
+                ->with('success', $message);
+        } catch (\Throwable $e) {
+            report($e);
+            return back()
+                ->withInput()
+                ->with('error', 'Failed to update audio. Please try again.');
         }
-
-        // 2️⃣ Update record with new data
-        $audio->update($data);
-
-        // 3️⃣ Redirect back with success
-        return redirect()
-            ->route('audios.index')
-            ->with('success', 'Audio updated successfully' . ($request->hasFile('file') ? ' and conversion restarted.' : '.'));
     }
-
 
     /**
      * Remove the specified resource from storage.
      */
     public function destroy(Audio $audio)
     {
-        $audio->delete();
-        return back()->with('success', 'Audio deleted');
+        try {
+            $this->audioService->deleteAudio($audio);
+
+            return redirect()
+                ->route('audios.index')
+                ->with('success', 'Audio deleted successfully');
+        } catch (\Throwable $e) {
+            report($e);
+            return back()->with('error', 'Failed to delete audio.');
+        }
     }
 }
