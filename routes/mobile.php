@@ -9,6 +9,8 @@ use App\Http\Controllers\Apis\CartController;
 use App\Http\Controllers\Apis\OrdertController;
 use App\Http\Controllers\Apis\ProfileController;
 use App\Http\Controllers\Apis\WishlistController;
+use App\Http\Controllers\Apis\ContactUsController;
+
 
 /**
  * Shopify APIs for Mobile App Development
@@ -86,3 +88,5 @@ Route::middleware(['disable.session'])->group(function () {
         });
     });
 });
+
+Route::post('/contact-us', [ContactUsController::class, 'store']);
