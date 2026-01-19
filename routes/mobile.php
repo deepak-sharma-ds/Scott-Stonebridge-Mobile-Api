@@ -25,6 +25,7 @@ Route::middleware(['disable.session'])->group(function () {
         Route::post('login', [AuthController::class, 'login']);
         Route::post('forgot-password', [AuthController::class, 'forgotPassword']);
         Route::post('reset-password', [AuthController::class, 'resetPassword']);
+        Route::post('logout', [AuthController::class, 'logout']);
     });
 
     Route::middleware(['shopify.customer.auth'])->prefix('home')->group(function () {

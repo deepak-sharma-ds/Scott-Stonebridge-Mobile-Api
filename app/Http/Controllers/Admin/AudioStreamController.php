@@ -31,6 +31,9 @@ class AudioStreamController extends Controller
         return response()->file($target, [
             'Content-Type' => $mime,
             'Cache-Control' => 'no-cache, must-revalidate',
+            'Access-Control-Allow-Origin' => 'https://chapter-verse-ds.myshopify.com',
+            'Access-Control-Allow-Methods' => 'GET, OPTIONS',
+            'Access-Control-Allow-Headers' => '*',
         ]);
     }
 }

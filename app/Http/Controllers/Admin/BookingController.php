@@ -47,34 +47,33 @@ class BookingController extends Controller
     public function index(Request $request)
     {
         try {
+            // Start with base query using scopes
             $query = ScheduledMeeting::query();
 
-            // Search by name, email or order number
+            // Search by name, email using scope
             if ($request->filled('search')) {
-                $query->where(function ($q) use ($request) {
-                    $q->where('name', 'like', '%' . $request->search . '%')
-                        ->orWhere('email', 'like', '%' . $request->search . '%');
-                });
+                $query->search($request->search);
             }
 
             // Filter by date range
             if ($request->filled('date_range')) {
                 $dates = explode(' to ', $request->date_range);
                 if (count($dates) == 2) {
-                    $from = $dates[0];
-                    $to = $dates[1];
-
-                    $query->whereDate('datetime', '>=', $from)
-                        ->whereDate('datetime', '<=', $to);
+                    $query->whereDate('datetime', '>=', $dates[0])
+                          ->whereDate('datetime', '<=', $dates[1]);
                 }
             }
-            // Get filtered results
-            $booking_inquiries = $query->latest()->paginate(config('Reading.nodes_per_page'));
-            // Get distinct statuses for the filter dropdown
+
+            // Optimized: Eager load relationships to prevent N+1
+            $booking_inquiries = $query->withRelations()
+                ->latest()
+                ->paginate(config('Reading.nodes_per_page'));
+
             return view('admin.booking_inquiries.index', compact('booking_inquiries'));
         } catch (\Exception $e) {
+            report($e);
             return redirect()->route('admin.scheduled-meetings')
-                ->with('error', 'Something went wrong while fetching the order.');
+                ->with('error', 'Something went wrong while fetching bookings.');
         }
     }
 
@@ -363,19 +362,21 @@ class BookingController extends Controller
     {
         $date = $request->get('date');
         $availability = AvailabilityDate::where('date', $date)->first();
+        
         if (!$availability) {
             return response()->json(['success' => true, 'time_slots' => []]);
         }
 
-        // get all slots for that date
+        // Optimized: Get all data in one query
         $timeSlots = TimeSlot::where('availability_date_id', $availability->id)->get();
 
-        // get booked slot ids for that date
-        $bookedSlotIds = ScheduledMeeting::where('availability_date_id', $availability->id)
-            ->where('status', '!=', 'closed')
+        // Get booked slot IDs efficiently
+        $bookedSlotIds = ScheduledMeeting::active()
+            ->where('availability_date_id', $availability->id)
             ->pluck('time_slot_id')
             ->toArray();
 
+        // Format slots
         $slotsFormatted = $timeSlots->map(function ($slot) use ($bookedSlotIds) {
             return [
                 'id' => $slot->id,

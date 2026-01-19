@@ -10,6 +10,7 @@ return [
     'storefront_access_token' => env('SHOPIFY_STOREFRONT_ACCESS_TOKEN'),
     'cdn_base_url' => env('SHOPIFY_CDN_BASE_URL'),
     'store_url' => env('SHOPIFY_STORE_URL'),
+    'currency' => env('CURRENCY', 'GBP'),
 
 
     'graphql' => [

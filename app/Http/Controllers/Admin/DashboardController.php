@@ -18,6 +18,7 @@ class DashboardController extends Controller
     public function index(Request $request)
     {
         try {
+            return view('admin.analytics.dashboard');
             // Get distinct statuses for the filter dropdown
             return view('admin.dashboard');
         } catch (\Exception $e) {

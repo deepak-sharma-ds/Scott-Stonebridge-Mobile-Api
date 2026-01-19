@@ -7,66 +7,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
     <meta name="description" content="" />
     <meta name="author" content="" />
+
     <!-- CSRF Token -->
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ config('Site.title') ? config('Site.title') : 'Coniq Shopify' }}</title>
     <link rel="icon" type="image/png" href="{{ asset('admin/images/favicon.png') }}">
-    <link href="{{ asset('/admin') }}/css/styles.css" rel="stylesheet" />
 
-    {{-- <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script> --}}
-    <link href="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/style.min.css" rel="stylesheet" />
-    {{-- <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script> --}}
-    <link href="{{ asset('/admin') }}/css/custom_styles.css" rel="stylesheet" />
-    <link href="{{ asset('/admin') }}/css/selecttwo.css" rel="stylesheet" />
-    <link href="{{ asset('/admin') }}/css/custom.css" rel="stylesheet" />
-    {{-- <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="{{ asset('js/deleteconfirm.js') }}"></script> --}}
-    <!-- CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" />
-
-    <style>
-        /* Ensure visibility of toastr messages */
-        #toast-container>.toast {
-            color: #fff !important;
-            /* White text */
-            background-color: #333 !important;
-            /* Dark background for contrast */
-            font-weight: 500;
-        }
-
-        #toast-container>.toast-success {
-            background-color: #28a745 !important;
-        }
-
-        #toast-container>.toast-error {
-            background-color: #dc3545 !important;
-        }
-
-        #toast-container>.toast-info {
-            background-color: #17a2b8 !important;
-        }
-
-        #toast-container>.toast-warning {
-            background-color: #ffc107 !important;
-            color: #000 !important;
-        }
-
-        .navbar a.navbar-brand img {
-            width: 100%;
-            height: 60px;
-            object-fit: contain;
-        }
-    </style>
+    @include('admin.elements.css_links')
+    @yield('custom_css_links')
 
 </head>
 
 <body class="sb-nav-fixed">
+
+    <!-- Loader Overlay -->
     <div id="loaderOverlay">
         <div class="loader"></div>
         <p>Processing...</p>
     </div>
+
+    <!-- Navbar -->
     <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
         <!-- Navbar Brand-->
         <a class="navbar-brand ps-3" href="{{ url('/admin/dashboard') }}">
@@ -106,6 +66,8 @@
             </li>
         </ul>
     </nav>
+
+    <!-- Side Navigation & Content -->
     <div id="layoutSidenav">
         @include('admin.elements.header')
         <div id="layoutSidenav_content">
@@ -116,6 +78,7 @@
             @include('admin.elements.footer')
         </div>
     </div>
+
 </body>
 
 <!-- JS dependencies -->
@@ -138,10 +101,13 @@
 
 <script>
     toastr.options = {
-        closeButton: false,
+        closeButton: true,
         progressBar: true,
         positionClass: 'toast-top-right',
-        timeOut: 5000
+        timeOut: 5000,
+        extendedTimeOut: 1000,
+        showMethod: 'fadeIn',
+        hideMethod: 'fadeOut'
     };
 </script>
 

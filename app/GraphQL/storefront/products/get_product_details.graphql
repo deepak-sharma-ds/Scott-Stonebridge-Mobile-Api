@@ -8,6 +8,12 @@ query getProductDetails($handle: String!) {
     productType
     tags
 
+    options {
+      id
+      name
+      values
+    }
+
     images(first: 250) {
       edges {
         node {
@@ -24,10 +30,28 @@ query getProductDetails($handle: String!) {
           title
           sku
           availableForSale
+          quantityAvailable
+          weight
+          weightUnit
 
-          priceV2 {
+          price {
             amount
             currencyCode
+          }
+
+          compareAtPrice {
+            amount
+            currencyCode
+          }
+
+          compareAtPriceV2 {
+            amount
+            currencyCode
+          }
+
+          image {
+            url
+            altText
           }
 
           selectedOptions {

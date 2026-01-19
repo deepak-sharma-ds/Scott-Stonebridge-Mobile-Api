@@ -379,4 +379,68 @@ class ShopifyCustomerAuthService
             'expires_at' => $data['customerAccessToken']['expiresAt'] ?? null,
         ];
     }
+
+    /**
+     * Logout customer by revoking access token
+     */
+    public function logoutCustomer(string $accessToken): bool
+    {
+        $log = Log::channel('shopify_customers_auth');
+        $log->info('================== START: ShopifyCustomerAuthService: logoutCustomer ==================');
+
+        if (empty($accessToken)) {
+            $log->warning('Logout failed: Access token missing');
+            return false;
+        }
+
+        $query = <<<'GRAPHQL'
+            mutation customerAccessTokenDelete($token: String!) {
+                customerAccessTokenDelete(customerAccessToken: $token) {
+                    deletedAccessToken
+                    userErrors {
+                        field
+                        message
+                    }
+                }
+            }
+        GRAPHQL;
+
+        $variables = [
+            'token' => $accessToken,
+        ];
+
+        try {
+            $response = $this->api->storefrontApiRequest($query, $variables);
+            $log->info('Shopify logout response', $response);
+
+            if (isset($response['errors'])) {
+                $log->error('Shopify logout failed', $response['errors']);
+                return false;
+            }
+
+            $errors = data_get(
+                $response,
+                'data.customerAccessTokenDelete.userErrors',
+                []
+            );
+
+            if (!empty($errors)) {
+                $log->warning('Shopify logout user errors', $errors);
+                return false;
+            }
+
+            $log->info('Shopify logout successful', [
+                'token' => $accessToken,
+            ]);
+
+            $log->info('================== END: ShopifyCustomerAuthService: logoutCustomer ==================');
+            return true;
+        } catch (\Throwable $e) {
+            $log->error('Shopify logout exception', [
+                'token' => $accessToken,
+                'error' => $e->getMessage(),
+            ]);
+            return false;
+        }
+    }
 }
