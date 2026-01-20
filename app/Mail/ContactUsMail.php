@@ -26,6 +26,7 @@ class ContactUsMail extends Mailable
                 'patient_name' => $this->contact->name,
                 'email'        => $this->contact->email,
                 'custom_text'  => $this->contact->message,
+                'phone' => $this->contact->phone,
             ]);
     }
 }
