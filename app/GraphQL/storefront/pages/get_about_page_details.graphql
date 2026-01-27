@@ -1,0 +1,19 @@
+query getPageDetails($handle: String!) {
+  page(handle: $handle) {
+    id
+    title
+    handle
+    body
+    bodySummary
+    createdAt
+    updatedAt
+    seo {
+      title
+      description
+    }
+  }
+}
+
+
+
+

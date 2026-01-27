@@ -552,6 +552,7 @@ class ProductController extends Controller
       );
 
       $product = data_get($response, 'data.productByHandle');
+      
 
       if (!$product) {
         return $this->fail('Product not found');

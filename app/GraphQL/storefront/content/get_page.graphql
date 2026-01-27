@@ -1,0 +1,8 @@
+query getPage($handle: String!) {
+  pageByHandle(handle: $handle) {
+    id
+    title
+    handle
+    body
+  }
+}

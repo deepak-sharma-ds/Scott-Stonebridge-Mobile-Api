@@ -1,0 +1,26 @@
+query getBlogArticleDetails($blogHandle: String!, $articleHandle: String!) {
+  blog(handle: $blogHandle) {
+    id
+    title
+    handle
+
+    articleByHandle(handle: $articleHandle) {
+      id
+      title
+      handle
+      excerpt
+      excerptHtml
+      contentHtml
+      publishedAt
+
+      authorV2 {
+        name
+      }
+
+      image {
+        url
+        altText
+      }
+    }
+  }
+}

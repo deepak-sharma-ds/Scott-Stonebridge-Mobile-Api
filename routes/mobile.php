@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Apis\AboutPageController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Apis\ProductController;
@@ -10,6 +11,9 @@ use App\Http\Controllers\Apis\OrdertController;
 use App\Http\Controllers\Apis\ProfileController;
 use App\Http\Controllers\Apis\WishlistController;
 use App\Http\Controllers\Apis\ContactUsController;
+use App\Http\Controllers\Apis\PageController;
+use App\Http\Controllers\Apis\BlogController;
+
 
 
 /**
@@ -20,6 +24,17 @@ Route::middleware(['disable.session'])->group(function () {
     Route::get('/products', [ProductController::class, 'getAllProducts']);
     Route::get('/products/search', [ProductController::class, 'searchProducts']);
     Route::get('/products/{productId}', [ProductController::class, 'getProductDetail']);
+
+    // Pages (PUBLIC)
+    Route::prefix('page')->group(function () {
+        Route::post('/details', [AboutPageController::class, 'getPageDetails']);
+    });
+
+    Route::prefix('blog')->group(function () {
+        Route::post('details', [BlogController::class, 'getBlogDetails']);      // list w/ pagination
+        Route::post('article', [BlogController::class, 'getArticleDetails']);  // single article
+        Route::post('resolve', [BlogController::class, 'resolveUrl']);         // dynamic internal redirect handler
+    });
 
 
     Route::prefix('auth')->group(function () {
@@ -90,3 +105,5 @@ Route::middleware(['disable.session'])->group(function () {
 });
 
 Route::post('/contact-us', [ContactUsController::class, 'store']);
+
+// Route::post('/page/details', [PageController::class, 'getPageDetails']);
