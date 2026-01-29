@@ -1,0 +1,13 @@
+query getShopPolicies {
+  shop {
+    shopPolicies {
+      id
+      title
+      url
+      type
+      body
+      createdAt
+      updatedAt
+    }
+  }
+}

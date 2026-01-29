@@ -1,0 +1,32 @@
+query getShopPolicies {
+  shop {
+    privacyPolicy {
+      id
+      handle
+      title
+      url
+      body
+    }
+    termsOfService {
+      id
+      handle
+      title
+      url
+      body
+    }
+    refundPolicy {
+      id
+      handle
+      title
+      url
+      body
+    }
+    shippingPolicy {
+      id
+      handle
+      title
+      url
+      body
+    }
+  }
+}
