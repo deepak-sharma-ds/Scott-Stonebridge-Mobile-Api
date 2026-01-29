@@ -412,6 +412,17 @@ class CartController extends Controller
       $query = <<<'GRAPHQL'
         query cartQuery($cartId: ID!) {
           cart(id: $cartId) {
+          buyerIdentity {
+              email
+              customer {
+                id
+                firstName
+                lastName
+                phone
+                acceptsMarketing
+                tags
+              }
+            }
             id
             checkoutUrl
             createdAt
@@ -486,6 +497,7 @@ class CartController extends Controller
       }
 
       $formattedCart = [
+        'buyerIdentity' => $cart['buyerIdentity'],
         'id' => $cart['id'],
         'checkout_url' => $cart['checkoutUrl'],
         'created_at' => $cart['createdAt'],
@@ -610,6 +622,7 @@ class CartController extends Controller
         'buyerIdentity' => [
           // Logged in user email from token from middleware
           'email' => $request->shopify_customer_data['email'],
+          'customerAccessToken' => $request->bearerToken(),
 
           // Optional country code for tax/shipping calculations
           // 'countryCode' => 'US',
