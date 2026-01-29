@@ -13,8 +13,7 @@ use App\Http\Controllers\Apis\WishlistController;
 use App\Http\Controllers\Apis\ContactUsController;
 use App\Http\Controllers\Apis\PageController;
 use App\Http\Controllers\Apis\BlogController;
-
-
+use App\Http\Controllers\Apis\PolicyPageController;
 
 /**
  * Shopify APIs for Mobile App Development
@@ -28,6 +27,10 @@ Route::middleware(['disable.session'])->group(function () {
     // Pages (PUBLIC)
     Route::prefix('page')->group(function () {
         Route::post('/details', [AboutPageController::class, 'getPageDetails']);
+    });
+
+    Route::prefix('policy')->group(function () {
+        Route::post('/details', [PolicyPageController::class, 'getPolicyDetails']);
     });
 
     Route::prefix('blog')->group(function () {

@@ -5,6 +5,8 @@ query getPageDetails($handle: String!) {
     handle
     body
     bodySummary
+    onlineStoreUrl
+    trackingParameters
     createdAt
     updatedAt
     seo {
@@ -13,7 +15,3 @@ query getPageDetails($handle: String!) {
     }
   }
 }
-
-
-
-
