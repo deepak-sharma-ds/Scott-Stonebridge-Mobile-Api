@@ -48,13 +48,16 @@ class AboutPageController extends Controller
 
             $originalBody = $page['body'] ?? '';
 
-            // 1) Extract Lets Connect full data (links + message + image)
-            $letsConnectData = $this->extractLetsConnectData($originalBody);
+            // 1️⃣ Normalize FIRST
+            $normalizedBody = $this->normalizeHeadings($originalBody);
 
-            // 2) Remove Lets Connect section from body (so it doesn’t appear in normal sections)
-            $bodyWithoutLetsConnect = $this->removeLetsConnectSection($originalBody);
+            // 2️⃣ Extract Lets Connect FROM normalized body
+            $letsConnectData = $this->extractLetsConnectData($normalizedBody);
 
-            // 3) Build section-wise data (Intro + Strong headings)
+            // 3️⃣ Remove Lets Connect FROM normalized body
+            $bodyWithoutLetsConnect = $this->removeLetsConnectSection($normalizedBody);
+
+            // 4️⃣ Build sections
             $sections = [];
 
             $intro = $this->extractIntroSection($bodyWithoutLetsConnect);
@@ -72,6 +75,7 @@ class AboutPageController extends Controller
 
             // 5) Attach structured output
             $page['sections'] = $sections;
+            $page['original_body'] = $originalBody;
 
             $page['lets_connect'] = [
                 'title'     => "Let's Connect",
@@ -142,7 +146,7 @@ class AboutPageController extends Controller
         if (!$html) return [];
 
         preg_match_all(
-            '/<strong>(.*?)<\/strong>(.*?)(?=<strong>|$)/is',
+            '/<strong>(.*?)<\/strong>\s*(.*?)(?=<strong>|$)/is',
             $html,
             $matches,
             PREG_SET_ORDER
@@ -151,13 +155,15 @@ class AboutPageController extends Controller
         $sections = [];
 
         foreach ($matches as $m) {
-            $title = trim(strip_tags($m[1]));
+            $title = trim(html_entity_decode(strip_tags($m[1])));
             $contentHtml = trim($m[2]);
 
-            if (!$title) continue;
+            if (!$title || strlen(strip_tags($contentHtml)) < 5) {
+                continue;
+            }
 
             $sections[] = [
-                'title'  => html_entity_decode($title),
+                'title'  => $title,
                 'text'   => $this->cleanText($contentHtml),
                 'images' => $this->extractImages($contentHtml),
                 'html'   => $contentHtml,
@@ -166,6 +172,7 @@ class AboutPageController extends Controller
 
         return $sections;
     }
+
 
     /**
      * Extract Lets Connect block: links + message + image
@@ -263,7 +270,11 @@ class AboutPageController extends Controller
 
         if ($start === false) return $html;
 
-        return substr($html, 0, $start);
+        return preg_replace(
+            '/<strong>(Let’s|Let\'s)\s+Connect<\/strong>.*$/is',
+            '',
+            $html
+        );
     }
 
     /**
@@ -323,5 +334,22 @@ class AboutPageController extends Controller
         $text = html_entity_decode($text);
         $text = preg_replace("/\n\s*\n+/", "\n\n", $text);
         return $text;
+    }
+
+    /**
+     * Normalize headings in HTML -> convert to <strong>
+     */
+    private function normalizeHeadings(string $html): string
+    {
+        // Convert <h1-6> to <strong>
+        $html = preg_replace('/<h[1-6][^>]*>(.*?)<\/h[1-6]>/is', '<strong>$1</strong>', $html);
+
+        // Convert <b> to <strong>
+        $html = preg_replace('/<b[^>]*>(.*?)<\/b>/is', '<strong>$1</strong>', $html);
+
+        // Fix <p><strong>Title</strong></p>
+        $html = preg_replace('/<p>\s*(<strong>.*?<\/strong>)\s*<\/p>/is', '$1', $html);
+
+        return $html;
     }
 }
