@@ -234,7 +234,6 @@ class UserController extends Controller
             'email' => $request->email,
             'password' => Hash::make($generatedPassword),
         ]);
-        // dd($request->all());
 
         Log::info('User created with ID: ' . $user->id);
 
