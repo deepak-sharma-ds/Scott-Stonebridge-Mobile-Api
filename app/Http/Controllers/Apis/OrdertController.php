@@ -53,7 +53,6 @@ class OrdertController extends Controller
                 'orders/get_customer_orders',
                 $vars
             );
-            dd($response);
             $ordersNode = data_get($response, 'data.customer.orders');
 
             if (!$ordersNode) {
