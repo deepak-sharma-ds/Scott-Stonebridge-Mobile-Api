@@ -1,22 +1,21 @@
-mutation updateAdminWishlist($customerId: ID!, $value: String!) {
-  customerUpdate(
-    input: {
-      id: $customerId
-      metafields: [
-        {
-          namespace: "wishlist"
-          key: "items"
-          type: "json"
-          value: $value
-        }
-      ]
-    }
-  ) {
+mutation($customerId: ID!, $value: String!) {
+  customerUpdate(input: {
+    id: $customerId,
+    metafields: [
+      {
+        namespace: "custom",
+        key: "wishlist",
+        value: $value,
+        type: "json"
+      }
+    ]
+  }) {
     customer {
       id
-      metafields(first: 250, namespace: "wishlist") {
+      metafields(first: 5) {
         edges {
           node {
+            namespace
             key
             value
           }
@@ -24,6 +23,7 @@ mutation updateAdminWishlist($customerId: ID!, $value: String!) {
       }
     }
     userErrors {
+      field
       message
     }
   }

@@ -3,55 +3,37 @@
 namespace App\Http\Controllers\Apis;
 
 use App\Http\Controllers\Controller;
-use App\Services\APIShopifyService;
-use App\Facades\Shopify;
-use App\Traits\ShopifyResponseFormatter;
+use App\Services\WishlistService;
+use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class WishlistController extends Controller
 {
-    use ShopifyResponseFormatter;
+    use ApiResponse;
 
-    protected $shopify;
-    protected $customerAccessToken;
-
-    public function __construct(APIShopifyService $shopify, Request $request)
-    {
-        $this->shopify = $shopify;
-        $this->customerAccessToken = $request->bearerToken();
-    }
+    public function __construct(
+        private readonly WishlistService $wishlistService
+    ) {}
 
     /**
      * Get customer wishlist from metafield
      */
     public function index(Request $request)
     {
+        $token = $request->bearerToken();
+        
+        if (!$token) {
+            return $this->error('Unauthorized', null, 401);
+        }
+
         try {
-            $vars = [
-                'customerAccessToken' => $this->customerAccessToken,
-            ];
-
-            // -----------------------------------------------------
-            // Shopify wrapper call
-            // -----------------------------------------------------
-            $response = Shopify::query(
-                'storefront',
-                'wishlist/get_customer_wishlist',
-                $vars
-            );
-
-            $wishlistValue = data_get($response, 'data.customer.metafield.value');
-
-            // Final decoded wishlist (always return array)
-            $wishlist = json_decode($wishlistValue ?: "[]", true);
-
+            $wishlist = $this->wishlistService->getWishlist($token);
             return $this->success('Wishlist fetched successfully', $wishlist);
         } catch (\Throwable $e) {
-            return $this->fail('Failed to fetch wishlist', $e->getMessage());
+            return $this->error('Failed to fetch wishlist', null, 500);
         }
     }
-
 
     /**
      * Add a product to the customer's wishlist (Admin API)
@@ -59,45 +41,44 @@ class WishlistController extends Controller
     public function add(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'product_id' => 'required|string', // Shopify GID
+            'product_id' => 'required|string', 
         ]);
+
         if ($validator->fails()) {
-            return $this->fail('Validation error.', $validator->errors());
+            return $this->validationError($validator->errors());
         }
 
-        try {
-            // Shopify Customer GID (from middleware / decoded token)
-            $customerId = $request['shopify_customer_data']['id'] ?? null;
-            $productId  = $request->product_id;
-
-            if (!$customerId) {
-                return $this->fail('Customer not authenticated');
-            }
-
-            // ---------------------------------------------------------
-            // 1. Fetch Current Wishlist from Admin API metafield
-            // ---------------------------------------------------------
-            $currentWishlist = $this->getCurrentWishlistAdmin($customerId);
-
-            // If product already exists in wishlist
-            if (in_array($productId, $currentWishlist)) {
-                return $this->success('Product already in wishlist');
-            }
-
-            // ---------------------------------------------------------
-            // 2. Append new product
-            // ---------------------------------------------------------
-            $currentWishlist[] = $productId;
-
-            // ---------------------------------------------------------
-            // 3. Update metafield using your unified helper
-            // ---------------------------------------------------------
-            $updated = $this->updateWishlistMetafield($customerId, $currentWishlist);
-
-            return $this->success('Product added to wishlist', $updated);
-        } catch (\Throwable $e) {
-            return $this->fail('Something went wrong.', $e->getMessage());
+        // Shopify Customer GID (from middleware / decoded token, or request param legacy)
+        // Legacy controller looked at internal 'shopify_customer_data' or similar?
+        // Actually, the middleware usually injects data or we decode it.
+        // Let's assume we get the ID from the `shopify_customer_data` injected by middleware
+        // OR distinct `customer_id` parameter if strictly following legacy behavior?
+        // Legacy: $customerId = $request['shopify_customer_data']['id'] ?? null;
+        
+        $customerId = $request->input('shopify_customer_data.id'); 
+        
+        if (!$customerId) {
+            // Fallback if middleware didn't inject it check request body
+             $customerId = $request->input('customer_id');
         }
+
+        if (!$customerId) {
+            return $this->error('Customer not authenticated or ID missing', null, 401);
+        }
+
+        $result = $this->wishlistService->addToWishlist(
+            customerId: $customerId,
+            productId: $request->input('product_id')
+        );
+
+        if (!$result['success']) {
+            return $this->error($result['message'] ?? 'Failed to add to wishlist');
+        }
+
+        return $this->success(
+            'Product added to wishlist',
+            ['updated' => true, 'wishlist' => $result['wishlist'] ?? []]
+        );
     }
 
     /**
@@ -106,97 +87,33 @@ class WishlistController extends Controller
     public function remove(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'customer_id' => 'required|string',
             'product_id'  => 'required|string',
+            // 'customer_id' => 'required|string', // Legacy required this, but we should use Auth
         ]);
+
         if ($validator->fails()) {
-            return $this->fail('Validation error.', $validator->errors());
+            return $this->validationError($validator->errors());
+        }
+        
+        // Similar ID resolution
+        $customerId = $request->input('shopify_customer_data.id') ?? $request->input('customer_id');
+
+        if (!$customerId) {
+            return $this->error('Customer ID missing', null, 401);
         }
 
-        try {
-            $customerId = $request->customer_id;
-            $productId  = $request->product_id;
+        $result = $this->wishlistService->removeFromWishlist(
+            customerId: $customerId, 
+            productId: $request->input('product_id')
+        );
 
-            // ---------------------------------------------------------
-            // 1. Fetch Current Wishlist (Admin API)
-            // ---------------------------------------------------------
-            $currentWishlist = $this->getCurrentWishlistAdmin($customerId);
-
-            // ---------------------------------------------------------
-            // 2. Remove item
-            // ---------------------------------------------------------
-            $updatedWishlist = array_values(
-                array_filter($currentWishlist, fn($id) => $id !== $productId)
-            );
-
-            // ---------------------------------------------------------
-            // 3. Update metafield
-            // ---------------------------------------------------------
-            $result = $this->updateWishlistMetafield($customerId, $updatedWishlist);
-
-            return $this->success('Product removed from wishlist successfully', $result);
-        } catch (\Throwable $e) {
-            return $this->fail('Something went wrong.', $e->getMessage());
+         if (!$result['success']) {
+            return $this->error($result['message'] ?? 'Failed to remove from wishlist');
         }
-    }
 
-    /**
-     * Fetch wishlist metafield using Admin API (New Standard)
-     */
-    private function getCurrentWishlistAdmin($customerId)
-    {
-        try {
-            $vars = [
-                'id' => $customerId,
-            ];
-
-            $response = Shopify::query(
-                'admin',
-                'wishlist/get_admin_wishlist',
-                $vars
-            );
-
-            $value = data_get($response, 'data.customer.metafield.value');
-
-            return $value ? json_decode($value, true) : [];
-        } catch (\Throwable $e) {
-            return []; // fail silently, wishlist is optional
-        }
-    }
-
-
-    /**
-     * Update wishlist metafield via Admin API (New Standard)
-     */
-    private function updateWishlistMetafield($customerId, $wishlistArray)
-    {
-        try {
-            $vars = [
-                'customerId' => $customerId,
-                'value'      => json_encode($wishlistArray),
-            ];
-
-            $response = Shopify::query(
-                'admin',
-                'wishlist/update_admin_wishlist',
-                $vars
-            );
-
-            // Extract the newly saved metafields
-            $metafields = data_get($response, 'data.customerUpdate.customer.metafields.edges', []);
-
-            // Convert edges → node (flatten)
-            $clean = array_map(fn($edge) => $edge['node'], $metafields);
-
-            return [
-                'updated'    => true,
-                'metafields' => $clean,
-            ];
-        } catch (\Throwable $e) {
-            return [
-                'updated' => false,
-                'error'   => $e->getMessage(),
-            ];
-        }
+        return $this->success(
+            'Product removed from wishlist successfully',
+            ['updated' => true, 'wishlist' => $result['wishlist'] ?? []]
+        );
     }
 }

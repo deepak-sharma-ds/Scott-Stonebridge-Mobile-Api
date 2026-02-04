@@ -1,0 +1,39 @@
+query getProducts($limit: Int = 20, $cursor: String, $query: String, $country: CountryCode = US) 
+  @inContext(country: $country) {
+  products(first: $limit, after: $cursor, query: $query) {
+    edges {
+      cursor
+      node {
+        id
+        title
+        handle
+        vendor
+        productType
+        availableForSale
+        
+        priceRange {
+          minVariantPrice {
+            amount
+            currencyCode
+          }
+        }
+        
+        compareAtPriceRange {
+          minVariantPrice {
+            amount
+            currencyCode
+          }
+        }
+        
+        featuredImage {
+          url
+          altText
+        }
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

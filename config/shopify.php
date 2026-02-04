@@ -11,6 +11,7 @@ return [
     'cdn_base_url' => env('SHOPIFY_CDN_BASE_URL'),
     'store_url' => env('SHOPIFY_STORE_URL'),
     'currency' => env('CURRENCY', 'GBP'),
+    'theme_id' => env('SHOPIFY_THEME_ID', '179834880383'),
 
 
     'graphql' => [

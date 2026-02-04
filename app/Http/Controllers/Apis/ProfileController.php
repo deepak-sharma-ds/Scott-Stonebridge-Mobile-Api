@@ -3,26 +3,23 @@
 namespace App\Http\Controllers\Apis;
 
 use App\Http\Controllers\Controller;
-use App\Services\APIShopifyService;
 use App\Facades\Shopify;
 use App\Http\Requests\Customer\AddCustomerAddressRequest;
 use App\Http\Requests\Customer\DeleteCustomerAddressRequest;
 use App\Http\Requests\Customer\UpdateCustomerAddressRequest;
 use App\Http\Requests\Customer\UpdateCustomerProfileRequest;
-use App\Traits\ShopifyResponseFormatter;
+use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class ProfileController extends Controller
 {
-    use ShopifyResponseFormatter;
+    use ApiResponse;
 
-    protected $shopify;
     protected $customerAccessToken;
 
-    public function __construct(APIShopifyService $shopify, Request $request)
+    public function __construct(Request $request)
     {
-        $this->shopify = $shopify;
         $this->customerAccessToken = $request->bearerToken();
     }
 

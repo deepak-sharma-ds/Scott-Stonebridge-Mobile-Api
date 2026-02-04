@@ -1,0 +1,34 @@
+mutation cartBuyerIdentityUpdate($cartId: ID!, $buyerIdentity: CartBuyerIdentityInput!) {
+  cartBuyerIdentityUpdate(cartId: $cartId, buyerIdentity: $buyerIdentity) {
+    cart {
+      id
+      checkoutUrl
+      
+      cost {
+        totalAmount {
+          amount
+          currencyCode
+        }
+        subtotalAmount {
+          amount
+          currencyCode
+        }
+        totalTaxAmount {
+          amount
+          currencyCode
+        }
+      }
+      
+      buyerIdentity {
+        email
+        phone
+        countryCode
+      }
+    }
+    
+    userErrors {
+      field
+      message
+    }
+  }
+}

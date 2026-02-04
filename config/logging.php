@@ -157,6 +157,12 @@ return [
             'path'      => storage_path('logs/shopify_webhooks.log'),
             'level'  => 'debug',
         ],
+        'shopify' => [
+            'driver' => 'daily',
+            'path'      => storage_path('logs/shopify.log'),
+            'level'  => 'debug',
+            'days'      => 14,
+        ],
 
     ],
 

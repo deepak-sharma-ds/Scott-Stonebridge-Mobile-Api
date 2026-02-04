@@ -107,6 +107,48 @@ Route::middleware(['disable.session'])->group(function () {
     });
 });
 
+
 Route::post('/contact-us', [ContactUsController::class, 'store']);
 
 // Route::post('/page/details', [PageController::class, 'getPageDetails']);
+
+
+/**
+ * ========================================
+ * VERSIONED API ROUTES (NEW ARCHITECTURE)
+ * ========================================
+ * These routes use the new service-oriented architecture with:
+ * - DTOs for type safety
+ * - API Resources for response transformation
+ * - Dependency injection
+ * - Multi-currency support
+ * - API versioning
+ */
+
+use App\Http\Controllers\Apis\V1\ProductController as V1ProductController;
+use App\Http\Controllers\Apis\V1\GuestCartController;
+
+Route::middleware(['disable.session', 'api.version', 'detect.currency'])->group(function () {
+    
+    // API v1 Routes
+    Route::prefix('v1')->group(function () {
+        
+        // Products (with multi-currency support)
+        Route::prefix('products')->group(function () {
+            Route::get('/', [V1ProductController::class, 'index']);
+            Route::get('/{handle}', [V1ProductController::class, 'show']);
+        });
+        
+        // Guest Cart (unauthenticated checkout)
+        Route::prefix('guest/cart')->group(function () {
+            Route::post('/', [GuestCartController::class, 'create']);
+            Route::get('/{cartId}', [GuestCartController::class, 'show']);
+            Route::post('/{cartId}/items', [GuestCartController::class, 'addItems']);
+            Route::patch('/{cartId}/items', [GuestCartController::class, 'updateItems']);
+            Route::delete('/{cartId}/items', [GuestCartController::class, 'removeItems']);
+            Route::patch('/{cartId}/buyer', [GuestCartController::class, 'updateBuyerInfo']);
+            Route::get('/{cartId}/checkout', [GuestCartController::class, 'getCheckoutUrl']);
+            Route::post('/{cartId}/discount', [GuestCartController::class, 'applyDiscount']);
+        });
+    });
+});

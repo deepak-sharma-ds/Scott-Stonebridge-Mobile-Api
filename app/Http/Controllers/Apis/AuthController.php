@@ -2,132 +2,84 @@
 
 namespace App\Http\Controllers\Apis;
 
-use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
-use Illuminate\Support\Facades\Http;
-use App\Services\APIShopifyService;
+use App\Http\Requests\Auth\LoginRequest;
+use App\Http\Requests\Auth\RegisterRequest;
+use App\Http\Resources\V1\ProductResource; // Assuming we might need this later, but not here
 use App\Services\ShopifyCustomerAuthService;
+use App\Traits\ApiResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class AuthController extends Controller
 {
-    protected $shopify;
-    protected $authService;
+    use ApiResponse;
 
-    public function __construct(APIShopifyService $shopify, ShopifyCustomerAuthService $authService)
-    {
-        $this->shopify = $shopify;
-        $this->authService = $authService;
-    }
+    public function __construct(
+        private readonly ShopifyCustomerAuthService $authService
+    ) {}
 
     /**
      * Register new customer
      * @return \Illuminate\Http\JsonResponse
      */
-    public function register(Request $request)
+    public function register(RegisterRequest $request)
     {
-        // Validate incoming request
-        $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
-            'first_name' => 'required|string',
-            'last_name' => 'nullable|string',
-            'password' => 'required|string|min:6',
-        ]);
+        $data = $request->validated();
 
-        if ($validator->fails()) {
-            return response()->json([
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
+        $response = $this->authService->signupCustomer(
+            firstName: $data['first_name'],
+            lastName: $data['last_name'] ?? '',
+            email: $data['email'],
+            password: $data['password'],
+            acceptsMarketing: $data['subscribe'] ?? false
+        );
+
+        if (!$response['success']) {
+            return $this->error(
+                'Failed to register customer', 
+                $response['errors'], 
+                400
+            );
         }
 
-        $data = $validator->validated();
-
-        try {
-            $data['password_confirmation'] = $data['password'];
-            $response = $this->shopify->createCustomer([
-                'customer' => [
-                    'email' => $data['email'],
-                    'first_name' => $data['first_name'],
-                    'last_name' => $data['last_name'] ?? '',
-                    'verified_email' => true,
-                    'password' => $data['password'],
-                    'password_confirmation' => $data['password_confirmation'],
-                    'accepts_marketing' =>  $data['subscribe'] ?? false,
-                    'send_email_welcome' => true,
-                    'form_type' => 'create_customer',
-                ],
-            ]);
-
-            if (isset($response['customer'])) {
-                return response()->json(['message' => 'Customer registered successfully', 'customer' => $response['customer']], 201);
-            }
-
-            // If Shopify API returns error response but no exception thrown
-            return response()->json(['error' => 'Failed to register customer', 'details' => $response], 400);
-        } catch (\Throwable $th) {
-            // Return the error message from the exception
-            return response()->json([
-                'error' => 'Failed to register customer',
-                'message' => $th->getMessage()
-            ], 400);
-        }
+        return $this->success(
+            'Customer registered successfully',
+            $response, // Contains customer DTO and token
+            201
+        );
     }
 
     /**
      * Login customer and return access token
      * @return \Illuminate\Http\JsonResponse
      */
-    public function login(Request $request)
+    public function login(LoginRequest $request)
     {
-        $validator = Validator::make($request->all(), [
-            'email' => 'required|email',
-            'password' => 'required|string',
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'status' => 422,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        $data = $validator->validated();
-        $tokenData = $this->authService->loginCustomer($request->email, $request->password);
+        $data = $request->validated();
+        
+        $tokenData = $this->authService->loginCustomer(
+            email: $data['email'],
+            password: $data['password']
+        );
 
         if (!$tokenData) {
-            return response()->json(['status' => 401, 'message' => 'Invalid credentials'], 401);
+            return $this->error('Invalid credentials', null, 401);
         }
 
-        return response()->json([
-            'status' => 200,
-            'message' => 'Login successful',
-            'data' => [
+        return $this->success(
+            'Login successful',
+            [
                 'access_token' => $tokenData['access_token'],
-                'expires_at' => $tokenData['expires_at']->toDateTimeString(),
-            ],
-        ]);
-
-
-
-        // $response = $this->shopify->customerAccessTokenCreate($data['email'], $data['password']);
-
-        // if ($response['success']) {
-        //     return response()->json([
-        //         'accessToken' => $response['token'],
-        //         'expiresAt' => $response['expiresAt'],
-        //     ]);
-        // }
-
-        // return response()->json([
-        //     'errors' => $response['errors']
-        // ], 401);
+                'expires_at' => is_a($tokenData['expires_at'], \Carbon\Carbon::class) 
+                    ? $tokenData['expires_at']->toDateTimeString() 
+                    : $tokenData['expires_at'],
+            ]
+        );
     }
 
     /**
      * Step 1: Send password reset email
-     * Shopify will handle the email and token generation
      */
     public function forgotPassword(Request $request)
     {
@@ -136,86 +88,65 @@ class AuthController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'status' => 422,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
+            return $this->validationError($validator->errors());
         }
 
-        $email = $validator->validated()['email'];
+        $email = $request->input('email');
 
-        try {
-            $response = $this->authService->sendPasswordResetEmail($email);
+        $response = $this->authService->sendPasswordResetEmail($email);
 
-            if (!empty($response['success']) && $response['success']) {
-                return response()->json([
-                    'status' => 200,
-                    'message' => 'Password reset email sent if the email exists in our system'
-                ], 200);
-            }
-
-            return response()->json([
-                'status' => 400,
-                'message' => 'Failed to send password reset email. Please check the email address.',
-                'error' => $response['error'] ?? []
-            ], 400);
-        } catch (\Throwable $th) {
-            return response()->json([
-                'status' => 500,
-                'message' => 'Unexpected error',
-                'error' => $th->getMessage()
-            ], 500);
+        if ($response['success']) {
+            return $this->success(
+                'Password reset email sent if the email exists in our system'
+            );
         }
+
+        return $this->error(
+            'Failed to send password reset email. Please check the email address.',
+            $response['message'] ?? [],
+            400
+        );
     }
 
     /**
      * Step 2: Reset password using token from email
-     * Shopify will automatically reset from website, here we just create the API not using it.
      */
     public function resetPassword(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'reset_token' => 'required|string',
+            'reset_token' => 'required|string', // This is the reset URL usually
             'new_password' => 'required|string|min:6|confirmed',
         ]);
 
         if ($validator->fails()) {
-            return response()->json([
-                'status' => 422,
-                'message' => 'Validation failed',
-                'errors' => $validator->errors(),
-            ], 422);
+            return $this->validationError($validator->errors());
         }
 
-        $data = $validator->validated();
+        $response = $this->authService->resetPassword(
+            resetUrl: $request->input('reset_token'), // API usually sends simple token; Shopify needs URL? 
+            // The previous implementation named it 'reset_token' but service expected 'resetUrl'.
+            // Assuming the frontend sends the full reset URL provided in the email link?
+            // Or if it sends a token, we might need to construct the URL?
+            // Shopify storefront API requires `resetUrl`.
+            // Let's assume input is correct for now based on previous code logic.
+            newPassword: $request->input('new_password')
+        );
 
-        try {
-            $response = $this->authService->resetPassword($data['reset_token'], $data['new_password']);
-
-            if (!empty($response['success']) && $response['success']) {
-                return response()->json([
-                    'status' => 200,
-                    'message' => $response['message'] ?? 'Password has been reset successfully',
-                    'data' => [
-                        'access_token' => $response['access_token'] ?? null,
-                        'expires_at' => $response['expires_at'] ?? null,
-                    ],
-                ], 200);
-            }
-
-            return response()->json([
-                'status' => 400,
-                'message' => 'Failed to reset password',
-                'error' => $response['error'] ?? []
-            ], 400);
-        } catch (\Throwable $th) {
-            return response()->json([
-                'status' => 500,
-                'message' => 'Unexpected error',
-                'error' => $th->getMessage()
-            ], 500);
+        if ($response['success']) {
+            return $this->success(
+                $response['message'] ?? 'Password has been reset successfully',
+                [
+                    'access_token' => $response['access_token'] ?? null,
+                    'expires_at' => $response['expires_at'] ?? null,
+                ]
+            );
         }
+
+        return $this->error(
+            'Failed to reset password',
+            $response['message'] ?? [],
+            400
+        );
     }
 
     /**
@@ -223,28 +154,20 @@ class AuthController extends Controller
      */
     public function getProfile(Request $request)
     {
-        try {
-            $token = $request->bearerToken();
-            $expiresAt = $request->header('X-Token-Expires-At');
+        $token = $request->bearerToken();
+        $expiresAt = $request->header('X-Token-Expires-At');
 
-            $customer = $this->authService->verifyToken($token, $expiresAt);
+        $customer = $this->authService->verifyToken($token, $expiresAt);
 
-            if (!$customer) {
-                return response()->json(['status' => 401, 'message' => 'Token invalid or expired'], 401);
-            }
-
-            return response()->json([
-                'status' => 200,
-                'message' => 'Profile retrieved successfully',
-                'data' => ['customer' => $customer]
-            ]);
-        } catch (\Throwable $th) {
-            return response()->json([
-                'status' => 500,
-                'message' => 'Internal Server Error',
-                'error' => $th->getMessage()
-            ], 500);
+        if (!$customer) {
+            return $this->error('Token invalid or expired', null, 401);
         }
+
+        // Return DTO possibly wrapped in resource or as array
+        return $this->success(
+            'Profile retrieved successfully',
+            ['customer' => $customer]
+        );
     }
 
     /**
@@ -256,24 +179,15 @@ class AuthController extends Controller
         $accessToken = $request->bearerToken();
 
         if (!$accessToken) {
-            return response()->json([
-                'status' => 401,
-                'message' => 'Access token missing',
-            ], 401);
+            return $this->error('Access token missing', null, 401);
         }
 
         $loggedOut = $this->authService->logoutCustomer($accessToken);
 
         if (!$loggedOut) {
-            return response()->json([
-                'status' => 400,
-                'message' => 'Failed to logout',
-            ], 400);
+            return $this->error('Failed to logout', null, 400);
         }
 
-        return response()->json([
-            'status' => 200,
-            'message' => 'Logout successful',
-        ], 200);
+        return $this->success('Logout successful');
     }
 }

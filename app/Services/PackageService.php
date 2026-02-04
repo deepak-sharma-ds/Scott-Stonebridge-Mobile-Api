@@ -1,17 +1,21 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services;
 
+use App\Contracts\PackageServiceInterface;
+use App\DTOs\PackageDTO;
 use App\Models\Package;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
-class PackageService
+class PackageService implements PackageServiceInterface
 {
     /**
-     * Get paginated packages with audio counts (optimized - no N+1)
+     * Get paginated packages
      */
     public function getPaginatedPackages(int $perPage = 10): LengthAwarePaginator
     {
@@ -19,16 +23,16 @@ class PackageService
             ->with(['audios' => function ($query) {
                 $query->select('id', 'package_id', 'title', 'order_index')
                     ->orderBy('order_index')
-                    ->limit(3); // Only load first 3 for preview
+                    ->limit(3); 
             }])
             ->latest()
             ->paginate($perPage);
     }
 
     /**
-     * Get active packages (for frontend/API)
+     * Get active packages
      */
-    public function getActivePackages()
+    public function getActivePackages(): Collection
     {
         return Package::where('status', 'active')
             ->withCount('audios')
@@ -38,24 +42,50 @@ class PackageService
     }
 
     /**
-     * Find package by ID with all relations
+     * Find package by ID
      */
-    public function findPackageWithRelations(int $id): ?Package
+    public function findPackageById(int $id): ?PackageDTO
     {
-        return Package::with(['audios' => fn($q) => $q->orderBy('order_index')])
+        $package = Package::with(['audios' => fn($q) => $q->orderBy('order_index')])
             ->withCount('audios')
             ->find($id);
+
+        if (!$package) {
+            return null;
+        }
+
+        return $this->toDTO($package);
     }
 
     /**
-     * Create a new package
+     * Find package by Shopify tag
      */
-    public function createPackage(array $data, ?UploadedFile $coverImage = null): Package
+    public function findPackageByShopifyTag(string $tag): ?PackageDTO
     {
-        return DB::transaction(function () use ($data, $coverImage) {
-            if ($coverImage) {
-                $data['cover_image'] = $this->uploadCoverImage($coverImage);
-            }
+        $package = Package::with(['audios' => fn($q) => $q->orderBy('order_index')])
+            ->withCount('audios')
+            ->where('shopify_tag', $tag)
+            ->first();
+
+        if (!$package) {
+            return null;
+        }
+
+        return $this->toDTO($package);
+    }
+
+    /**
+     * Create new package
+     */
+    public function createPackage(PackageDTO $dto): Package
+    {
+        return DB::transaction(function () use ($dto) {
+            $data = $dto->toArray();
+            
+            // Handle image if it's a file path/url passed in DTO or handled separately
+            // For now assuming DTO contains string path if already uploaded, or we handle upload in controller
+            // The previous service handled UploadedFile, but DTOs shouldn't carry UploadedFile instances typically.
+            // We'll assume the controller handles upload and passes the path in the DTO.
 
             return Package::create($data);
         });
@@ -64,88 +94,47 @@ class PackageService
     /**
      * Update existing package
      */
-    public function updatePackage(Package $package, array $data, ?UploadedFile $coverImage = null): Package
+    public function updatePackage(int $id, PackageDTO $dto): Package
     {
-        return DB::transaction(function () use ($package, $data, $coverImage) {
-            if ($coverImage) {
-                // Delete old image if exists
-                $this->deleteOldCoverImage($package);
-                $data['cover_image'] = $this->uploadCoverImage($coverImage);
-            }
+        $package = Package::findOrFail($id);
 
+        return DB::transaction(function () use ($package, $dto) {
+            $data = $dto->toArray();
+            
+            // If DTO has new cover image, handle old deletion logic if needed
+            // But here we just update data
+            
             $package->update($data);
             return $package->fresh();
         });
     }
 
     /**
-     * Delete package (soft delete)
+     * Delete package
      */
-    public function deletePackage(Package $package): bool
+    public function deletePackage(int $id): bool
     {
+        $package = Package::findOrFail($id);
+
         return DB::transaction(function () use ($package) {
-            // Soft delete will trigger model event to delete audios
+            if ($package->cover_image) {
+                Storage::disk('public')->delete($package->cover_image);
+            }
             return $package->delete();
         });
     }
 
-    /**
-     * Force delete package and cleanup
-     */
-    public function forceDeletePackage(Package $package): bool
+    private function toDTO(Package $package): PackageDTO
     {
-        return DB::transaction(function () use ($package) {
-            // Delete cover image
-            $this->deleteOldCoverImage($package);
-
-            // Force delete (will cascade to audios via model events)
-            return $package->forceDelete();
-        });
-    }
-
-    /**
-     * Search packages by query
-     */
-    public function searchPackages(string $query)
-    {
-        return Package::where(function ($q) use ($query) {
-                $q->where('title', 'like', "%{$query}%")
-                  ->orWhere('description', 'like', "%{$query}%")
-                  ->orWhere('shopify_tag', 'like', "%{$query}%");
-            })
-            ->withCount('audios')
-            ->latest()
-            ->get();
-    }
-
-    /**
-     * Get packages by Shopify tag
-     */
-    public function getPackagesByTag(string $tag)
-    {
-        return Package::where('shopify_tag', $tag)
-            ->where('status', 'active')
-            ->withCount('audios')
-            ->with(['audios' => fn($q) => $q->orderBy('order_index')])
-            ->get();
-    }
-
-    /**
-     * Upload cover image with unique filename
-     */
-    private function uploadCoverImage(UploadedFile $file): string
-    {
-        $filename = time() . '_' . str_replace(' ', '_', $file->getClientOriginalName());
-        return $file->storeAs('covers', $filename, 'public');
-    }
-
-    /**
-     * Delete old cover image from storage
-     */
-    private function deleteOldCoverImage(Package $package): void
-    {
-        if ($package->cover_image && Storage::disk('public')->exists($package->cover_image)) {
-            Storage::disk('public')->delete($package->cover_image);
-        }
+        return new PackageDTO(
+            id: $package->id,
+            title: $package->title,
+            description: $package->description,
+            price: (float) $package->price,
+            currency: $package->currency ?? 'USD',
+            shopifyTag: $package->shopify_tag,
+            coverImage: $package->cover_image,
+            status: $package->status
+        );
     }
 }

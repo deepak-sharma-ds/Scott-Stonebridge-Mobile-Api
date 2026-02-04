@@ -1,7 +1,7 @@
-query getCustomerWishlist($customerAccessToken: String!) {
+query($customerAccessToken: String!) {
   customer(customerAccessToken: $customerAccessToken) {
     id
-    metafield(namespace: "wishlist", key: "items") {
+    metafield(namespace: "custom", key: "wishlist") {
       value
     }
   }

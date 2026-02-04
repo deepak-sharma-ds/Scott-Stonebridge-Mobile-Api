@@ -1,0 +1,46 @@
+query getCollectionProducts($handle: String!, $limit: Int = 20, $cursor: String, $country: CountryCode = US) 
+  @inContext(country: $country) {
+  collection(handle: $handle) {
+    id
+    title
+    handle
+    description
+    
+    products(first: $limit, after: $cursor) {
+      edges {
+        cursor
+        node {
+          id
+          title
+          handle
+          vendor
+          productType
+          availableForSale
+          
+          priceRange {
+            minVariantPrice {
+              amount
+              currencyCode
+            }
+          }
+          
+          compareAtPriceRange {
+            minVariantPrice {
+              amount
+              currencyCode
+            }
+          }
+          
+          featuredImage {
+            url
+            altText
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

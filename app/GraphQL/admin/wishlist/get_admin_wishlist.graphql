@@ -1,7 +1,7 @@
-query getAdminWishlist($id: ID!) {
+query($id: ID!) {
   customer(id: $id) {
     id
-    metafield(namespace: "wishlist", key: "items") {
+    metafield(namespace: "custom", key: "wishlist") {
       value
     }
   }

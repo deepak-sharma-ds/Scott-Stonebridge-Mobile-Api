@@ -5,12 +5,12 @@ namespace App\Http\Controllers\Apis;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Facades\Shopify;
-use App\Traits\ShopifyResponseFormatter;
+use App\Traits\ApiResponse;
 use Illuminate\Support\Facades\Validator;
 
 class BlogController extends Controller
 {
-    use ShopifyResponseFormatter;
+    use ApiResponse;
 
     /**
      * GET /api/blog/details?handle=news&first=10&after=CURSOR(optional)

@@ -5,12 +5,12 @@ namespace App\Http\Controllers\Apis;
 use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
 use App\Facades\Shopify;
-use App\Traits\ShopifyResponseFormatter;
+use App\Traits\ApiResponse;
 use Illuminate\Support\Facades\Validator;
 
 class PolicyPageController extends Controller
 {
-    use ShopifyResponseFormatter;
+    use ApiResponse;
 
     /**
      * Get page details by handle (example: about-me)

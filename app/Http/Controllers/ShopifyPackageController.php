@@ -2,39 +2,33 @@
 
 namespace App\Http\Controllers;
 
+use App\Contracts\PackageServiceInterface;
 use App\Http\Controllers\Controller;
-use App\Http\Resources\PackageResource;
-use App\Models\Package;
+use App\Http\Resources\V1\PackageResource;
+use App\Traits\ApiResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 class ShopifyPackageController extends Controller
 {
+    use ApiResponse;
+
+    public function __construct(
+        private readonly PackageServiceInterface $packageService
+    ) {}
+
     /**
      * GET /api/shopify/packages
      * Return all packages (with audios)
      */
     public function index(Request $request)
     {
-        try {
-            // Optionally filter or paginate
-            $packages = Package::with('audios')
-                ->where('status', 'active')
-                ->latest()
-                ->get();
+        // Using getActivePackages as per service capability for API
+        $packages = $this->packageService->getActivePackages();
 
-            return response()->json([
-                'status' => 200,
-                'message' => 'Data found successfully',
-                'packages' => PackageResource::collection($packages),
-            ], 200);
-        } catch (\Throwable $th) {
-            return response()->json([
-                'status' => 500,
-                'message' => 'Something went wrong! Please try again later.',
-                'error' => $th->getMessage(),
-            ], 500);
-        }
+        return $this->success(
+            'Data found successfully',
+            PackageResource::collection($packages)
+        );
     }
 
     /**
@@ -43,36 +37,16 @@ class ShopifyPackageController extends Controller
      */
     public function show($id)
     {
-        try {
-            // $package = Package::with('audios')->findOrFail($id);
-            $package = Package::with('audios')->where('shopify_tag', $id)->firstOrFail();
-            // Convert the resource to an array
-            $packageData = (new PackageResource($package))->toArray(request());
+        // Existing logic used shopify_tag as the identifier for "id" param
+        $package = $this->packageService->findPackageByShopifyTag($id);
 
-            // Append audio URLs dynamically
-            $packageData['audios'] = $package->audios->map(function ($audio) {
-                return [
-                    'id' => $audio->id,
-                    'title' => $audio->title,
-                    'order_index' => $audio->order_index,
-                    'duration_seconds' => $audio->duration_seconds,
-                    'file_url' => $audio->file_path
-                        ? route('audio.stream', $audio->id)
-                        : null,
-                ];
-            });
-
-            return response()->json([
-                'status'  => 200,
-                'message' => 'Data found successfully',
-                'package' => $packageData,
-            ], 200);
-        } catch (\Throwable $th) {
-            return response()->json([
-                'status' => 500,
-                'message' => 'Something went wrong! Please try again later.',
-                'error' => $th->getMessage(),
-            ], 500);
+        if (!$package) {
+            return $this->error('Package not found', null, 404);
         }
+
+        return $this->success(
+            'Data found successfully',
+            new PackageResource($package)
+        );
     }
 }

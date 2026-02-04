@@ -1,42 +1,28 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services;
 
-use App\Services\APIShopifyService;
+use App\Contracts\Shopify\ShopifyAdapterInterface;
+use App\DTOs\Shopify\CustomerDTO;
+use App\Services\Shopify\GraphQLLoaderService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
 class ShopifyCustomerAuthService
 {
-    protected $api;
-
-    public function __construct(APIShopifyService $api)
-    {
-        $this->api = $api;
-    }
+    public function __construct(
+        private readonly ShopifyAdapterInterface $adapter,
+        private readonly GraphQLLoaderService $queryLoader
+    ) {}
 
     /**
      * Create new customer (signup)
-     * NOT WORKING - use (customers.json) REST API instead
      */
-    public function signupCustomer($firstName, $lastName, $email, $password, $acceptsMarketing = false)
+    public function signupCustomer(string $firstName, string $lastName, string $email, string $password, bool $acceptsMarketing = false): array
     {
-        $query = <<<'GRAPHQL'
-        mutation customerCreate($input: CustomerCreateInput!) {
-            customerCreate(input: $input) {
-                customer {
-                    id
-                    email
-                    firstName
-                    lastName
-                }
-                customerUserErrors {
-                    field
-                    message
-                }
-            }
-        }
-        GRAPHQL;
+        $query = $this->queryLoader->load('storefront/customers/create');
 
         $variables = [
             'input' => [
@@ -52,331 +38,162 @@ class ShopifyCustomerAuthService
             ],
         ];
 
-        $response = $this->api->storefrontApiRequest($query, $variables);
+        $response = $this->adapter->storefrontQuery($query, $variables);
 
-        $errors = data_get($response, 'data.customerCreate.customerUserErrors', []);
+        // Handle User Errors (functional errors from Shopify)
+        $errors = data_get($response, 'customerCreate.customerUserErrors', []);
 
-        if (!empty($errors)) {
-            // Log errors and return
-            Log::warning('Shopify signup errors', $errors);
+        if (! empty($errors)) {
             return [
                 'success' => false,
                 'errors' => $errors,
             ];
         }
 
-        // Signup success
-        $customer = data_get($response, 'data.customerCreate.customer');
-        if ($customer) {
-            // Automatically login customer after signup
-            $tokenData = $this->loginCustomer($email, $password);
-            return array_merge(['success' => true, 'customer' => $customer], $tokenData ?? []);
+        $customerData = data_get($response, 'customerCreate.customer');
+
+        if ($customerData) {
+            // Parse to DTO
+            $customerDTO = CustomerDTO::fromShopifyNode($customerData);
+
+            // Dispatch Event
+            \App\Events\CustomerRegistered::dispatch($customerDTO);
+
+            return [
+                'success' => true,
+                'customer' => $customerDTO,
+            ];
         }
 
-        return ['success' => false, 'errors' => [['message' => 'Unknown error during signup']]];
+        return ['success' => false, 'errors' => [['message' => 'Unknown error during registration']]];
     }
 
     /**
      * Login customer and get access token
      */
-    public function loginCustomer($email, $password)
+    public function loginCustomer(string $email, string $password): ?array
     {
-        $log = Log::channel('shopify_customers_auth');
-        $log->info('================== START: ShopifyCustomerAuthService: loginCustomer ==================');
-        $log->info('Attempting Shopify customer login', [
-            'email' => $email,
-        ]);
-        $query = <<<'GRAPHQL'
-        mutation customerAccessTokenCreate($input: CustomerAccessTokenCreateInput!) {
-            customerAccessTokenCreate(input: $input) {
-                customerAccessToken {
-                    accessToken
-                    expiresAt
-                }
-                userErrors {
-                    field
-                    message
-                }
-            }
-        }
-        GRAPHQL;
+        $query = $this->queryLoader->load('storefront/customers/access_token_create');
 
         $variables = ['input' => ['email' => $email, 'password' => $password]];
 
-        $response = $this->api->storefrontApiRequest($query, $variables);
-        $log->info('Shopify customer login response', $response);
-        if (isset($response['errors'])) {
-            return null;
-        }
+        $response = $this->adapter->storefrontQuery($query, $variables);
 
-        if (!empty($response['data']['customerAccessTokenCreate']['customerAccessToken'])) {
-            $tokenData = $response['data']['customerAccessTokenCreate']['customerAccessToken'];
-            $log->info('Shopify customer login successful', [
-                'email' => $email,
-                'expires_at' => $tokenData['expiresAt'],
-            ]);
-            $log->info('================== END: ShopifyCustomerAuthService: loginCustomer ==================');
+        $tokenData = data_get($response, 'customerAccessTokenCreate.customerAccessToken');
+
+        if ($tokenData) {
             return [
                 'access_token' => $tokenData['accessToken'],
                 'expires_at' => Carbon::parse($tokenData['expiresAt']),
             ];
         }
 
-        // Log errors
-        if (!empty($response['data']['customerAccessTokenCreate']['userErrors'])) {
-            $log->warning('Shopify login user errors', $response['data']['customerAccessTokenCreate']['userErrors']);
+        // Log user errors
+        $userErrors = data_get($response, 'customerAccessTokenCreate.userErrors', []);
+        if (! empty($userErrors)) {
+            Log::warning('Shopify login user errors', $userErrors);
         }
 
         return null;
     }
 
     /**
-     * Verify token validity
-     * Optionally check expiry time
+     * Verify token validity and return Customer DTO
      */
-    public function verifyToken($accessToken, $expiresAt = null)
+    public function verifyToken(string $accessToken, ?string $expiresAt = null): ?CustomerDTO
     {
-        $log = Log::channel('shopify_customers_auth');
-        $log->info('================== START: ShopifyCustomerAuthService: verifyToken ==================');
-        // First, check local expiry
+        // First, check local expiry check if provided
         if ($expiresAt && Carbon::now()->gt(Carbon::parse($expiresAt))) {
-            $log->info('Shopify customer token expired locally', [
-                'token' => $accessToken,
-                'expires_at' => $expiresAt,
-            ]);
-            return false;
+            return null;
         }
 
-        $query = <<<'GRAPHQL'
-            query($token: String!) {
-                customer(customerAccessToken: $token) {
-                    id
-                    email
-                    firstName
-                    lastName
-                    phone
-                    acceptsMarketing
-                    tags
-                    defaultAddress {
-                        id
-                        firstName
-                        lastName
-                        address1
-                        address2
-                        city
-                        province
-                        country
-                        zip
-                        phone
-                    }
-                    addresses(first: 10) {
-                        edges {
-                            node {
-                            id
-                            firstName
-                            lastName
-                            address1
-                            address2
-                            city
-                            province
-                            country
-                            zip
-                            phone
-                            }
-                        }
-                    }
-                }
-            }
-        GRAPHQL;
-
+        $query = $this->queryLoader->load('storefront/customers/get_customer');
         $variables = ['token' => $accessToken];
 
-        try {
-            $response = $this->api->storefrontApiRequest($query, $variables);
-            $log->info('Shopify token verification response', $response);
-            if (isset($response['errors'])) {
-                $log->warning('Shopify token verification errors', $response['errors']);
-                return false;
-            }
-            $customer = data_get($response, 'data.customer');
+        $response = $this->adapter->storefrontQuery($query, $variables);
+        $customerData = data_get($response, 'customer');
 
-            $log->info('================== END: ShopifyCustomerAuthService: verifyToken ==================');
-            return $customer ?: false;
-        } catch (\Throwable $e) {
-            $log->error('Shopify token verification failed', [
-                'token' => $accessToken,
-                'error' => $e->getMessage(),
-            ]);
+        if (! $customerData) {
+            return null;
         }
 
-        return false;
+        return CustomerDTO::fromShopifyNode($customerData);
     }
 
     /**
      * Renew token if expired
      */
-    public function renewToken($accessToken)
+    public function renewToken(string $accessToken): ?array
     {
-        $log = Log::channel('shopify_customers_auth');
-        $log->info('================== START: ShopifyCustomerAuthService: renewToken ==================');
-
-        $query = <<<'GRAPHQL'
-        mutation customerAccessTokenRenew($token: String!) {
-            customerAccessTokenRenew(customerAccessToken: $token) {
-                customerAccessToken {
-                    accessToken
-                    expiresAt
-                }
-                userErrors {
-                    field
-                    message
-                }
-            }
-        }
-        GRAPHQL;
-
+        $query = $this->queryLoader->load('storefront/customers/access_token_renew');
         $variables = ['token' => $accessToken];
 
-        $response = $this->api->storefrontApiRequest($query, $variables);
-        $log->info('Shopify token renewal response', $response);
-        if (isset($response['errors'])) {
-            $log->warning('Shopify token renewal errors', $response['errors']);
-            return null;
-        }
+        $response = $this->adapter->storefrontQuery($query, $variables);
 
-        if (!empty($response['data']['customerAccessTokenRenew']['customerAccessToken'])) {
-            $tokenData = $response['data']['customerAccessTokenRenew']['customerAccessToken'];
-            $log->info('Shopify token renewal successful', [
-                'expires_at' => $tokenData['expiresAt'],
-            ]);
-            $log->info('================== END: ShopifyCustomerAuthService: renewToken ==================');
+        $tokenData = data_get($response, 'customerAccessTokenRenew.customerAccessToken');
+        if ($tokenData) {
             return [
                 'access_token' => $tokenData['accessToken'],
                 'expires_at' => Carbon::parse($tokenData['expiresAt']),
             ];
         }
 
-        $log->warning('Shopify token renewal user errors', $response['data']['customerAccessTokenRenew']['userErrors'] ?? []);
         return null;
     }
 
     /**
-     * Sends a password reset email to the customer.
+     * Sends a password reset email
      */
-    public function sendPasswordResetEmail(string $email)
+    public function sendPasswordResetEmail(string $email): array
     {
-        $log = Log::channel('shopify_customers_auth');
-        $log->info('================== START: ShopifyCustomerAuthService: sendPasswordResetEmail ==================');
-
-        $query = <<<'GRAPHQL'
-            mutation customerRecover($email: String!) {
-                customerRecover(email: $email) {
-                    customerUserErrors {
-                        field
-                        message
-                    }
-                }
-            }
-            GRAPHQL;
-
+        $query = $this->queryLoader->load('storefront/customers/recover');
         $variables = ['email' => $email];
 
-        $response = $this->api->storefrontApiRequest($query, $variables);
-        $log->info('Shopify password reset email response', $response);
-        if (isset($response['errors'])) {
-            $log->error('Shopify password reset email failed', [
-                'email' => $email,
-                'errors' => $response['errors'],
-            ]);
+        $response = $this->adapter->storefrontQuery($query, $variables);
+
+        $errors = data_get($response, 'customerRecover.customerUserErrors', []);
+
+        if (! empty($errors)) {
             return [
                 'success' => false,
-                'message' => 'Unknown error occurred',
-                'error' => $response['errors'] ?? []
+                'message' => $errors,
             ];
         }
 
-        if (!empty($response['data']['customerRecover']['customerUserErrors'])) {
-            $log->warning('Shopify password reset email user errors', $response['data']['customerRecover']['customerUserErrors']);
-            return [
-                'success' => false,
-                'message' => $response['data']['customerRecover']['customerUserErrors']
-            ];
-        }
-
-        $log->info('Shopify password reset email sent successfully', ['email' => $email]);
-        $log->info('================== END: ShopifyCustomerAuthService: sendPasswordResetEmail ==================');
         return [
             'success' => true,
-            'message' => 'Password reset email sent successfully.'
+            'message' => 'Password reset email sent successfully.',
         ];
     }
 
     /**
      * Resets customer password using Shopify token.
      */
-    public function resetPassword(string $resetUrl, string $newPassword)
+    public function resetPassword(string $resetUrl, string $newPassword): array
     {
-        $log = Log::channel('shopify_customers_auth');
-        $log->info('================== START: ShopifyCustomerAuthService: resetPassword ==================');
-
-        $query = <<<'GRAPHQL'
-            mutation customerResetByUrl($resetUrl: URL!, $password: String!) {
-                customerResetByUrl(resetUrl: $resetUrl, password: $password) {
-                    customer {
-                        id
-                        email
-                    }
-                    customerAccessToken {
-                        accessToken
-                        expiresAt
-                    }
-                    customerUserErrors {
-                        field
-                        message
-                    }
-                }
-            }
-            GRAPHQL;
+        $query = $this->queryLoader->load('storefront/customers/reset_by_url');
 
         $variables = [
             'resetUrl' => $resetUrl,
             'password' => $newPassword,
         ];
 
-        $response = $this->api->storefrontApiRequest($query, $variables);
-        $log->info('Shopify password reset response', $response);
-        if (isset($response['errors'])) {
-            $log->error('Shopify password reset failed', [
-                'reset_url' => $resetUrl,
-                'errors' => $response['errors'],
-            ]);
+        $response = $this->adapter->storefrontQuery($query, $variables);
+
+        $data = data_get($response, 'customerResetByUrl', []);
+
+        if (! empty($data['customerUserErrors'])) {
             return [
                 'success' => false,
-                'message' => 'Unknown error occurred',
-                'error' => $response['errors'] ?? []
+                'message' => $data['customerUserErrors'],
             ];
         }
 
-        $data = $response['data']['customerResetByUrl'] ?? null;
-
-        if (!empty($data['customerUserErrors'])) {
-            $log->warning('Shopify password reset user errors', $data['customerUserErrors']);
-            return [
-                'success' => false,
-                'message' => $data['customerUserErrors']
-            ];
-        }
-
-        $log->info('Shopify password reset successful', [
-            'customer_id' => $data['customer']['id'] ?? null,
-            'email' => $data['customer']['email'] ?? null,
-        ]);
-        $log->info('================== END: ShopifyCustomerAuthService: resetPassword ==================');
         return [
             'success' => true,
             'message' => 'Password has been reset successfully.',
-            'access_token' => $data['customerAccessToken']['accessToken'] ?? null,
-            'expires_at' => $data['customerAccessToken']['expiresAt'] ?? null,
+            'access_token' => data_get($data, 'customerAccessToken.accessToken'),
+            'expires_at' => data_get($data, 'customerAccessToken.expiresAt'),
         ];
     }
 
@@ -385,62 +202,13 @@ class ShopifyCustomerAuthService
      */
     public function logoutCustomer(string $accessToken): bool
     {
-        $log = Log::channel('shopify_customers_auth');
-        $log->info('================== START: ShopifyCustomerAuthService: logoutCustomer ==================');
+        $query = $this->queryLoader->load('storefront/customers/access_token_delete');
+        $variables = ['token' => $accessToken];
 
-        if (empty($accessToken)) {
-            $log->warning('Logout failed: Access token missing');
-            return false;
-        }
+        $response = $this->adapter->storefrontQuery($query, $variables);
 
-        $query = <<<'GRAPHQL'
-            mutation customerAccessTokenDelete($token: String!) {
-                customerAccessTokenDelete(customerAccessToken: $token) {
-                    deletedAccessToken
-                    userErrors {
-                        field
-                        message
-                    }
-                }
-            }
-        GRAPHQL;
+        $deletedToken = data_get($response, 'customerAccessTokenDelete.deletedAccessToken');
 
-        $variables = [
-            'token' => $accessToken,
-        ];
-
-        try {
-            $response = $this->api->storefrontApiRequest($query, $variables);
-            $log->info('Shopify logout response', $response);
-
-            if (isset($response['errors'])) {
-                $log->error('Shopify logout failed', $response['errors']);
-                return false;
-            }
-
-            $errors = data_get(
-                $response,
-                'data.customerAccessTokenDelete.userErrors',
-                []
-            );
-
-            if (!empty($errors)) {
-                $log->warning('Shopify logout user errors', $errors);
-                return false;
-            }
-
-            $log->info('Shopify logout successful', [
-                'token' => $accessToken,
-            ]);
-
-            $log->info('================== END: ShopifyCustomerAuthService: logoutCustomer ==================');
-            return true;
-        } catch (\Throwable $e) {
-            $log->error('Shopify logout exception', [
-                'token' => $accessToken,
-                'error' => $e->getMessage(),
-            ]);
-            return false;
-        }
+        return ! empty($deletedToken);
     }
 }

@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers\Apis;
 
-use Illuminate\Http\Request;
-use App\Http\Controllers\Controller;
 use App\Facades\Shopify;
-use App\Traits\ShopifyResponseFormatter;
+use App\Http\Controllers\Controller;
+use App\Traits\ApiResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class AboutPageController extends Controller
 {
-    use ShopifyResponseFormatter;
+    use ApiResponse;
 
     /**
      * Get page details by handle (example: about-me)
@@ -38,7 +38,7 @@ class AboutPageController extends Controller
 
             $page = data_get($response, 'data.page');
 
-            if (!$page) {
+            if (! $page) {
                 return response()->json([
                     'status' => false,
                     'message' => 'Page not found',
@@ -78,9 +78,9 @@ class AboutPageController extends Controller
             $page['original_body'] = $originalBody;
 
             $page['lets_connect'] = [
-                'title'     => "Let's Connect",
-                'links'     => $letsConnectData['links'],
-                'message'   => $letsConnectData['message'],
+                'title' => "Let's Connect",
+                'links' => $letsConnectData['links'],
+                'message' => $letsConnectData['message'],
                 'image_url' => $letsConnectData['image_url'],
             ];
 
@@ -97,7 +97,9 @@ class AboutPageController extends Controller
      */
     private function extractIntroSection(string $html): ?array
     {
-        if (!$html) return null;
+        if (! $html) {
+            return null;
+        }
 
         // Find the first major section heading marker
         $patterns = [
@@ -126,15 +128,15 @@ class AboutPageController extends Controller
         $introHtml = trim(substr($html, 0, $firstPos));
 
         // If intro is empty return null
-        if (!$introHtml || strlen(trim(strip_tags($introHtml))) < 5) {
+        if (! $introHtml || strlen(trim(strip_tags($introHtml))) < 5) {
             return null;
         }
 
         return [
-            'title'  => 'Intro',
-            'text'   => $this->cleanText($introHtml),
+            'title' => 'Intro',
+            'text' => $this->cleanText($introHtml),
             'images' => $this->extractImages($introHtml),
-            'html'   => $introHtml,
+            'html' => $introHtml,
         ];
     }
 
@@ -143,7 +145,9 @@ class AboutPageController extends Controller
      */
     private function extractSectionsByStrongHeadings(string $html): array
     {
-        if (!$html) return [];
+        if (! $html) {
+            return [];
+        }
 
         preg_match_all(
             '/<strong>(.*?)<\/strong>\s*(.*?)(?=<strong>|$)/is',
@@ -158,28 +162,27 @@ class AboutPageController extends Controller
             $title = trim(html_entity_decode(strip_tags($m[1])));
             $contentHtml = trim($m[2]);
 
-            if (!$title || strlen(strip_tags($contentHtml)) < 5) {
+            if (! $title || strlen(strip_tags($contentHtml)) < 5) {
                 continue;
             }
 
             $sections[] = [
-                'title'  => $title,
-                'text'   => $this->cleanText($contentHtml),
+                'title' => $title,
+                'text' => $this->cleanText($contentHtml),
                 'images' => $this->extractImages($contentHtml),
-                'html'   => $contentHtml,
+                'html' => $contentHtml,
             ];
         }
 
         return $sections;
     }
 
-
     /**
      * Extract Lets Connect block: links + message + image
      */
     private function extractLetsConnectData(string $html): array
     {
-        if (!$html) {
+        if (! $html) {
             return [
                 'links' => [],
                 'message' => null,
@@ -188,7 +191,7 @@ class AboutPageController extends Controller
         }
 
         // Find Lets Connect heading
-        $start = stripos($html, "<strong>Let’s Connect</strong>");
+        $start = stripos($html, '<strong>Let’s Connect</strong>');
         if ($start === false) {
             $start = stripos($html, "<strong>Let's Connect</strong>");
         }
@@ -217,12 +220,14 @@ class AboutPageController extends Controller
                 $href = trim($m[1]);
                 $text = trim(strip_tags($m[2]));
 
-                if (!$href || !$text) continue;
+                if (! $href || ! $text) {
+                    continue;
+                }
 
                 $links[] = [
-                    'title'  => html_entity_decode($text),
-                    'url'    => $href,
-                    'type'   => $this->detectShopifyLinkType($href),
+                    'title' => html_entity_decode($text),
+                    'url' => $href,
+                    'type' => $this->detectShopifyLinkType($href),
                     'handle' => $this->extractHandleFromUrl($href),
                 ];
             }
@@ -246,7 +251,7 @@ class AboutPageController extends Controller
         $message = preg_replace("/\n\s*\n+/", "\n\n", $message);
 
         // Remove heading text from message
-        $message = str_replace(["Let’s Connect", "Let's Connect"], '', $message);
+        $message = str_replace(['Let’s Connect', "Let's Connect"], '', $message);
         $message = trim($message);
 
         return [
@@ -261,14 +266,18 @@ class AboutPageController extends Controller
      */
     private function removeLetsConnectSection(string $html): string
     {
-        if (!$html) return $html;
+        if (! $html) {
+            return $html;
+        }
 
-        $start = stripos($html, "<strong>Let’s Connect</strong>");
+        $start = stripos($html, '<strong>Let’s Connect</strong>');
         if ($start === false) {
             $start = stripos($html, "<strong>Let's Connect</strong>");
         }
 
-        if ($start === false) return $html;
+        if ($start === false) {
+            return $html;
+        }
 
         return preg_replace(
             '/<strong>(Let’s|Let\'s)\s+Connect<\/strong>.*$/is',
@@ -284,10 +293,18 @@ class AboutPageController extends Controller
     {
         $path = parse_url($url, PHP_URL_PATH) ?? '';
 
-        if (str_starts_with($path, '/products/')) return 'product';
-        if (str_starts_with($path, '/collections/')) return 'collection';
-        if (str_starts_with($path, '/pages/')) return 'page';
-        if (str_starts_with($path, '/blogs/')) return 'blog';
+        if (str_starts_with($path, '/products/')) {
+            return 'product';
+        }
+        if (str_starts_with($path, '/collections/')) {
+            return 'collection';
+        }
+        if (str_starts_with($path, '/pages/')) {
+            return 'page';
+        }
+        if (str_starts_with($path, '/blogs/')) {
+            return 'blog';
+        }
 
         return 'external';
     }
@@ -303,6 +320,7 @@ class AboutPageController extends Controller
             if (str_starts_with($path, $prefix)) {
                 $handle = substr($path, strlen($prefix));
                 $handle = trim($handle, '/');
+
                 return $handle ?: null;
             }
         }
@@ -333,6 +351,7 @@ class AboutPageController extends Controller
         $text = trim(strip_tags($html));
         $text = html_entity_decode($text);
         $text = preg_replace("/\n\s*\n+/", "\n\n", $text);
+
         return $text;
     }
 

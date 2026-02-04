@@ -1,0 +1,90 @@
+query getProductByHandle($handle: String!, $country: CountryCode = US) 
+  @inContext(country: $country) {
+  product(handle: $handle) {
+    id
+    title
+    handle
+    description
+    descriptionHtml
+    vendor
+    productType
+    tags
+    availableForSale
+    createdAt
+    updatedAt
+    
+    priceRange {
+      minVariantPrice {
+        amount
+        currencyCode
+      }
+      maxVariantPrice {
+        amount
+        currencyCode
+      }
+    }
+    
+    compareAtPriceRange {
+      minVariantPrice {
+        amount
+        currencyCode
+      }
+      maxVariantPrice {
+        amount
+        currencyCode
+      }
+    }
+    
+    variants(first: 250) {
+      edges {
+        node {
+          id
+          title
+          sku
+          availableForSale
+          quantityAvailable
+          weight
+          weightUnit
+          
+          price {
+            amount
+            currencyCode
+          }
+          
+          compareAtPrice {
+            amount
+            currencyCode
+          }
+          
+          selectedOptions {
+            name
+            value
+          }
+          
+          image {
+            url
+            altText
+            width
+            height
+          }
+        }
+      }
+    }
+    
+    images(first: 10) {
+      edges {
+        node {
+          url
+          altText
+          width
+          height
+        }
+      }
+    }
+    
+    options {
+      name
+      values
+    }
+  }
+}

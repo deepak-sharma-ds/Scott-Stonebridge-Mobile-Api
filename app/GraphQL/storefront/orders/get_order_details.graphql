@@ -1,0 +1,60 @@
+query($id: ID!) {
+  node(id: $id) {
+    ... on Order {
+      id
+      name
+      orderNumber
+      financialStatus
+      fulfillmentStatus
+      processedAt
+      currencyCode
+      statusUrl
+      
+      shippingAddress {
+        address1
+        city
+        country
+        zip
+      }
+      
+      totalPriceV2 {
+        amount
+        currencyCode
+      }
+      subtotalPriceV2 {
+         amount
+         currencyCode
+      }
+      totalTaxV2 {
+        amount
+        currencyCode
+      }
+      totalShippingPriceV2 {
+        amount
+        currencyCode
+      }
+      
+      lineItems(first: 50) {
+        edges {
+          node {
+            title
+            quantity
+            variant {
+              id
+              title
+              sku
+              image {
+                url
+                altText
+              }
+              priceV2 {
+                amount
+                currencyCode
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
