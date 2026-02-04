@@ -1,1 +1,1 @@
-<img src="{{ asset('storage/configuration-images/'.config('Site.logo')) }}" {{ $attributes }} alt="Logo">
+<img src="{{ url('media/configuration-images/' . config('Site.logo')) }}" {{ $attributes }} alt="Logo">

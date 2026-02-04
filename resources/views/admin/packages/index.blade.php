@@ -49,7 +49,7 @@
                                     @if ($pkg->cover_image)
                                         <div
                                             style="width: 60px; height: 60px; border-radius: 12px; overflow: hidden; box-shadow: var(--shadow-sm);">
-                                            <img src="{{ asset('storage/' . $pkg->cover_image) }}"
+                                            <img src="{{ url('media/' . $pkg->cover_image) }}"
                                                 style="width: 100%; height: 100%; object-fit: cover;"
                                                 alt="{{ $pkg->title }}">
                                         </div>
