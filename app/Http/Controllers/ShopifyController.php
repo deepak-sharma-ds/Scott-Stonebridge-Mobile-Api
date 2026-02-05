@@ -191,13 +191,29 @@ class ShopifyController extends Controller
                     'message' => 'No line items',
                 ], 400);
             }
+            $log->info('Processing line items.', [
+                'order_id' => data_get($payload, 'id'),
+                'line_items_count' => count($lineItems),
+            ]);
 
             foreach ($lineItems as $item) {
                 $properties = data_get($item, 'properties', []);
 
+                if (empty($properties)) {
+                    $log->info('No line item properties found.', [
+                        'line_item_id' => data_get($item, 'id')
+                    ]);
+                    continue;
+                }
+
                 foreach ($properties as $property) {
                     $name  = data_get($property, 'name');
                     $value = data_get($property, 'value');
+
+                    $log->info('Processing line item property.', [
+                        'name'  => $name,
+                        'value' => $value,
+                    ]);
 
                     // -------------------------------
                     // 3. Identify meditation product
@@ -205,7 +221,7 @@ class ShopifyController extends Controller
                     if ($name === 'meditation-audio' && !empty($value)) {
 
                         // Example: value = communication-meditation
-                        $package = Package::where('shopify_property_value', $value)->first();
+                        $package = Package::where('shopify_tag', $value)->first();
 
                         if (!$package) {
                             $log->warning('No package found for meditation audio.', [
