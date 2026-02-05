@@ -241,9 +241,9 @@ class ShopifyController extends Controller
                             ],
                             [
                                 'email'       => $email,
-                                'order_id'    => data_get($payload, 'id'),
-                                'line_item_id' => data_get($item, 'id'),
-                                'granted_at'  => now(),
+                                // 'order_id'    => data_get($payload, 'id'),
+                                // 'line_item_id' => data_get($item, 'id'),
+                                // 'created_at'  => now(),
                             ]
                         );
 
