@@ -132,7 +132,7 @@
                                 <div class="col-sm-6 form-group">
                                     <div class="img-parent-box">
                                         @if(config('Site.logo'))
-                                            <img src="{{ asset('storage/configuration-images/'.config('Site.logo')) }}" alt="{{ config('Site.logo') }}" class="configurationPrefixImg img-for-onchange">
+                                            <img src="{{ url('media/configuration-images/'.config('Site.logo')) }}" alt="{{ config('Site.logo') }}" class="configurationPrefixImg img-for-onchange">
                                         @endif
                                         <div class="form-file d-inline-block">
                                             <input type="file" accept=".png, .jpg, .jpeg, .svg" name="Site[logo]" id="SiteLogo" class="form-file-input img-input-onchange ps-2 form-control">
@@ -146,7 +146,7 @@
                                 <div class="col-sm-6 form-group">
                                     <div class="img-parent-box">
                                         @if(config('Site.logo_white'))
-                                            <img src="{{ asset('storage/configuration-images/'.config('Site.logo_white')) }}" alt="{{ config('Site.logo_white') }}" class="configurationPrefixImg img-for-onchange">
+                                            <img src="{{ url('media/configuration-images/'.config('Site.logo_white')) }}" alt="{{ config('Site.logo_white') }}" class="configurationPrefixImg img-for-onchange">
                                         @endif
                                         <div class="form-file d-inline-block">
                                             <input type="file" accept=".png, .jpg, .jpeg, .svg" name="Site[logo_white]" id="SiteLogoWhite" class="form-file-input img-input-onchange ps-2 form-control">
@@ -160,7 +160,7 @@
                                 <div class="col-sm-6 form-group">
                                     <div class="img-parent-box">
                                         @if(config('Site.favicon'))
-                                            <img src="{{ asset('storage/configuration-images/'.config('Site.favicon')) }}" alt="{{ config('Site.favicon') }}" class="configurationPrefixImg img-for-onchange">
+                                            <img src="{{ url('media/configuration-images/'.config('Site.favicon')) }}" alt="{{ config('Site.favicon') }}" class="configurationPrefixImg img-for-onchange">
                                         @endif
                                         <div class="form-file d-inline-block">
                                             <input type="file" accept=".png, .jpg, .jpeg, .svg" name="Site[favicon]" id="SiteFavicon" class="form-file-input img-input-onchange ps-2 form-control">
@@ -174,7 +174,7 @@
                                 <div class="col-sm-6 form-group">
                                     <div class="img-parent-box">
                                         @if(config('Site.text_logo'))
-                                            <img src="{{ asset('storage/configuration-images/'.config('Site.text_logo')) }}" alt="{{ config('Site.text_logo') }}" class="configurationPrefixImg img-for-onchange">
+                                            <img src="{{ url('media/configuration-images/'.config('Site.text_logo')) }}" alt="{{ config('Site.text_logo') }}" class="configurationPrefixImg img-for-onchange">
                                         @endif
                                         <div class="form-file d-inline-block">
                                             <input type="file" accept=".png, .jpg, .jpeg, .svg" name="Site[text_logo]" id="SiteTextLogo" class="form-file-input img-input-onchange ps-2 form-control">
@@ -187,7 +187,7 @@
                                 <div class="col-sm-6 form-group">
                                     <div class="img-parent-box">
                                         @if(config('Site.icon_logo'))
-                                            <img src="{{ asset('storage/configuration-images/'.config('Site.icon_logo')) }}" alt="{{ config('Site.icon_logo') }}" class="configurationPrefixImg img-for-onchange">
+                                            <img src="{{ url('media/configuration-images/'.config('Site.icon_logo')) }}" alt="{{ config('Site.icon_logo') }}" class="configurationPrefixImg img-for-onchange">
                                         @endif
                                         <div class="form-file d-inline-block">
                                             <input type="file" accept=".png, .jpg, .jpeg, .svg" name="Site[icon_logo]" id="SiteIconLogo" class="form-file-input img-input-onchange ps-2 form-control">

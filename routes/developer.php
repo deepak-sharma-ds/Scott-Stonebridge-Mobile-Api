@@ -3,6 +3,48 @@
 use App\Http\Controllers\AudioAccessController;
 use App\Http\Controllers\HlsController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use Symfony\Component\HttpFoundation\Response;
+
+Route::get('/media/{path}', function (string $path) {
+
+	// 1 Normalize & block traversal
+	$path = ltrim($path, '/');
+
+	if (Str::contains($path, ['..', './', '\\'])) {
+		abort(403);
+	}
+
+	// 2 Force public disk namespace
+	$diskPath = 'public/' . $path;
+
+	abort_unless(Storage::exists($diskPath), 404);
+
+	// 3 Allow ONLY safe image types
+	$allowedMime = [
+		'image/png',
+		'image/jpeg',
+		'image/webp',
+		'image/avif',
+		'image/svg+xml',
+	];
+
+	$mime = Storage::mimeType($diskPath);
+
+	abort_unless(in_array($mime, $allowedMime), 403);
+
+	// 4 Stream file with security headers
+	return response()->file(
+		storage_path('app/' . $diskPath),
+		[
+			'Content-Type'        => $mime,
+			'Cache-Control'       => 'public, max-age=31536000, immutable',
+			'X-Content-Type-Options' => 'nosniff',
+			'Content-Disposition' => 'inline',
+		]
+	);
+})->where('path', '.*');
 
 Route::get('clear-all', function () {
 	\Artisan::call('config:clear');

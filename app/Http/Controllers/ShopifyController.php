@@ -61,6 +61,7 @@ class ShopifyController extends Controller
 
             // Map or validate data according to your booking structure
             $bookingData = [
+                'order_id' => $data['id'] ?? null,
                 'name' => $data['name'] ?? $data['customer']['first_name'] . ' ' . $data['customer']['last_name'] ?? null,
                 'email' => $data['email'] ?? $data['customer']['email'] ?? null,
                 'phone' => $data['phone'] ?? null,
@@ -79,7 +80,7 @@ class ShopifyController extends Controller
                 'order_id' => 'required',
                 'name' => 'required|string|max:255',
                 'email' => 'required|email',
-                'phone' => 'required|string',
+                'phone' => 'nullable|max:20',
                 'availability_date' => 'required|date',
                 'time_slot_id' => 'required|exists:time_slots,id',
             ]);
@@ -133,51 +134,143 @@ class ShopifyController extends Controller
     public function orderPaid(Request $request)
     {
         $log = Log::channel('shopify_webhooks');
-        $log->info('================== START: handleAppointmentBookingWebhook ==================');
+        $log->info('================== START: orderPaid webhook ==================');
+
         try {
+            // Verify Shopify HMAC (recommended for production)
+
             // $hmacHeader = $request->header('X-Shopify-Hmac-Sha256');
             // $data = $request->getContent();
-            // $calculated = base64_encode(hash_hmac('sha256', $data, config('services.shopify.secret'), true));
+            // $calculated = base64_encode(
+            //     hash_hmac('sha256', $data, config('services.shopify.secret'), true)
+            // );
 
             // if (!hash_equals($calculated, $hmacHeader)) {
-            //     logger()->warning('Invalid Shopify webhook HMAC');
+            //     $log->warning('Invalid Shopify webhook HMAC');
             //     return response('Invalid signature', 401);
             // }
 
+
             $payload = $request->all();
 
-            $customer = data_get($payload, 'customer', []);
-            if (empty($customer)) {
-                $log->warning('No customer data in order paid webhook.');
+            // -------------------------------
+            // 1. Validate customer
+            // -------------------------------
+            $customer = data_get($payload, 'customer');
+            if (!$customer) {
+                $log->warning('No customer object in order payload.');
                 return response()->json([
                     'status' => 400,
-                    'message' => 'No customer data'
+                    'message' => 'Customer data missing',
                 ], 400);
             }
-            $customerId = data_get($customer, 'id');
-            $email = data_get($customer, 'email');
-            $tagsCsv = data_get($customer, 'tags', '');
 
-            $tags = array_filter(array_map('trim', explode(',', $tagsCsv)));
-            foreach ($tags as $tag) {
-                if (Package::where('shopify_tag', $tag)->exists()) {
-                    CustomerEntitlement::updateOrCreate(
-                        ['shopify_customer_id' => $customerId, 'package_tag' => $tag],
-                        ['email' => $email]
-                    );
+            $customerId = data_get($customer, 'id');
+            $email      = data_get($customer, 'email');
+
+            if (!$customerId || !$email) {
+                $log->warning('Customer ID or email missing.', [
+                    'customer' => $customer
+                ]);
+                return response()->json([
+                    'status' => 400,
+                    'message' => 'Invalid customer data',
+                ], 400);
+            }
+
+            // -------------------------------
+            // 2. Process line items and validation
+            // -------------------------------
+            $lineItems = data_get($payload, 'line_items', []);
+            if (empty($lineItems)) {
+                $log->warning('No line items found in order.', [
+                    'order_id' => data_get($payload, 'id')
+                ]);
+                return response()->json([
+                    'status' => 400,
+                    'message' => 'No line items',
+                ], 400);
+            }
+            $log->info('Processing line items.', [
+                'order_id' => data_get($payload, 'id'),
+                'line_items_count' => count($lineItems),
+            ]);
+
+            foreach ($lineItems as $item) {
+                $properties = data_get($item, 'properties', []);
+
+                if (empty($properties)) {
+                    $log->info('No line item properties found.', [
+                        'line_item_id' => data_get($item, 'id')
+                    ]);
+                    continue;
+                }
+
+                foreach ($properties as $property) {
+                    $name  = data_get($property, 'name');
+                    $value = data_get($property, 'value');
+
+                    $log->info('Processing line item property.', [
+                        'name'  => $name,
+                        'value' => $value,
+                    ]);
+
+                    // -------------------------------
+                    // 3. Identify meditation product
+                    // -------------------------------
+                    if ($name === 'meditation-audio' && !empty($value)) {
+
+                        // Example: value = communication-meditation
+                        $package = Package::where('shopify_tag', $value)->first();
+
+                        if (!$package) {
+                            $log->warning('No package found for meditation audio.', [
+                                'value' => $value,
+                                'order_id' => data_get($payload, 'id')
+                            ]);
+                            continue;
+                        }
+
+                        // -------------------------------
+                        // 4. Grant entitlement
+                        // -------------------------------
+                        CustomerEntitlement::updateOrCreate(
+                            [
+                                'shopify_customer_id' => $customerId,
+                                'package_tag'         => $package->shopify_tag,
+                            ],
+                            [
+                                'email'       => $email,
+                                // 'order_id'    => data_get($payload, 'id'),
+                                // 'line_item_id' => data_get($item, 'id'),
+                                // 'created_at'  => now(),
+                            ]
+                        );
+
+                        $log->info('Meditation access granted.', [
+                            'customer_id' => $customerId,
+                            'email'       => $email,
+                            'package'     => $package->shopify_tag,
+                            'order_id'    => data_get($payload, 'id'),
+                        ]);
+                    }
                 }
             }
 
             return response()->json([
-                'status' => 200,
-                'message' => 'Audio access granted',
+                'status'  => 200,
+                'message' => 'Meditation access processed successfully',
             ], 200);
         } catch (\Throwable $th) {
-            $log->error('Exception in handleAppointmentBookingWebhook:', ['error' => $th->getMessage()]);
-            return response()->json([
-                'status' => 500,
-                'message' => 'Exception occurred',
+            $log->error('Exception in orderPaid webhook', [
                 'error' => $th->getMessage(),
+                'trace' => $th->getTraceAsString(),
+            ]);
+
+            return response()->json([
+                'status'  => 500,
+                'message' => 'Exception occurred',
+                'error'   => $th->getMessage(),
             ], 500);
         }
     }

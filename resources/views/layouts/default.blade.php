@@ -15,7 +15,7 @@
     <title>{{ config('Site.title') ? config('Site.title') : config('dz.name') ; }} | @yield('title', $page_title ?? '')</title>
     <!-- Favicon icon -->
     @if(config('Site.favicon'))
-        <link rel="icon" type="image/png" href="{{ asset('storage/configuration-images/'.config('Site.favicon')) }}">
+        <link rel="icon" type="image/png" href="{{ url('media/configuration-images/'.config('Site.favicon')) }}">
     @else 
         <link rel="icon" type="image/png" sizes="32x32" href="{{ asset('images/favicon.png') }}">
     @endif
@@ -75,8 +75,8 @@
         <div class="nav-header">
             {{-- <a href="{!! url('/admin'); !!}" class="brand-logo">
                 @if (!empty(config('Site.icon_logo')) && !empty(config('Site.text_logo')))
-                    <img class="logo-abbr" src="{{ asset('storage/configuration-images/'.config('Site.icon_logo')) }}">
-                    <img class="brand-title" src="{{ asset('storage/configuration-images/'.config('Site.text_logo')) }}">
+                    <img class="logo-abbr" src="{{ url('media/configuration-images/'.config('Site.icon_logo')) }}">
+                    <img class="brand-title" src="{{ url('media/configuration-images/'.config('Site.text_logo')) }}">
                 @else
                     <img class="logo-abbr" src="{{ asset('images/logo.png') }}">
                     <img class="brand-title" src="{{ asset('images/logo-text.png') }}">
