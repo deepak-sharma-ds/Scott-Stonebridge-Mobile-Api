@@ -1,0 +1,14 @@
+mutation customerLogin($input: CustomerAccessTokenCreateInput!) {
+  customerAccessTokenCreate(input: $input) {
+    customerAccessToken {
+      accessToken
+      expiresAt
+    }
+    
+    customerUserErrors {
+      field
+      message
+      code
+    }
+  }
+}

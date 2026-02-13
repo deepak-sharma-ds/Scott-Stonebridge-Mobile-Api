@@ -1,0 +1,11 @@
+query getOrdersCount($query: String!, $after: String) {
+  orders(first: 250, after: $after, query: $query) {
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+    edges {
+      cursor
+    }
+  }
+}

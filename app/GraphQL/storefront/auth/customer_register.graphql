@@ -1,0 +1,17 @@
+mutation customerRegister($input: CustomerCreateInput!) {
+  customerCreate(input: $input) {
+    customer {
+      id
+      firstName
+      lastName
+      email
+      phone
+    }
+    
+    customerUserErrors {
+      field
+      message
+      code
+    }
+  }
+}

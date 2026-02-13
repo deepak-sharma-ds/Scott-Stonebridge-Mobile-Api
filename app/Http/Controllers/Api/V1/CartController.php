@@ -1,0 +1,224 @@
+<?php
+
+namespace App\Http\Controllers\Api\V1;
+
+use App\Contracts\Services\CartServiceInterface;
+use App\Http\Controllers\Base\BaseApiController;
+use App\Http\Resources\Cart\CartResource;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+
+/**
+ * Cart Controller (v1)
+ * 
+ * Handles cart-related API endpoints.
+ * Supports both guest and authenticated cart operations.
+ * Extends BaseApiController for standardized responses.
+ * 
+ * Requirements: 2.1, 2.2, 5.4, 11.6
+ */
+class CartController extends BaseApiController
+{
+    public function __construct(
+        protected CartServiceInterface $cartService
+    ) {}
+
+    /**
+     * Create a new cart
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function store(Request $request): JsonResponse
+    {
+        try {
+            $accessToken = $request->input('access_token');
+
+            $cart = $this->cartService->createCart($accessToken);
+
+            return $this->success(
+                'Cart created successfully',
+                [
+                    'cart' => new CartResource($cart),
+                ],
+                [],
+                201
+            );
+        } catch (\Exception $e) {
+            return $this->error(
+                'Failed to create cart',
+                ['error' => $e->getMessage()],
+                [],
+                500
+            );
+        }
+    }
+
+    /**
+     * Get cart by ID
+     * 
+     * @param string $cartId
+     * @return JsonResponse
+     */
+    public function show(string $cartId): JsonResponse
+    {
+        try {
+            $cart = $this->cartService->getCart($cartId);
+
+            return $this->success(
+                'Cart fetched successfully',
+                [
+                    'cart' => new CartResource($cart),
+                ]
+            );
+        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+            return $this->notFound($e->getMessage());
+        } catch (\Exception $e) {
+            return $this->error(
+                'Failed to fetch cart',
+                ['error' => $e->getMessage()],
+                [],
+                500
+            );
+        }
+    }
+
+    /**
+     * Add item to cart
+     * 
+     * @param string $cartId
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function addItem(string $cartId, Request $request): JsonResponse
+    {
+        try {
+            $variantId = $request->input('variant_id');
+            $quantity = (int) $request->input('quantity', 1);
+
+            if (empty($variantId)) {
+                return $this->validationError(
+                    'Validation failed',
+                    ['variant_id' => ['The variant_id field is required']]
+                );
+            }
+
+            if ($quantity < 1) {
+                return $this->validationError(
+                    'Validation failed',
+                    ['quantity' => ['The quantity must be at least 1']]
+                );
+            }
+
+            $cart = $this->cartService->addLineItem($cartId, $variantId, $quantity);
+
+            return $this->success(
+                'Item added to cart successfully',
+                [
+                    'cart' => new CartResource($cart),
+                ]
+            );
+        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+            return $this->notFound($e->getMessage());
+        } catch (\App\Exceptions\ShopifyApiException $e) {
+            return $this->error(
+                'Failed to add item to cart',
+                ['error' => $e->getMessage()],
+                [],
+                422
+            );
+        } catch (\Exception $e) {
+            return $this->error(
+                'Failed to add item to cart',
+                ['error' => $e->getMessage()],
+                [],
+                500
+            );
+        }
+    }
+
+    /**
+     * Update cart item quantity
+     * 
+     * @param string $cartId
+     * @param string $lineId
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function updateItem(string $cartId, string $lineId, Request $request): JsonResponse
+    {
+        try {
+            $quantity = (int) $request->input('quantity', 1);
+
+            if ($quantity < 0) {
+                return $this->validationError(
+                    'Validation failed',
+                    ['quantity' => ['The quantity must be at least 0']]
+                );
+            }
+
+            $cart = $this->cartService->updateLineItem($cartId, $lineId, $quantity);
+
+            return $this->success(
+                'Cart item updated successfully',
+                [
+                    'cart' => new CartResource($cart),
+                ]
+            );
+        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+            return $this->notFound($e->getMessage());
+        } catch (\App\Exceptions\ShopifyApiException $e) {
+            return $this->error(
+                'Failed to update cart item',
+                ['error' => $e->getMessage()],
+                [],
+                422
+            );
+        } catch (\Exception $e) {
+            return $this->error(
+                'Failed to update cart item',
+                ['error' => $e->getMessage()],
+                [],
+                500
+            );
+        }
+    }
+
+    /**
+     * Remove item from cart
+     * 
+     * @param string $cartId
+     * @param string $lineId
+     * @return JsonResponse
+     */
+    public function removeItem(string $cartId, string $lineId): JsonResponse
+    {
+        try {
+            $cart = $this->cartService->removeLineItem($cartId, $lineId);
+
+            return $this->success(
+                'Item removed from cart successfully',
+                [
+                    'cart' => new CartResource($cart),
+                ]
+            );
+        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+            return $this->notFound($e->getMessage());
+        } catch (\App\Exceptions\ShopifyApiException $e) {
+            return $this->error(
+                'Failed to remove cart item',
+                ['error' => $e->getMessage()],
+                [],
+                422
+            );
+        } catch (\Exception $e) {
+            return $this->error(
+                'Failed to remove cart item',
+                ['error' => $e->getMessage()],
+                [],
+                500
+            );
+        }
+    }
+}
+

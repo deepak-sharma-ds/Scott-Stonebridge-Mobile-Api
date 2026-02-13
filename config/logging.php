@@ -4,6 +4,7 @@ use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
 use Monolog\Processor\PsrLogMessageProcessor;
+use App\Logging\CorrelationIdProcessor;
 
 return [
 
@@ -156,6 +157,46 @@ return [
             'driver' => 'single',
             'path'      => storage_path('logs/shopify_webhooks.log'),
             'level'  => 'debug',
+        ],
+
+        // Shopify API request/response logging
+        'shopify' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/shopify.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+            'processors' => [CorrelationIdProcessor::class],
+        ],
+
+        // API endpoint logging
+        'api' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/api.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+            'processors' => [CorrelationIdProcessor::class],
+        ],
+
+        // Performance metrics logging
+        'performance' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/performance.log'),
+            'level' => env('LOG_LEVEL', 'info'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+            'processors' => [CorrelationIdProcessor::class],
+        ],
+
+        // Error logging
+        'error' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/error.log'),
+            'level' => 'error',
+            'days' => env('LOG_DAILY_DAYS', 30),
+            'replace_placeholders' => true,
+            'processors' => [CorrelationIdProcessor::class],
         ],
 
     ],

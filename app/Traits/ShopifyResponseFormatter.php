@@ -2,6 +2,22 @@
 
 namespace App\Traits;
 
+/**
+ * @deprecated This trait has been refactored into ApiResponse trait.
+ * 
+ * Please migrate to App\Traits\ApiResponse for new code.
+ * This trait is maintained for backward compatibility with existing controllers.
+ * 
+ * Migration guide:
+ * - Replace `use App\Traits\ShopifyResponseFormatter;` with `use App\Traits\ApiResponse;`
+ * - Replace `success()` with `successResponse()`
+ * - Replace `fail()` with `errorResponse()`
+ * - Replace `parseEdges()` with `parseEdges()` (same signature)
+ * - Replace `parseConnection()` with `parseConnection()` (enhanced with pagination key)
+ * - Replace `refineNestedEdges()` with `flattenEdges()`
+ * 
+ * @see App\Traits\ApiResponse
+ */
 trait ShopifyResponseFormatter
 {
     /**
