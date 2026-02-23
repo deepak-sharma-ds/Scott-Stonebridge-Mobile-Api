@@ -37,6 +37,7 @@ class ProductController extends BaseApiController
                 'sortKey' => $request->input('sort_key', 'TITLE'),
                 'reverse' => $request->boolean('reverse', false),
                 'query' => $request->input('query'),
+                'tag' => $request->input('tag', null),
             ];
 
             $products = $this->productService->getAllProducts($limit, $cursor, $filters);
@@ -125,4 +126,3 @@ class ProductController extends BaseApiController
         }
     }
 }
-

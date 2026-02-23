@@ -7,15 +7,13 @@ use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\Customer\CustomerDTO;
 use App\DTOs\Customer\AddressDTO;
 use App\Services\Base\BaseService;
-use App\Services\GraphQL\GraphQLLoaderService;
 use App\Exceptions\ShopifyApiException;
 use App\Exceptions\ShopifyNotFoundException;
 
 class CustomerService extends BaseService implements CustomerServiceInterface
 {
     public function __construct(
-        protected StorefrontApiClientInterface $storefrontClient,
-        protected GraphQLLoaderService $graphQLLoader
+        protected StorefrontApiClientInterface $storefrontClient
     ) {
         parent::__construct();
     }
@@ -31,11 +29,9 @@ class CustomerService extends BaseService implements CustomerServiceInterface
         try {
             $this->logPerformanceStart('getCustomer');
 
-            $query = $this->graphQLLoader->load('storefront/customer/get_customer_profile');
-
             $variables = ['customerAccessToken' => $accessToken];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/customer/get_customer_profile', $variables);
 
             if (empty($response['data']['customer'])) {
                 throw new ShopifyNotFoundException('Customer not found or invalid access token');
@@ -66,8 +62,6 @@ class CustomerService extends BaseService implements CustomerServiceInterface
         try {
             $this->logPerformanceStart('updateCustomer');
 
-            $query = $this->graphQLLoader->load('storefront/customer/update_customer_profile');
-
             $customerInput = [];
             
             if (isset($data['firstName'])) {
@@ -91,7 +85,7 @@ class CustomerService extends BaseService implements CustomerServiceInterface
                 'customer' => $customerInput,
             ];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/customer/update_customer_profile', $variables);
 
             if (!empty($response['data']['customerUpdate']['customerUserErrors'])) {
                 $errors = $response['data']['customerUpdate']['customerUserErrors'];
@@ -128,14 +122,12 @@ class CustomerService extends BaseService implements CustomerServiceInterface
         try {
             $this->logPerformanceStart('addAddress');
 
-            $query = $this->graphQLLoader->load('storefront/customer/add_customer_address');
-
             $variables = [
                 'customerAccessToken' => $accessToken,
                 'address' => $addressData,
             ];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/customer/add_customer_address', $variables);
 
             if (!empty($response['data']['customerAddressCreate']['customerUserErrors'])) {
                 $errors = $response['data']['customerAddressCreate']['customerUserErrors'];
@@ -172,15 +164,13 @@ class CustomerService extends BaseService implements CustomerServiceInterface
         try {
             $this->logPerformanceStart('updateAddress');
 
-            $query = $this->graphQLLoader->load('storefront/customer/update_customer_address');
-
             $variables = [
                 'customerAccessToken' => $accessToken,
                 'id' => $addressId,
                 'address' => $addressData,
             ];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/customer/update_customer_address', $variables);
 
             if (!empty($response['data']['customerAddressUpdate']['customerUserErrors'])) {
                 $errors = $response['data']['customerAddressUpdate']['customerUserErrors'];
@@ -219,14 +209,12 @@ class CustomerService extends BaseService implements CustomerServiceInterface
         try {
             $this->logPerformanceStart('deleteAddress');
 
-            $query = $this->graphQLLoader->load('storefront/customer/delete_customer_address');
-
             $variables = [
                 'customerAccessToken' => $accessToken,
                 'id' => $addressId,
             ];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/customer/delete_customer_address', $variables);
 
             if (!empty($response['data']['customerAddressDelete']['customerUserErrors'])) {
                 $errors = $response['data']['customerAddressDelete']['customerUserErrors'];

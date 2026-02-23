@@ -6,15 +6,13 @@ use App\Contracts\Services\AuthServiceInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\Customer\CustomerDTO;
 use App\Services\Base\BaseService;
-use App\Services\GraphQL\GraphQLLoaderService;
 use App\Exceptions\ShopifyApiException;
 use App\Exceptions\ShopifyAuthException;
 
 class AuthService extends BaseService implements AuthServiceInterface
 {
     public function __construct(
-        protected StorefrontApiClientInterface $storefrontClient,
-        protected GraphQLLoaderService $graphQLLoader
+        protected StorefrontApiClientInterface $storefrontClient
     ) {
         parent::__construct();
     }
@@ -31,8 +29,6 @@ class AuthService extends BaseService implements AuthServiceInterface
         try {
             $this->logPerformanceStart('login');
 
-            $query = $this->graphQLLoader->load('storefront/auth/customer_login');
-
             $variables = [
                 'input' => [
                     'email' => $email,
@@ -40,7 +36,7 @@ class AuthService extends BaseService implements AuthServiceInterface
                 ],
             ];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/auth/customer_login', $variables);
 
             if (!empty($response['data']['customerAccessTokenCreate']['customerUserErrors'])) {
                 $errors = $response['data']['customerAccessTokenCreate']['customerUserErrors'];
@@ -54,8 +50,7 @@ class AuthService extends BaseService implements AuthServiceInterface
             $accessToken = $response['data']['customerAccessTokenCreate']['customerAccessToken']['accessToken'];
 
             // Fetch customer profile
-            $customerQuery = $this->graphQLLoader->load('storefront/customer/get_customer_profile');
-            $customerResponse = $this->storefrontClient->query($customerQuery, [
+            $customerResponse = $this->storefrontClient->query('storefront/customer/get_customer_profile', [
                 'customerAccessToken' => $accessToken,
             ]);
 
@@ -91,8 +86,6 @@ class AuthService extends BaseService implements AuthServiceInterface
         try {
             $this->logPerformanceStart('register');
 
-            $query = $this->graphQLLoader->load('storefront/auth/customer_register');
-
             $customerInput = [
                 'email' => $data['email'],
                 'password' => $data['password'],
@@ -113,7 +106,7 @@ class AuthService extends BaseService implements AuthServiceInterface
 
             $variables = ['input' => $customerInput];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/auth/customer_register', $variables);
 
             if (!empty($response['data']['customerCreate']['customerUserErrors'])) {
                 $errors = $response['data']['customerCreate']['customerUserErrors'];
@@ -150,11 +143,9 @@ class AuthService extends BaseService implements AuthServiceInterface
         try {
             $this->logPerformanceStart('forgotPassword');
 
-            $query = $this->graphQLLoader->load('storefront/auth/customer_recover');
-
             $variables = ['email' => $email];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/auth/customer_recover', $variables);
 
             if (!empty($response['data']['customerRecover']['customerUserErrors'])) {
                 $errors = $response['data']['customerRecover']['customerUserErrors'];
@@ -192,8 +183,6 @@ class AuthService extends BaseService implements AuthServiceInterface
                 throw new ShopifyApiException('Invalid reset token format');
             }
 
-            $query = $this->graphQLLoader->load('storefront/auth/customer_reset');
-
             $variables = [
                 'id' => $customerId,
                 'input' => [
@@ -202,7 +191,7 @@ class AuthService extends BaseService implements AuthServiceInterface
                 ],
             ];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/auth/customer_reset', $variables);
 
             if (!empty($response['data']['customerReset']['customerUserErrors'])) {
                 $errors = $response['data']['customerReset']['customerUserErrors'];
@@ -229,11 +218,9 @@ class AuthService extends BaseService implements AuthServiceInterface
         try {
             $this->logPerformanceStart('logout');
 
-            $query = $this->graphQLLoader->load('storefront/auth/customer_logout');
-
             $variables = ['customerAccessToken' => $accessToken];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/auth/customer_logout', $variables);
 
             if (!empty($response['data']['customerAccessTokenDelete']['userErrors'])) {
                 $errors = $response['data']['customerAccessTokenDelete']['userErrors'];

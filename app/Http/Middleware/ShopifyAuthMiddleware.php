@@ -3,7 +3,6 @@
 namespace App\Http\Middleware;
 
 use App\Contracts\Shopify\StorefrontApiClientInterface;
-use App\Services\GraphQL\GraphQLLoaderService;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -23,8 +22,7 @@ class ShopifyAuthMiddleware
      * Create a new middleware instance.
      */
     public function __construct(
-        protected StorefrontApiClientInterface $storefrontClient,
-        protected GraphQLLoaderService $graphQLLoader
+        protected StorefrontApiClientInterface $storefrontClient
     ) {
     }
 
@@ -87,13 +85,10 @@ class ShopifyAuthMiddleware
         $log = Log::channel('api');
         
         try {
-            // Load GraphQL query for customer verification
-            $query = $this->graphQLLoader->load('storefront/customer/get_customer_profile');
-            
             $variables = ['customerAccessToken' => $accessToken];
             
             // Query Shopify Storefront API
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/customer/get_customer_profile', $variables);
             
             // Check for GraphQL errors
             if (isset($response['errors']) && !empty($response['errors'])) {

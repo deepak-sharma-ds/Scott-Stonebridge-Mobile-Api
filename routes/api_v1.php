@@ -68,13 +68,25 @@ Route::prefix('v1')->middleware([
      * POST /api/v1/cart/{cartId}/items - Add item to cart
      * PUT /api/v1/cart/{cartId}/items/{lineId} - Update cart item
      * DELETE /api/v1/cart/{cartId}/items/{lineId} - Remove cart item
+     * 
+     * Note: Shopify IDs contain special characters (gid://shopify/Cart/...) 
+     * The routes accept URL-encoded IDs automatically.
+     * Example: gid://shopify/Cart/abc123 should be sent as gid%3A%2F%2Fshopify%2FCart%2Fabc123
      */
     Route::prefix('cart')->group(function () {
         Route::post('/', [CartController::class, 'store'])->name('api.v1.cart.store');
-        Route::get('/{cartId}', [CartController::class, 'show'])->name('api.v1.cart.show');
-        Route::post('/{cartId}/items', [CartController::class, 'addItem'])->name('api.v1.cart.addItem');
-        Route::put('/{cartId}/items/{lineId}', [CartController::class, 'updateItem'])->name('api.v1.cart.updateItem');
-        Route::delete('/{cartId}/items/{lineId}', [CartController::class, 'removeItem'])->name('api.v1.cart.removeItem');
+        Route::get('/{cartId}', [CartController::class, 'show'])
+            ->where('cartId', '.*')
+            ->name('api.v1.cart.show');
+        Route::post('/{cartId}/items', [CartController::class, 'addItem'])
+            ->where('cartId', '.*')
+            ->name('api.v1.cart.addItem');
+        Route::put('/{cartId}/items/{lineId}', [CartController::class, 'updateItem'])
+            ->where(['cartId' => '.*', 'lineId' => '.*'])
+            ->name('api.v1.cart.updateItem');
+        Route::delete('/{cartId}/items/{lineId}', [CartController::class, 'removeItem'])
+            ->where(['cartId' => '.*', 'lineId' => '.*'])
+            ->name('api.v1.cart.removeItem');
     });
     
     // ============================================
@@ -88,10 +100,14 @@ Route::prefix('v1')->middleware([
          * 
          * GET /api/v1/orders - List customer orders
          * GET /api/v1/orders/{orderId} - Get order details
+         * 
+         * Note: Shopify IDs contain special characters and are URL-encoded automatically
          */
         Route::prefix('orders')->group(function () {
             Route::get('/', [OrderController::class, 'index'])->name('api.v1.orders.index');
-            Route::get('/{orderId}', [OrderController::class, 'show'])->name('api.v1.orders.show');
+            Route::get('/{orderId}', [OrderController::class, 'show'])
+                ->where('orderId', '.*')
+                ->name('api.v1.orders.show');
         });
     });
 });

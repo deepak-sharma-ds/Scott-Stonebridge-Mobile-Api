@@ -6,15 +6,13 @@ use App\Contracts\Services\CartServiceInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\Cart\CartDTO;
 use App\Services\Base\BaseService;
-use App\Services\GraphQL\GraphQLLoaderService;
 use App\Exceptions\ShopifyApiException;
 use App\Exceptions\ShopifyNotFoundException;
 
 class CartService extends BaseService implements CartServiceInterface
 {
     public function __construct(
-        protected StorefrontApiClientInterface $storefrontClient,
-        protected GraphQLLoaderService $graphQLLoader
+        protected StorefrontApiClientInterface $storefrontClient
     ) {
         parent::__construct();
     }
@@ -30,8 +28,6 @@ class CartService extends BaseService implements CartServiceInterface
         try {
             $this->logPerformanceStart('createCart');
 
-            $query = $this->graphQLLoader->load('storefront/cart/create_cart');
-
             $input = [];
             
             if ($accessToken) {
@@ -40,9 +36,14 @@ class CartService extends BaseService implements CartServiceInterface
                 ];
             }
 
+            // Ensure empty array is encoded as object {} not array []
+            if (empty($input)) {
+                $input = new \stdClass();
+            }
+
             $variables = ['input' => $input];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/cart/create_cart', $variables);
 
             if (!empty($response['data']['cartCreate']['userErrors'])) {
                 $errors = $response['data']['cartCreate']['userErrors'];
@@ -80,11 +81,9 @@ class CartService extends BaseService implements CartServiceInterface
         try {
             $this->logPerformanceStart('getCart');
 
-            $query = $this->graphQLLoader->load('storefront/cart/get_cart');
-
             $variables = ['cartId' => $cartId];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/cart/get_cart', $variables);
 
             if (empty($response['data']['cart'])) {
                 throw new ShopifyNotFoundException("Cart not found: {$cartId}");
@@ -117,8 +116,6 @@ class CartService extends BaseService implements CartServiceInterface
         try {
             $this->logPerformanceStart('addLineItem');
 
-            $query = $this->graphQLLoader->load('storefront/cart/add_line_item');
-
             $variables = [
                 'cartId' => $cartId,
                 'lines' => [
@@ -129,7 +126,7 @@ class CartService extends BaseService implements CartServiceInterface
                 ],
             ];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/cart/add_line_item', $variables);
 
             if (!empty($response['data']['cartLinesAdd']['userErrors'])) {
                 $errors = $response['data']['cartLinesAdd']['userErrors'];
@@ -172,8 +169,6 @@ class CartService extends BaseService implements CartServiceInterface
         try {
             $this->logPerformanceStart('updateLineItem');
 
-            $query = $this->graphQLLoader->load('storefront/cart/update_line_item');
-
             $variables = [
                 'cartId' => $cartId,
                 'lines' => [
@@ -184,7 +179,7 @@ class CartService extends BaseService implements CartServiceInterface
                 ],
             ];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/cart/update_line_item', $variables);
 
             if (!empty($response['data']['cartLinesUpdate']['userErrors'])) {
                 $errors = $response['data']['cartLinesUpdate']['userErrors'];
@@ -226,14 +221,12 @@ class CartService extends BaseService implements CartServiceInterface
         try {
             $this->logPerformanceStart('removeLineItem');
 
-            $query = $this->graphQLLoader->load('storefront/cart/remove_line_item');
-
             $variables = [
                 'cartId' => $cartId,
                 'lineIds' => [$lineId],
             ];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/cart/remove_line_item', $variables);
 
             if (!empty($response['data']['cartLinesRemove']['userErrors'])) {
                 $errors = $response['data']['cartLinesRemove']['userErrors'];
@@ -273,8 +266,6 @@ class CartService extends BaseService implements CartServiceInterface
         try {
             $this->logPerformanceStart('associateCustomer');
 
-            $query = $this->graphQLLoader->load('storefront/cart/associate_customer');
-
             $variables = [
                 'cartId' => $cartId,
                 'buyerIdentity' => [
@@ -282,7 +273,7 @@ class CartService extends BaseService implements CartServiceInterface
                 ],
             ];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/cart/associate_customer', $variables);
 
             if (!empty($response['data']['cartBuyerIdentityUpdate']['userErrors'])) {
                 $errors = $response['data']['cartBuyerIdentityUpdate']['userErrors'];

@@ -6,15 +6,13 @@ use App\Contracts\Services\OrderServiceInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\Order\OrderDTO;
 use App\Services\Base\BaseService;
-use App\Services\GraphQL\GraphQLLoaderService;
 use App\Exceptions\ShopifyNotFoundException;
 use Illuminate\Support\Collection;
 
 class OrderService extends BaseService implements OrderServiceInterface
 {
     public function __construct(
-        protected StorefrontApiClientInterface $storefrontClient,
-        protected GraphQLLoaderService $graphQLLoader
+        protected StorefrontApiClientInterface $storefrontClient
     ) {
         parent::__construct();
     }
@@ -32,15 +30,13 @@ class OrderService extends BaseService implements OrderServiceInterface
         try {
             $this->logPerformanceStart('getOrders');
 
-            $query = $this->graphQLLoader->load('storefront/orders/get_customer_orders');
-
             $variables = [
                 'accessToken' => $accessToken,
                 'limit' => $limit,
                 'after' => $cursor,
             ];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/orders/get_customer_orders', $variables);
 
             if (empty($response['data']['customer'])) {
                 throw new ShopifyNotFoundException('Customer not found or invalid access token');
@@ -77,15 +73,13 @@ class OrderService extends BaseService implements OrderServiceInterface
             $this->logPerformanceStart('getOrderDetails');
 
             // First, verify the customer has access to this order by fetching their orders
-            $query = $this->graphQLLoader->load('storefront/orders/get_customer_orders');
-
             $variables = [
                 'accessToken' => $accessToken,
                 'limit' => 250, // Fetch all orders to find the specific one
                 'after' => null,
             ];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/orders/get_customer_orders', $variables);
 
             if (empty($response['data']['customer'])) {
                 throw new ShopifyNotFoundException('Customer not found or invalid access token');

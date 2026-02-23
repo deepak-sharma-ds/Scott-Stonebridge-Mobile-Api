@@ -6,14 +6,12 @@ use App\Contracts\Services\ProductServiceInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\Product\ProductDTO;
 use App\Services\Base\BaseService;
-use App\Services\GraphQL\GraphQLLoaderService;
 use Illuminate\Support\Collection;
 
 class ProductService extends BaseService implements ProductServiceInterface
 {
     public function __construct(
-        protected StorefrontApiClientInterface $storefrontClient,
-        protected GraphQLLoaderService $graphQLLoader
+        protected StorefrontApiClientInterface $storefrontClient
     ) {
         parent::__construct();
     }
@@ -31,8 +29,6 @@ class ProductService extends BaseService implements ProductServiceInterface
         try {
             $this->logPerformanceStart('getAllProducts');
 
-            $query = $this->graphQLLoader->load('storefront/products/get_all_products');
-
             $variables = [
                 'limit' => $limit,
                 'after' => $cursor,
@@ -41,7 +37,7 @@ class ProductService extends BaseService implements ProductServiceInterface
                 'query' => $filters['query'] ?? null,
             ];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/products/get_all_products', $variables);
 
             $products = collect($response['data']['products']['edges'] ?? [])
                 ->map(fn($edge) => ProductDTO::fromShopifyResponse($edge['node']));
@@ -73,11 +69,9 @@ class ProductService extends BaseService implements ProductServiceInterface
         try {
             $this->logPerformanceStart('getProductByHandle');
 
-            $query = $this->graphQLLoader->load('storefront/products/get_product_details');
-
             $variables = ['handle' => $handle];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/products/get_product_details', $variables);
 
             if (empty($response['data']['productByHandle'])) {
                 throw new \App\Exceptions\ShopifyNotFoundException("Product not found: {$handle}");
@@ -107,15 +101,13 @@ class ProductService extends BaseService implements ProductServiceInterface
         try {
             $this->logPerformanceStart('searchProducts');
 
-            $graphqlQuery = $this->graphQLLoader->load('storefront/products/get_all_products');
-
             $variables = [
                 'limit' => $limit,
                 'after' => $cursor,
                 'query' => $query,
             ];
 
-            $response = $this->storefrontClient->query($graphqlQuery, $variables);
+            $response = $this->storefrontClient->query('storefront/products/get_all_products', $variables);
 
             $products = collect($response['data']['products']['edges'] ?? [])
                 ->map(fn($edge) => ProductDTO::fromShopifyResponse($edge['node']));
@@ -148,14 +140,12 @@ class ProductService extends BaseService implements ProductServiceInterface
         try {
             $this->logPerformanceStart('getFeaturedProducts');
 
-            $query = $this->graphQLLoader->load('storefront/products/get_featured_products');
-
             $variables = [
                 'limit' => $limit,
                 'query' => "tag:{$tag}",
             ];
 
-            $response = $this->storefrontClient->query($query, $variables);
+            $response = $this->storefrontClient->query('storefront/products/get_featured_products', $variables);
 
             $products = collect($response['data']['products']['edges'] ?? [])
                 ->map(fn($edge) => ProductDTO::fromShopifyResponse($edge['node']));
