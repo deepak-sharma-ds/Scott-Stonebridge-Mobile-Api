@@ -220,5 +220,44 @@ class CartController extends BaseApiController
             );
         }
     }
+
+    /**
+     * Update cart buyer identity
+     * 
+     * @param string $cartId
+     * @param \App\Http\Requests\Cart\UpdateBuyerIdentityRequest $request
+     * @return JsonResponse
+     */
+    public function updateBuyerIdentity(string $cartId, \App\Http\Requests\Cart\UpdateBuyerIdentityRequest $request): JsonResponse
+    {
+        try {
+            $email = $request->validated('email');
+
+            $cart = $this->cartService->updateBuyerIdentity($cartId, $email);
+
+            return $this->success(
+                'Buyer identity updated successfully',
+                [
+                    'cart' => new CartResource($cart),
+                ]
+            );
+        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+            return $this->notFound($e->getMessage());
+        } catch (\App\Exceptions\ShopifyApiException $e) {
+            return $this->error(
+                'Failed to update buyer identity',
+                ['error' => $e->getMessage()],
+                [],
+                422
+            );
+        } catch (\Exception $e) {
+            return $this->error(
+                'Failed to update buyer identity',
+                ['error' => $e->getMessage()],
+                [],
+                500
+            );
+        }
+    }
 }
 

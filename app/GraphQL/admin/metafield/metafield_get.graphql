@@ -1,0 +1,16 @@
+query metafieldGet($ownerId: ID!, $namespace: String!, $key: String!) {
+  node(id: $ownerId) {
+    ... on Customer {
+      id
+      metafield(namespace: $namespace, key: $key) {
+        id
+        namespace
+        key
+        value
+        type
+        createdAt
+        updatedAt
+      }
+    }
+  }
+}

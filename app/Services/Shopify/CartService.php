@@ -302,4 +302,52 @@ class CartService extends BaseService implements CartServiceInterface
             throw $e;
         }
     }
+
+    /**
+     * Update buyer identity with email
+     *
+     * @param string $cartId Cart identifier
+     * @param string $email Customer email
+     * @return CartDTO
+     */
+    public function updateBuyerIdentity(string $cartId, string $email): CartDTO
+    {
+        try {
+            $this->logPerformanceStart('updateBuyerIdentity');
+
+            $variables = [
+                'cartId' => $cartId,
+                'buyerIdentity' => [
+                    'email' => $email,
+                ],
+                'country' => $this->getCurrencyCountryCode(),
+            ];
+
+            $response = $this->storefrontClient->queryWithCurrency('storefront/cart/associate_customer', $variables);
+
+            if (!empty($response['data']['cartBuyerIdentityUpdate']['userErrors'])) {
+                $errors = $response['data']['cartBuyerIdentityUpdate']['userErrors'];
+                throw new ShopifyApiException('Failed to update buyer identity: ' . json_encode($errors));
+            }
+
+            if (empty($response['data']['cartBuyerIdentityUpdate']['cart'])) {
+                throw new ShopifyApiException('Update buyer identity returned empty response');
+            }
+
+            $cart = CartDTO::fromShopifyResponse($response['data']['cartBuyerIdentityUpdate']['cart']);
+
+            $this->logPerformanceEnd('updateBuyerIdentity', [
+                'cart_id' => $cartId,
+                'email' => $email,
+            ]);
+
+            return $cart;
+        } catch (\Exception $e) {
+            $this->logErrorWithException('Failed to update buyer identity', $e, [
+                'cart_id' => $cartId,
+                'email' => $email,
+            ]);
+            throw $e;
+        }
+    }
 }

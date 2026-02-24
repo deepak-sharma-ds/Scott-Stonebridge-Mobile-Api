@@ -1,6 +1,6 @@
 <?php
 
-namespace App\DTOs\Collection;
+namespace App\DTOs\Product;
 
 use App\DTOs\Base\BaseDTO;
 use InvalidArgumentException;
@@ -11,7 +11,7 @@ use InvalidArgumentException;
  * Represents a Shopify collection with typed properties and validation.
  * Collections are groups of products organized by theme, category, or other criteria.
  * 
- * Requirements: 16.5, 16.6, 16.7
+ * Requirements: 11.1, 11.12
  */
 class CollectionDTO extends BaseDTO
 {
@@ -21,6 +21,7 @@ class CollectionDTO extends BaseDTO
         public readonly string $handle,
         public readonly ?string $description,
         public readonly ?array $image,
+        public readonly int $productsCount,
         public readonly ?string $updatedAt,
     ) {
         $this->validate();
@@ -64,6 +65,7 @@ class CollectionDTO extends BaseDTO
             handle: $data['handle'],
             description: $data['description'] ?? null,
             image: $image,
+            productsCount: $data['productsCount'] ?? $data['products_count'] ?? 0,
             updatedAt: $data['updatedAt'] ?? null,
         );
     }

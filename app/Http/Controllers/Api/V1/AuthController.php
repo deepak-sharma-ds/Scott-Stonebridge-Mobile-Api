@@ -185,5 +185,112 @@ class AuthController extends BaseApiController
             );
         }
     }
+
+    /**
+     * Request password reset
+     * 
+     * @param \App\Http\Requests\Auth\ForgotPasswordRequest $request
+     * @return JsonResponse
+     */
+    public function forgotPassword(\App\Http\Requests\Auth\ForgotPasswordRequest $request): JsonResponse
+    {
+        try {
+            $email = $request->validated('email');
+
+            $this->authService->forgotPassword($email);
+
+            return $this->success(
+                'Password reset email sent successfully',
+                []
+            );
+        } catch (\App\Exceptions\ShopifyApiException $e) {
+            return $this->error(
+                'Failed to send password reset email',
+                ['error' => $e->getMessage()],
+                [],
+                422
+            );
+        } catch (\Exception $e) {
+            return $this->error(
+                'Failed to send password reset email',
+                ['error' => $e->getMessage()],
+                [],
+                500
+            );
+        }
+    }
+
+    /**
+     * Reset customer password
+     * 
+     * @param \App\Http\Requests\Auth\ResetPasswordRequest $request
+     * @return JsonResponse
+     */
+    public function resetPassword(\App\Http\Requests\Auth\ResetPasswordRequest $request): JsonResponse
+    {
+        try {
+            $token = $request->validated('token');
+            $password = $request->validated('password');
+
+            $this->authService->resetPassword($token, $password);
+
+            return $this->success(
+                'Password reset successfully',
+                []
+            );
+        } catch (\App\Exceptions\ShopifyApiException $e) {
+            return $this->error(
+                'Failed to reset password',
+                ['error' => $e->getMessage()],
+                [],
+                422
+            );
+        } catch (\Exception $e) {
+            return $this->error(
+                'Failed to reset password',
+                ['error' => $e->getMessage()],
+                [],
+                500
+            );
+        }
+    }
+
+    /**
+     * Logout customer
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function logout(Request $request): JsonResponse
+    {
+        try {
+            $accessToken = $request->input('access_token') ?? $request->bearerToken();
+
+            if (empty($accessToken)) {
+                return $this->unauthorized('Access token is required');
+            }
+
+            $this->authService->logout($accessToken);
+
+            return $this->success(
+                'Logout successful',
+                []
+            );
+        } catch (\App\Exceptions\ShopifyApiException $e) {
+            return $this->error(
+                'Logout failed',
+                ['error' => $e->getMessage()],
+                [],
+                422
+            );
+        } catch (\Exception $e) {
+            return $this->error(
+                'Logout failed',
+                ['error' => $e->getMessage()],
+                [],
+                500
+            );
+        }
+    }
 }
 

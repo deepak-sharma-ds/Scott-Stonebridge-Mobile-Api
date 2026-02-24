@@ -1,0 +1,37 @@
+query getCollections($limit: Int!, $after: String) {
+  collections(first: $limit, after: $after) {
+    edges {
+      node {
+        id
+        title
+        handle
+        description
+        descriptionHtml
+        updatedAt
+        
+        image {
+          url
+          altText
+          width
+          height
+        }
+        
+        products(first: 1) {
+          edges {
+            node {
+              id
+            }
+          }
+        }
+      }
+      cursor
+    }
+    
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+  }
+}

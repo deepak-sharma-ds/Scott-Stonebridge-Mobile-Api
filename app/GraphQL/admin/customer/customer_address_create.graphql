@@ -1,0 +1,29 @@
+mutation customerAddressCreate(
+  $customerId: ID!,
+  $address: MailingAddressInput!
+) {
+  customerAddressCreate(
+    customerId: $customerId,
+    address: $address
+  ) {
+    customerAddress {
+      id
+      firstName
+      lastName
+      address1
+      address2
+      city
+      province
+      country
+      zip
+      phone
+      name
+      provinceCode
+      countryCodeV2
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}

@@ -125,4 +125,103 @@ class ProductController extends BaseApiController
             );
         }
     }
+
+    /**
+     * Get all collections
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function indexCollections(Request $request): JsonResponse
+    {
+        try {
+            $limit = (int) $request->input('limit', 50);
+            $cursor = $request->input('cursor');
+
+            $result = $this->productService->getCollections($limit, $cursor);
+
+            return $this->success(
+                'Collections fetched successfully',
+                [
+                    'collections' => \App\Http\Resources\Product\CollectionResource::collection($result['items']),
+                ],
+                ['pagination' => $result['pagination']]
+            );
+        } catch (\Exception $e) {
+            return $this->error(
+                'Failed to fetch collections',
+                ['error' => $e->getMessage()],
+                [],
+                500
+            );
+        }
+    }
+
+    /**
+     * Get products by collection
+     * 
+     * @param string $handle
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function showCollectionProducts(string $handle, Request $request): JsonResponse
+    {
+        try {
+            $limit = (int) $request->input('limit', 20);
+            $cursor = $request->input('cursor');
+            $sortKey = $request->input('sort_key', 'COLLECTION_DEFAULT');
+            $reverse = $request->boolean('reverse', false);
+
+            $result = $this->productService->getCollectionProducts($handle, $limit, $cursor, $sortKey, $reverse);
+
+            return $this->success(
+                'Collection products fetched successfully',
+                [
+                    'collection' => new \App\Http\Resources\Product\CollectionResource($result['collection']),
+                    'products' => ProductResource::collection($result['items']),
+                ],
+                ['pagination' => $result['pagination']]
+            );
+        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+            return $this->notFound($e->getMessage());
+        } catch (\Exception $e) {
+            return $this->error(
+                'Failed to fetch collection products',
+                ['error' => $e->getMessage()],
+                [],
+                500
+            );
+        }
+    }
+
+    /**
+     * Get featured products
+     * 
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function indexFeatured(Request $request): JsonResponse
+    {
+        try {
+            $tag = $request->input('tag', 'featured');
+            $limit = (int) $request->input('limit', 10);
+
+            $products = $this->productService->getFeaturedProducts($tag, $limit);
+
+            return $this->success(
+                'Featured products fetched successfully',
+                [
+                    'products' => ProductResource::collection($products),
+                ]
+            );
+        } catch (\Exception $e) {
+            return $this->error(
+                'Failed to fetch featured products',
+                ['error' => $e->getMessage()],
+                [],
+                500
+            );
+        }
+    }
 }
+

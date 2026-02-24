@@ -1,0 +1,47 @@
+mutation customerUpdate(
+  $id: ID!,
+  $firstName: String,
+  $lastName: String,
+  $phone: String,
+  $acceptsMarketing: Boolean
+) {
+  customerUpdate(
+    input: {
+      id: $id
+      firstName: $firstName
+      lastName: $lastName
+      phone: $phone
+      acceptsMarketing: $acceptsMarketing
+    }
+  ) {
+    customer {
+      id
+      firstName
+      lastName
+      email
+      phone
+      acceptsMarketing
+      createdAt
+      updatedAt
+      addresses {
+        id
+        firstName
+        lastName
+        address1
+        address2
+        city
+        province
+        country
+        zip
+        phone
+        name
+        provinceCode
+        countryCodeV2
+      }
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}
