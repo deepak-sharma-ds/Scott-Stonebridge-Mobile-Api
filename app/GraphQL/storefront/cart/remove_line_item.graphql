@@ -1,33 +1,34 @@
-mutation removeLineItem($cartId: ID!, $lineIds: [ID!]!) {
+mutation removeLineItem($cartId: ID!, $lineIds: [ID!]!, $country: CountryCode)
+@inContext(country: $country) {
   cartLinesRemove(cartId: $cartId, lineIds: $lineIds) {
     cart {
       id
       checkoutUrl
       createdAt
       updatedAt
-      
+
       lines(first: 250) {
         edges {
           node {
             id
             quantity
-            
+
             merchandise {
               ... on ProductVariant {
                 id
                 title
                 sku
-                
+
                 price {
                   amount
                   currencyCode
                 }
-                
+
                 image {
                   url
                   altText
                 }
-                
+
                 product {
                   id
                   title
@@ -35,7 +36,7 @@ mutation removeLineItem($cartId: ID!, $lineIds: [ID!]!) {
                 }
               }
             }
-            
+
             cost {
               totalAmount {
                 amount
@@ -49,7 +50,7 @@ mutation removeLineItem($cartId: ID!, $lineIds: [ID!]!) {
           }
         }
       }
-      
+
       cost {
         totalAmount {
           amount
@@ -68,7 +69,7 @@ mutation removeLineItem($cartId: ID!, $lineIds: [ID!]!) {
           currencyCode
         }
       }
-      
+
       buyerIdentity {
         email
         phone
@@ -78,7 +79,7 @@ mutation removeLineItem($cartId: ID!, $lineIds: [ID!]!) {
         }
       }
     }
-    
+
     userErrors {
       field
       message

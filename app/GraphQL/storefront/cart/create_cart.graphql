@@ -1,33 +1,31 @@
-mutation createCart($input: CartInput!) {
+mutation createCart($input: CartInput!, $country: CountryCode)
+@inContext(country: $country) {
   cartCreate(input: $input) {
     cart {
       id
       checkoutUrl
       createdAt
       updatedAt
-      
+
       lines(first: 250) {
         edges {
           node {
             id
             quantity
-            
+
             merchandise {
               ... on ProductVariant {
                 id
                 title
                 sku
-                
                 price {
                   amount
                   currencyCode
                 }
-                
                 image {
                   url
                   altText
                 }
-                
                 product {
                   id
                   title
@@ -35,7 +33,7 @@ mutation createCart($input: CartInput!) {
                 }
               }
             }
-            
+
             cost {
               totalAmount {
                 amount
@@ -49,7 +47,7 @@ mutation createCart($input: CartInput!) {
           }
         }
       }
-      
+
       cost {
         totalAmount {
           amount
@@ -68,7 +66,7 @@ mutation createCart($input: CartInput!) {
           currencyCode
         }
       }
-      
+
       buyerIdentity {
         email
         phone
@@ -78,7 +76,7 @@ mutation createCart($input: CartInput!) {
         }
       }
     }
-    
+
     userErrors {
       field
       message

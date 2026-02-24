@@ -34,9 +34,10 @@ class OrderService extends BaseService implements OrderServiceInterface
                 'accessToken' => $accessToken,
                 'limit' => $limit,
                 'after' => $cursor,
+                'country' => $this->getCurrencyCountryCode(),
             ];
 
-            $response = $this->storefrontClient->query('storefront/orders/get_customer_orders', $variables);
+            $response = $this->storefrontClient->queryWithCurrency('storefront/orders/get_customer_orders', $variables);
 
             if (empty($response['data']['customer'])) {
                 throw new ShopifyNotFoundException('Customer not found or invalid access token');
@@ -77,9 +78,10 @@ class OrderService extends BaseService implements OrderServiceInterface
                 'accessToken' => $accessToken,
                 'limit' => 250, // Fetch all orders to find the specific one
                 'after' => null,
+                'country' => $this->getCurrencyCountryCode(),
             ];
 
-            $response = $this->storefrontClient->query('storefront/orders/get_customer_orders', $variables);
+            $response = $this->storefrontClient->queryWithCurrency('storefront/orders/get_customer_orders', $variables);
 
             if (empty($response['data']['customer'])) {
                 throw new ShopifyNotFoundException('Customer not found or invalid access token');

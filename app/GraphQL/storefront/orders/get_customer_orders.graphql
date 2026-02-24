@@ -1,4 +1,9 @@
-query getCustomerOrders($accessToken: String!, $limit: Int!, $after: String) {
+query getCustomerOrders(
+  $accessToken: String!
+  $limit: Int!
+  $after: String
+  $country: CountryCode
+) @inContext(country: $country) {
   customer(customerAccessToken: $accessToken) {
     id
 

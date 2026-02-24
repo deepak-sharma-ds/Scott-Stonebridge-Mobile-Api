@@ -41,9 +41,9 @@ class CartService extends BaseService implements CartServiceInterface
                 $input = new \stdClass();
             }
 
-            $variables = ['input' => $input];
+            $variables = ['input' => $input, 'country' => $this->getCurrencyCountryCode()];
 
-            $response = $this->storefrontClient->query('storefront/cart/create_cart', $variables);
+            $response = $this->storefrontClient->queryWithCurrency('storefront/cart/create_cart', $variables);
 
             if (!empty($response['data']['cartCreate']['userErrors'])) {
                 $errors = $response['data']['cartCreate']['userErrors'];
@@ -81,9 +81,9 @@ class CartService extends BaseService implements CartServiceInterface
         try {
             $this->logPerformanceStart('getCart');
 
-            $variables = ['cartId' => $cartId];
+            $variables = ['cartId' => $cartId, 'country' => $this->getCurrencyCountryCode()];
 
-            $response = $this->storefrontClient->query('storefront/cart/get_cart', $variables);
+            $response = $this->storefrontClient->queryWithCurrency('storefront/cart/get_cart', $variables);
 
             if (empty($response['data']['cart'])) {
                 throw new ShopifyNotFoundException("Cart not found: {$cartId}");
@@ -124,9 +124,10 @@ class CartService extends BaseService implements CartServiceInterface
                         'quantity' => $quantity,
                     ],
                 ],
+                'country' => $this->getCurrencyCountryCode(),
             ];
 
-            $response = $this->storefrontClient->query('storefront/cart/add_line_item', $variables);
+            $response = $this->storefrontClient->queryWithCurrency('storefront/cart/add_line_item', $variables);
 
             if (!empty($response['data']['cartLinesAdd']['userErrors'])) {
                 $errors = $response['data']['cartLinesAdd']['userErrors'];
@@ -177,9 +178,10 @@ class CartService extends BaseService implements CartServiceInterface
                         'quantity' => $quantity,
                     ],
                 ],
+                'country' => $this->getCurrencyCountryCode(),
             ];
 
-            $response = $this->storefrontClient->query('storefront/cart/update_line_item', $variables);
+            $response = $this->storefrontClient->queryWithCurrency('storefront/cart/update_line_item', $variables);
 
             if (!empty($response['data']['cartLinesUpdate']['userErrors'])) {
                 $errors = $response['data']['cartLinesUpdate']['userErrors'];
@@ -224,9 +226,10 @@ class CartService extends BaseService implements CartServiceInterface
             $variables = [
                 'cartId' => $cartId,
                 'lineIds' => [$lineId],
+                'country' => $this->getCurrencyCountryCode(),
             ];
 
-            $response = $this->storefrontClient->query('storefront/cart/remove_line_item', $variables);
+            $response = $this->storefrontClient->queryWithCurrency('storefront/cart/remove_line_item', $variables);
 
             if (!empty($response['data']['cartLinesRemove']['userErrors'])) {
                 $errors = $response['data']['cartLinesRemove']['userErrors'];
@@ -271,9 +274,10 @@ class CartService extends BaseService implements CartServiceInterface
                 'buyerIdentity' => [
                     'customerAccessToken' => $accessToken,
                 ],
+                'country' => $this->getCurrencyCountryCode(),
             ];
 
-            $response = $this->storefrontClient->query('storefront/cart/associate_customer', $variables);
+            $response = $this->storefrontClient->queryWithCurrency('storefront/cart/associate_customer', $variables);
 
             if (!empty($response['data']['cartBuyerIdentityUpdate']['userErrors'])) {
                 $errors = $response['data']['cartBuyerIdentityUpdate']['userErrors'];

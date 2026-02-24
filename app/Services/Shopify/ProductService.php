@@ -35,9 +35,10 @@ class ProductService extends BaseService implements ProductServiceInterface
                 'sortKey' => $filters['sortKey'] ?? 'TITLE',
                 'reverse' => $filters['reverse'] ?? false,
                 'query' => $filters['query'] ?? null,
+                'country' => $this->getCurrencyCountryCode(),
             ];
 
-            $response = $this->storefrontClient->query('storefront/products/get_all_products', $variables);
+            $response = $this->storefrontClient->queryWithCurrency('storefront/products/get_all_products', $variables);
 
             $products = collect($response['data']['products']['edges'] ?? [])
                 ->map(fn($edge) => ProductDTO::fromShopifyResponse($edge['node']));
@@ -69,9 +70,12 @@ class ProductService extends BaseService implements ProductServiceInterface
         try {
             $this->logPerformanceStart('getProductByHandle');
 
-            $variables = ['handle' => $handle];
+            $variables = [
+                'handle' => $handle,
+                'country' => $this->getCurrencyCountryCode(),
+            ];
 
-            $response = $this->storefrontClient->query('storefront/products/get_product_details', $variables);
+            $response = $this->storefrontClient->queryWithCurrency('storefront/products/get_product_details', $variables);
 
             if (empty($response['data']['productByHandle'])) {
                 throw new \App\Exceptions\ShopifyNotFoundException("Product not found: {$handle}");
@@ -105,9 +109,10 @@ class ProductService extends BaseService implements ProductServiceInterface
                 'limit' => $limit,
                 'after' => $cursor,
                 'query' => $query,
+                'country' => $this->getCurrencyCountryCode(),
             ];
 
-            $response = $this->storefrontClient->query('storefront/products/get_all_products', $variables);
+            $response = $this->storefrontClient->queryWithCurrency('storefront/products/get_all_products', $variables);
 
             $products = collect($response['data']['products']['edges'] ?? [])
                 ->map(fn($edge) => ProductDTO::fromShopifyResponse($edge['node']));
@@ -143,9 +148,10 @@ class ProductService extends BaseService implements ProductServiceInterface
             $variables = [
                 'limit' => $limit,
                 'query' => "tag:{$tag}",
+                'country' => $this->getCurrencyCountryCode(),
             ];
 
-            $response = $this->storefrontClient->query('storefront/products/get_featured_products', $variables);
+            $response = $this->storefrontClient->queryWithCurrency('storefront/products/get_featured_products', $variables);
 
             $products = collect($response['data']['products']['edges'] ?? [])
                 ->map(fn($edge) => ProductDTO::fromShopifyResponse($edge['node']));

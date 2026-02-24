@@ -1,33 +1,37 @@
-mutation updateLineItem($cartId: ID!, $lines: [CartLineUpdateInput!]!) {
+mutation updateLineItem(
+  $cartId: ID!
+  $lines: [CartLineUpdateInput!]!
+  $country: CountryCode
+) @inContext(country: $country) {
   cartLinesUpdate(cartId: $cartId, lines: $lines) {
     cart {
       id
       checkoutUrl
       createdAt
       updatedAt
-      
+
       lines(first: 250) {
         edges {
           node {
             id
             quantity
-            
+
             merchandise {
               ... on ProductVariant {
                 id
                 title
                 sku
-                
+
                 price {
                   amount
                   currencyCode
                 }
-                
+
                 image {
                   url
                   altText
                 }
-                
+
                 product {
                   id
                   title
@@ -35,7 +39,7 @@ mutation updateLineItem($cartId: ID!, $lines: [CartLineUpdateInput!]!) {
                 }
               }
             }
-            
+
             cost {
               totalAmount {
                 amount
@@ -49,7 +53,7 @@ mutation updateLineItem($cartId: ID!, $lines: [CartLineUpdateInput!]!) {
           }
         }
       }
-      
+
       cost {
         totalAmount {
           amount
@@ -68,7 +72,7 @@ mutation updateLineItem($cartId: ID!, $lines: [CartLineUpdateInput!]!) {
           currencyCode
         }
       }
-      
+
       buyerIdentity {
         email
         phone
@@ -78,7 +82,7 @@ mutation updateLineItem($cartId: ID!, $lines: [CartLineUpdateInput!]!) {
         }
       }
     }
-    
+
     userErrors {
       field
       message

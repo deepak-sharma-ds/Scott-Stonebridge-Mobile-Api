@@ -1,32 +1,33 @@
-query getCart($cartId: ID!) {
+query getCart($cartId: ID!, $country: CountryCode)
+@inContext(country: $country) {
   cart(id: $cartId) {
     id
     checkoutUrl
     createdAt
     updatedAt
-    
+
     lines(first: 250) {
       edges {
         node {
           id
           quantity
-          
+
           merchandise {
             ... on ProductVariant {
               id
               title
               sku
-              
+
               price {
                 amount
                 currencyCode
               }
-              
+
               image {
                 url
                 altText
               }
-              
+
               product {
                 id
                 title
@@ -34,7 +35,7 @@ query getCart($cartId: ID!) {
               }
             }
           }
-          
+
           cost {
             totalAmount {
               amount
@@ -48,7 +49,7 @@ query getCart($cartId: ID!) {
         }
       }
     }
-    
+
     cost {
       totalAmount {
         amount
@@ -67,7 +68,7 @@ query getCart($cartId: ID!) {
         currencyCode
       }
     }
-    
+
     buyerIdentity {
       email
       phone

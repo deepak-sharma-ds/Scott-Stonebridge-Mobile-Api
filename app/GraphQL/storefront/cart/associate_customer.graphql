@@ -1,33 +1,37 @@
-mutation associateCustomer($cartId: ID!, $buyerIdentity: CartBuyerIdentityInput!) {
+mutation associateCustomer(
+  $cartId: ID!
+  $buyerIdentity: CartBuyerIdentityInput!
+  $country: CountryCode
+) @inContext(country: $country) {
   cartBuyerIdentityUpdate(cartId: $cartId, buyerIdentity: $buyerIdentity) {
     cart {
       id
       checkoutUrl
       createdAt
       updatedAt
-      
+
       lines(first: 250) {
         edges {
           node {
             id
             quantity
-            
+
             merchandise {
               ... on ProductVariant {
                 id
                 title
                 sku
-                
+
                 price {
                   amount
                   currencyCode
                 }
-                
+
                 image {
                   url
                   altText
                 }
-                
+
                 product {
                   id
                   title
@@ -35,7 +39,7 @@ mutation associateCustomer($cartId: ID!, $buyerIdentity: CartBuyerIdentityInput!
                 }
               }
             }
-            
+
             cost {
               totalAmount {
                 amount
@@ -49,7 +53,7 @@ mutation associateCustomer($cartId: ID!, $buyerIdentity: CartBuyerIdentityInput!
           }
         }
       }
-      
+
       cost {
         totalAmount {
           amount
@@ -68,7 +72,7 @@ mutation associateCustomer($cartId: ID!, $buyerIdentity: CartBuyerIdentityInput!
           currencyCode
         }
       }
-      
+
       buyerIdentity {
         email
         phone
@@ -78,7 +82,7 @@ mutation associateCustomer($cartId: ID!, $buyerIdentity: CartBuyerIdentityInput!
         }
       }
     }
-    
+
     userErrors {
       field
       message

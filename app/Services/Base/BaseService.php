@@ -309,5 +309,30 @@ abstract class BaseService
 
         $this->log('error', $message, $enrichedContext, 'error');
     }
-}
 
+    /**
+     * Get country code based on currency for logging context
+     *
+     * @return string
+     */
+    protected function getCurrencyCountryCode(): string
+    {
+        $currency = request()->get('currency', config('shopify.currency', 'GBP'));
+
+        $currencyToCountry = [
+            'GBP' => 'GB',
+            'USD' => 'US',
+            'EUR' => 'DE',
+            'CAD' => 'CA',
+            'AUD' => 'AU',
+            'JPY' => 'JP',
+            'CHF' => 'CH',
+            'NZD' => 'NZ',
+            'SEK' => 'SE',
+            'DKK' => 'DK',
+            'NOK' => 'NO',
+        ];
+
+        return $currencyToCountry[$currency] ?? 'GB';
+    }
+}
