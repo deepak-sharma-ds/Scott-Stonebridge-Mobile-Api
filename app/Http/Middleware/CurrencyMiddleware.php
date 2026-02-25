@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Contracts\Services\ShopServiceInterface;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -10,30 +11,29 @@ use Symfony\Component\HttpFoundation\Response;
  * CurrencyMiddleware
  * 
  * Extracts currency from request headers or query params and adds to request context.
- * Validates currency code against supported currencies.
+ * Validates currency code against Shopify's supported currencies dynamically.
  * 
  * Requirements: 15.2
  */
 class CurrencyMiddleware
 {
     /**
-     * Supported ISO 4217 currency codes
+     * Fallback currencies if API fails
      * 
      * @var array<string>
      */
-    protected array $supportedCurrencies = [
-        'GBP', // British Pound Sterling
-        'USD', // United States Dollar
-        'EUR', // Euro
-        'CAD', // Canadian Dollar
-        'AUD', // Australian Dollar
-        'JPY', // Japanese Yen
-        'CHF', // Swiss Franc
-        'NZD', // New Zealand Dollar
-        'SEK', // Swedish Krona
-        'DKK', // Danish Krone
-        'NOK', // Norwegian Krone
+    protected array $fallbackCurrencies = [
+        'GBP', 'USD', 'EUR', 'CAD', 'AUD',
     ];
+
+    /**
+     * Constructor
+     * 
+     * @param ShopServiceInterface $shopService
+     */
+    public function __construct(
+        protected ShopServiceInterface $shopService
+    ) {}
 
     /**
      * Handle an incoming request.
@@ -55,8 +55,8 @@ class CurrencyMiddleware
         // Normalize to uppercase
         $currency = strtoupper(trim($currency));
 
-        // Validate currency code against supported currencies
-        if (!in_array($currency, $this->supportedCurrencies, true)) {
+        // Validate currency code against Shopify's supported currencies
+        if (!$this->isCurrencySupported($currency)) {
             // Fall back to default if invalid
             $currency = config('shopify.currency', 'GBP');
         }
@@ -74,12 +74,35 @@ class CurrencyMiddleware
     }
 
     /**
+     * Check if currency is supported
+     * 
+     * Fetches from Shopify API with fallback to static list
+     * 
+     * @param string $currency
+     * @return bool
+     */
+    protected function isCurrencySupported(string $currency): bool
+    {
+        try {
+            // Try to get from Shopify API (cached for 24 hours)
+            return $this->shopService->isCurrencySupported($currency);
+        } catch (\Exception $e) {
+            // Fallback to static list if API fails
+            return in_array($currency, $this->fallbackCurrencies, true);
+        }
+    }
+
+    /**
      * Get supported currencies
      * 
      * @return array<string>
      */
     public function getSupportedCurrencies(): array
     {
-        return $this->supportedCurrencies;
+        try {
+            return $this->shopService->getSupportedCurrencies();
+        } catch (\Exception $e) {
+            return $this->fallbackCurrencies;
+        }
     }
 }

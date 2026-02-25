@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\HomeController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProfileController;
+use App\Http\Controllers\Api\V1\ShopController;
 use App\Http\Controllers\Api\V1\WishlistController;
 use Illuminate\Support\Facades\Route;
 
@@ -166,6 +167,17 @@ Route::prefix('v1')->middleware([
      * POST /api/v1/contact - Submit contact form
      */
     Route::post('/contact', [ContactController::class, 'store'])->name('api.v1.contact.store');
+    
+    /**
+     * Shop & Currency Routes (Public - Guest Friendly)
+     * 
+     * GET /api/v1/shop/currencies - Get supported currencies
+     * GET /api/v1/shop/markets - Get shop markets and regional settings
+     */
+    Route::prefix('shop')->group(function () {
+        Route::get('/currencies', [ShopController::class, 'currencies'])->name('api.v1.shop.currencies');
+        Route::get('/markets', [ShopController::class, 'markets'])->name('api.v1.shop.markets');
+    });
     
     /**
      * Home Routes (Public - Guest Friendly)
