@@ -2,6 +2,8 @@
 
 namespace App\Services\Shopify;
 
+use App\Contracts\Services\ProfileServiceInterface;
+use App\Contracts\Services\CustomerServiceInterface;
 use App\Contracts\Shopify\AdminApiClientInterface;
 use App\DTOs\Profile\ProfileDTO;
 use App\DTOs\Customer\CustomerDTO;
@@ -19,17 +21,17 @@ use App\Services\Base\BaseService;
  * 
  * Requirements: 5.1
  */
-class ProfileService extends BaseService
+class ProfileService extends BaseService implements ProfileServiceInterface
 {
     /**
      * Constructor
      * 
      * @param AdminApiClientInterface $adminClient Admin API client for mutations
-     * @param CustomerService $customerService Customer service for read operations
+     * @param CustomerServiceInterface $customerService Customer service for read operations
      */
     public function __construct(
         private readonly AdminApiClientInterface $adminClient,
-        private readonly CustomerService $customerService
+        private readonly CustomerServiceInterface $customerService
     ) {
         parent::__construct();
     }

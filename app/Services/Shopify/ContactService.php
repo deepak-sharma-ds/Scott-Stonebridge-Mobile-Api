@@ -2,6 +2,7 @@
 
 namespace App\Services\Shopify;
 
+use App\Contracts\Services\ContactServiceInterface;
 use App\Contracts\Shopify\AdminApiClientInterface;
 use App\DTOs\Contact\ContactDTO;
 use App\Exceptions\ShopifyApiException;
@@ -23,7 +24,7 @@ use Illuminate\Support\Facades\Mail;
  * 
  * Requirements: 11.9, 11.11, 11.12
  */
-class ContactService extends BaseService
+class ContactService extends BaseService implements ContactServiceInterface
 {
     /**
      * Constructor

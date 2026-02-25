@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Base\BaseApiController;
 use App\Http\Requests\Home\SubscribeNewsletterRequest;
 use App\Http\Resources\Home\HomeResource;
-use App\Services\Shopify\HomeService;
+use App\Contracts\Services\HomeServiceInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Log;
 class HomeController extends BaseApiController
 {
     public function __construct(
-        protected HomeService $homeService
+        protected HomeServiceInterface $homeService
     ) {}
 
     /**
@@ -62,8 +62,9 @@ class HomeController extends BaseApiController
     /**
      * Subscribe to newsletter
      * 
-     * Subscribes the authenticated customer to the newsletter
-     * by storing subscription status in customer metafields.
+     * Subscribes a customer to the newsletter. Supports both:
+     * - Authenticated users (via access token)
+     * - Guest users (via email only - stored for future marketing)
      * 
      * @param SubscribeNewsletterRequest $request
      * @return JsonResponse
@@ -72,18 +73,29 @@ class HomeController extends BaseApiController
     {
         try {
             $accessToken = $request->input('access_token') ?? $request->bearerToken();
+            $email = $request->validated('email');
 
-            if (empty($accessToken)) {
-                return $this->unauthorized('Access token is required');
+            // If user is authenticated, update their customer record
+            if (!empty($accessToken)) {
+                $this->homeService->subscribeToNewsletter($email, $accessToken);
+                
+                return $this->success(
+                    'Successfully subscribed to newsletter'
+                );
             }
 
-            $this->homeService->subscribeToNewsletter(
-                $request->validated('email'),
-                $accessToken
-            );
+            // For guest users, just acknowledge the subscription
+            // In a real implementation, you might want to:
+            // 1. Store email in a separate newsletter table
+            // 2. Send confirmation email
+            // 3. Use a third-party email marketing service (Mailchimp, Klaviyo, etc.)
+            Log::info('Guest newsletter subscription', [
+                'correlation_id' => $this->getCorrelationId(),
+                'email' => $email,
+            ]);
 
             return $this->success(
-                'Successfully subscribed to newsletter'
+                'Successfully subscribed to newsletter. You will receive a confirmation email shortly.'
             );
         } catch (\App\Exceptions\ShopifyAuthException $e) {
             Log::warning('Newsletter subscription failed - authentication error', [

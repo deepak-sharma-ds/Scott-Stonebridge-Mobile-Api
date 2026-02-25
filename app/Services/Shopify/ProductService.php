@@ -8,11 +8,13 @@ use App\DTOs\Product\ProductDTO;
 use App\DTOs\Product\CollectionDTO;
 use App\Services\Base\BaseService;
 use App\Services\Cache\ShopifyCacheStrategy;
+use App\Traits\CacheWithFallback;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
 class ProductService extends BaseService implements ProductServiceInterface
 {
+    use CacheWithFallback;
     public function __construct(
         protected StorefrontApiClientInterface $storefrontClient,
         protected ShopifyCacheStrategy $cacheStrategy
@@ -155,12 +157,12 @@ class ProductService extends BaseService implements ProductServiceInterface
                 'currency' => $this->getCurrencyCountryCode(),
             ]);
 
-            $products = Cache::tags(['products', 'featured'])
-                ->remember(
-                    $cacheKey,
-                    900, // 15 minutes
-                    fn() => $this->fetchFeaturedProducts($tag, $limit)
-                );
+            $products = $this->cacheWithFallback(
+                $cacheKey,
+                900, // 15 minutes
+                fn() => $this->fetchFeaturedProducts($tag, $limit),
+                ['products', 'featured']
+            );
 
             $this->logPerformanceEnd('getFeaturedProducts', [
                 'tag' => $tag,
@@ -216,12 +218,12 @@ class ProductService extends BaseService implements ProductServiceInterface
                 'cursor' => $cursor,
             ]);
 
-            $result = Cache::tags(['collections'])
-                ->remember(
-                    $cacheKey,
-                    1800, // 30 minutes
-                    fn() => $this->fetchCollections($limit, $cursor)
-                );
+            $result = $this->cacheWithFallback(
+                $cacheKey,
+                1800, // 30 minutes
+                fn() => $this->fetchCollections($limit, $cursor),
+                ['collections']
+            );
 
             $this->logPerformanceEnd('getCollections', [
                 'count' => $result['items']->count(),

@@ -167,22 +167,22 @@ Route::prefix('v1')->middleware([
      */
     Route::post('/contact', [ContactController::class, 'store'])->name('api.v1.contact.store');
     
+    /**
+     * Home Routes (Public - Guest Friendly)
+     * 
+     * GET /api/v1/home - Get home page data (no auth required)
+     * POST /api/v1/home/subscribe - Subscribe to newsletter (optional auth)
+     */
+    Route::prefix('home')->group(function () {
+        Route::get('/', [HomeController::class, 'index'])->name('api.v1.home.index');
+        Route::post('/subscribe', [HomeController::class, 'subscribe'])->name('api.v1.home.subscribe');
+    });
+    
     // ============================================
     // Protected Routes (Authentication Required)
     // ============================================
     
     Route::middleware(['shopify.auth'])->group(function () {
-        
-        /**
-         * Home Routes
-         * 
-         * GET /api/v1/home - Get home page data
-         * POST /api/v1/home/subscribe - Subscribe to newsletter
-         */
-        Route::prefix('home')->group(function () {
-            Route::get('/', [HomeController::class, 'index'])->name('api.v1.home.index');
-            Route::post('/subscribe', [HomeController::class, 'subscribe'])->name('api.v1.home.subscribe');
-        });
         
         /**
          * Profile Routes

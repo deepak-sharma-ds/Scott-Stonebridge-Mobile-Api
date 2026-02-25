@@ -40,7 +40,8 @@ class AuthService extends BaseService implements AuthServiceInterface
 
             if (!empty($response['data']['customerAccessTokenCreate']['customerUserErrors'])) {
                 $errors = $response['data']['customerAccessTokenCreate']['customerUserErrors'];
-                throw new ShopifyAuthException('Login failed: ' . json_encode($errors));
+                $errorMessage = $this->formatCustomerErrors($errors);
+                throw new ShopifyAuthException($errorMessage);
             }
 
             if (empty($response['data']['customerAccessTokenCreate']['customerAccessToken'])) {
@@ -236,5 +237,38 @@ class AuthService extends BaseService implements AuthServiceInterface
             $this->logErrorWithException('Logout failed', $e);
             throw $e;
         }
+    }
+
+    /**
+     * Format customer error messages for better readability
+     *
+     * @param array $errors
+     * @return string
+     */
+    private function formatCustomerErrors(array $errors): string
+    {
+        if (empty($errors)) {
+            return 'Unknown error occurred';
+        }
+
+        $messages = [];
+        foreach ($errors as $error) {
+            $code = $error['code'] ?? 'UNKNOWN';
+            $message = $error['message'] ?? 'Unknown error';
+            
+            // Provide user-friendly messages for common errors
+            switch ($code) {
+                case 'UNIDENTIFIED_CUSTOMER':
+                    $messages[] = 'Invalid email or password. Please check your credentials or register a new account.';
+                    break;
+                case 'CUSTOMER_DISABLED':
+                    $messages[] = 'This customer account has been disabled. Please contact support.';
+                    break;
+                default:
+                    $messages[] = $message;
+            }
+        }
+
+        return implode(' ', $messages);
     }
 }

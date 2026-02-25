@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Contracts\Services\ProfileServiceInterface;
 use App\Http\Controllers\Base\BaseApiController;
 use App\Http\Requests\Profile\AddAddressRequest;
 use App\Http\Requests\Profile\UpdateAddressRequest;
 use App\Http\Requests\Profile\UpdateProfileRequest;
 use App\Http\Resources\Profile\ProfileResource;
-use App\Services\Shopify\ProfileService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\Log;
 class ProfileController extends BaseApiController
 {
     public function __construct(
-        protected ProfileService $profileService
+        protected ProfileServiceInterface $profileService
     ) {}
 
     /**

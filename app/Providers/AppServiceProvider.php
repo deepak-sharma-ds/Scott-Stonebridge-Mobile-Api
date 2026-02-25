@@ -52,6 +52,31 @@ class AppServiceProvider extends ServiceProvider
             \App\Services\Shopify\AuthService::class
         );
 
+        $this->app->bind(
+            \App\Contracts\Services\HomeServiceInterface::class,
+            \App\Services\Shopify\HomeService::class
+        );
+
+        $this->app->bind(
+            \App\Contracts\Services\WishlistServiceInterface::class,
+            \App\Services\Shopify\WishlistService::class
+        );
+
+        $this->app->bind(
+            \App\Contracts\Services\ContentServiceInterface::class,
+            \App\Services\Shopify\ContentService::class
+        );
+
+        $this->app->bind(
+            \App\Contracts\Services\ContactServiceInterface::class,
+            \App\Services\Shopify\ContactService::class
+        );
+
+        $this->app->bind(
+            \App\Contracts\Services\ProfileServiceInterface::class,
+            \App\Services\Shopify\ProfileService::class
+        );
+
         // Register Cache Strategy interface
         $this->app->bind(
             \App\Contracts\Cache\CacheStrategyInterface::class,

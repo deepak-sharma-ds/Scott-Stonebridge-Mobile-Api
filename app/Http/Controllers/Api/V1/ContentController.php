@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Contracts\Services\ContentServiceInterface;
 use App\Http\Controllers\Base\BaseApiController;
 use App\Http\Resources\Content\ArticleResource;
 use App\Http\Resources\Content\BlogResource;
 use App\Http\Resources\Content\PageResource;
-use App\Services\Shopify\ContentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -23,7 +23,7 @@ use Illuminate\Support\Facades\Log;
 class ContentController extends BaseApiController
 {
     public function __construct(
-        protected ContentService $contentService
+        protected ContentServiceInterface $contentService
     ) {}
 
     /**

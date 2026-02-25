@@ -59,4 +59,13 @@ interface CartServiceInterface
      * @return CartDTO
      */
     public function associateCustomer(string $cartId, string $accessToken): CartDTO;
+
+    /**
+     * Update buyer identity with email
+     *
+     * @param string $cartId Cart identifier
+     * @param string $email Customer email
+     * @return CartDTO
+     */
+    public function updateBuyerIdentity(string $cartId, string $email): CartDTO;
 }

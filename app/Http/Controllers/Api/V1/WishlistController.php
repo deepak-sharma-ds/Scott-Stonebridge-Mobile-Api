@@ -5,7 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Base\BaseApiController;
 use App\Http\Requests\Wishlist\AddWishlistItemRequest;
 use App\Http\Resources\Wishlist\WishlistResource;
-use App\Services\Shopify\WishlistService;
+use App\Contracts\Services\WishlistServiceInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Log;
 class WishlistController extends BaseApiController
 {
     public function __construct(
-        protected WishlistService $wishlistService
+        protected WishlistServiceInterface $wishlistService
     ) {}
 
     /**

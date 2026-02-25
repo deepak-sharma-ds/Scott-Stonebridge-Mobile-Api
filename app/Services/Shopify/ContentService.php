@@ -2,6 +2,7 @@
 
 namespace App\Services\Shopify;
 
+use App\Contracts\Services\ContentServiceInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\Content\PageDTO;
 use App\DTOs\Content\BlogDTO;
@@ -9,6 +10,7 @@ use App\DTOs\Content\ArticleDTO;
 use App\Exceptions\ShopifyApiException;
 use App\Services\Base\BaseService;
 use App\Services\Cache\ShopifyCacheStrategy;
+use App\Traits\CacheWithFallback;
 use Illuminate\Support\Facades\Cache;
 use InvalidArgumentException;
 
@@ -27,8 +29,9 @@ use InvalidArgumentException;
  * 
  * Requirements: 10.4, 10.6, 10.7, 10.8, 10.9, 10.10
  */
-class ContentService extends BaseService
+class ContentService extends BaseService implements ContentServiceInterface
 {
+    use CacheWithFallback;
     /**
      * Policy type mapping from API types to Shopify policy fields
      */
@@ -67,12 +70,12 @@ class ContentService extends BaseService
         try {
             $this->logPerformanceStart('getPageByHandle');
 
-            $page = Cache::tags(['page', $handle])
-                ->remember(
-                    $this->cacheStrategy->getCacheKey('page', ['handle' => $handle]),
-                    3600, // 1 hour
-                    fn() => $this->fetchPage($handle)
-                );
+            $page = $this->cacheWithFallback(
+                $this->cacheStrategy->getCacheKey('page', ['handle' => $handle]),
+                3600, // 1 hour
+                fn() => $this->fetchPage($handle),
+                ['page', $handle]
+            );
 
             $this->logPerformanceEnd('getPageByHandle', [
                 'handle' => $handle,
@@ -127,12 +130,12 @@ class ContentService extends BaseService
                 throw new InvalidArgumentException("Invalid policy type: {$type}. Supported types: " . implode(', ', array_keys(self::POLICY_TYPE_MAP)));
             }
 
-            $policy = Cache::tags(['policy', $type])
-                ->remember(
-                    $this->cacheStrategy->getCacheKey('policy', ['type' => $type]),
-                    3600, // 1 hour
-                    fn() => $this->fetchPolicy($type)
-                );
+            $policy = $this->cacheWithFallback(
+                $this->cacheStrategy->getCacheKey('policy', ['type' => $type]),
+                3600, // 1 hour
+                fn() => $this->fetchPolicy($type),
+                ['policy', $type]
+            );
 
             $this->logPerformanceEnd('getPolicyByType', [
                 'type' => $type,
@@ -189,12 +192,12 @@ class ContentService extends BaseService
                 'cursor' => $cursor,
             ]);
 
-            $result = Cache::tags(['blogs'])
-                ->remember(
-                    $cacheKey,
-                    1800, // 30 minutes
-                    fn() => $this->fetchBlogs($limit, $cursor)
-                );
+            $result = $this->cacheWithFallback(
+                $cacheKey,
+                1800, // 30 minutes
+                fn() => $this->fetchBlogs($limit, $cursor),
+                ['blogs']
+            );
 
             $this->logPerformanceEnd('getBlogs', [
                 'limit' => $limit,
@@ -264,12 +267,12 @@ class ContentService extends BaseService
                 'cursor' => $cursor,
             ]);
 
-            $result = Cache::tags(['articles', $blogHandle])
-                ->remember(
-                    $cacheKey,
-                    1800, // 30 minutes
-                    fn() => $this->fetchArticles($blogHandle, $limit, $cursor)
-                );
+            $result = $this->cacheWithFallback(
+                $cacheKey,
+                1800, // 30 minutes
+                fn() => $this->fetchArticles($blogHandle, $limit, $cursor),
+                ['articles', $blogHandle]
+            );
 
             $this->logPerformanceEnd('getArticles', [
                 'blog_handle' => $blogHandle,
@@ -341,15 +344,15 @@ class ContentService extends BaseService
         try {
             $this->logPerformanceStart('getArticle');
 
-            $article = Cache::tags(['article', $blogHandle, $articleHandle])
-                ->remember(
-                    $this->cacheStrategy->getCacheKey('article', [
-                        'blog' => $blogHandle,
-                        'article' => $articleHandle,
-                    ]),
-                    1800, // 30 minutes
-                    fn() => $this->fetchArticle($blogHandle, $articleHandle)
-                );
+            $article = $this->cacheWithFallback(
+                $this->cacheStrategy->getCacheKey('article', [
+                    'blog' => $blogHandle,
+                    'article' => $articleHandle,
+                ]),
+                1800, // 30 minutes
+                fn() => $this->fetchArticle($blogHandle, $articleHandle),
+                ['article', $blogHandle, $articleHandle]
+            );
 
             $this->logPerformanceEnd('getArticle', [
                 'blog_handle' => $blogHandle,

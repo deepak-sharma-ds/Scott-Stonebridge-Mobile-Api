@@ -8,6 +8,7 @@ use App\Contracts\Shopify\ShopifyClientInterface;
 use App\Exceptions\ShopifyApiException;
 use App\Exceptions\ShopifyTimeoutException;
 use App\Facades\GraphQLLoader;
+use App\Traits\CacheWithFallback;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Exception\RequestException;
@@ -17,7 +18,7 @@ use Illuminate\Support\Str;
 
 abstract class BaseShopifyClient implements ShopifyClientInterface
 {
-    use HasRetryLogic, HasCircuitBreaker;
+    use HasRetryLogic, HasCircuitBreaker, CacheWithFallback;
 
     protected Client $httpClient;
     protected ?int $cacheTtl = null;
@@ -59,16 +60,35 @@ abstract class BaseShopifyClient implements ShopifyClientInterface
         // Check cache first if caching is enabled
         if ($this->cacheTtl !== null) {
             $cacheKey = $this->getCacheKey($queryPath, $variables);
-            $cached = Cache::tags($this->cacheTags)->get($cacheKey);
             
-            if ($cached !== null) {
-                Log::channel('shopify')->info('Cache hit', [
-                    'correlation_id' => $correlationId,
-                    'query_path' => $queryPath,
-                    'cache_key' => $cacheKey,
-                ]);
+            try {
+                // Try to get from cache with tags
+                $cached = !empty($this->cacheTags) 
+                    ? Cache::tags($this->cacheTags)->get($cacheKey)
+                    : Cache::get($cacheKey);
                 
-                return $cached;
+                if ($cached !== null) {
+                    Log::channel('shopify')->info('Cache hit', [
+                        'correlation_id' => $correlationId,
+                        'query_path' => $queryPath,
+                        'cache_key' => $cacheKey,
+                    ]);
+                    
+                    return $cached;
+                }
+            } catch (\BadMethodCallException $e) {
+                // Fallback to simple cache without tags
+                $cached = Cache::get($cacheKey);
+                
+                if ($cached !== null) {
+                    Log::channel('shopify')->info('Cache hit (fallback)', [
+                        'correlation_id' => $correlationId,
+                        'query_path' => $queryPath,
+                        'cache_key' => $cacheKey,
+                    ]);
+                    
+                    return $cached;
+                }
             }
         }
 
@@ -95,7 +115,18 @@ abstract class BaseShopifyClient implements ShopifyClientInterface
         // Cache response if caching is enabled
         if ($this->cacheTtl !== null && isset($response['data'])) {
             $cacheKey = $this->getCacheKey($queryPath, $variables);
-            Cache::tags($this->cacheTags)->put($cacheKey, $response, $this->cacheTtl);
+            
+            try {
+                // Try to cache with tags
+                if (!empty($this->cacheTags)) {
+                    Cache::tags($this->cacheTags)->put($cacheKey, $response, $this->cacheTtl);
+                } else {
+                    Cache::put($cacheKey, $response, $this->cacheTtl);
+                }
+            } catch (\BadMethodCallException $e) {
+                // Fallback to simple cache without tags
+                Cache::put($cacheKey, $response, $this->cacheTtl);
+            }
         }
 
         // Reset per-request configuration

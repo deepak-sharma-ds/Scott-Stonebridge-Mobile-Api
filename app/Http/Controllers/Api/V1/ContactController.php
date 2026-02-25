@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Contracts\Services\ContactServiceInterface;
 use App\Http\Controllers\Base\BaseApiController;
 use App\Http\Requests\Contact\ContactFormRequest;
-use App\Services\Shopify\ContactService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Log;
 
@@ -20,7 +20,7 @@ use Illuminate\Support\Facades\Log;
 class ContactController extends BaseApiController
 {
     public function __construct(
-        protected ContactService $contactService
+        protected ContactServiceInterface $contactService
     ) {}
 
     /**
