@@ -14,12 +14,12 @@ class AddToCartRequest extends BaseApiRequest
     public function rules(): array
     {
         return [
-            'cart_id' => ['required', 'string'],
-            'variant_id' => ['required', 'string'],
-            'quantity' => ['required', 'integer', 'min:1', 'max:999'],
-            'attributes' => ['sometimes', 'array'],
-            'attributes.*.key' => ['required_with:attributes', 'string', 'max:255'],
-            'attributes.*.value' => ['required_with:attributes', 'string', 'max:255'],
+            'lines' => ['required', 'array', 'min:1'],
+            'lines.*.merchandise_id' => ['required', 'string'],
+            'lines.*.quantity' => ['required', 'integer', 'min:1', 'max:999'],
+            'lines.*.attributes' => ['sometimes', 'array'],
+            'lines.*.attributes.*.key' => ['required_with:lines.*.attributes', 'string', 'max:255'],
+            'lines.*.attributes.*.value' => ['required_with:lines.*.attributes', 'string', 'max:255'],
         ];
     }
 
@@ -29,14 +29,14 @@ class AddToCartRequest extends BaseApiRequest
     public function messages(): array
     {
         return array_merge(parent::messages(), [
-            'cart_id.required' => 'The cart ID is required.',
-            'variant_id.required' => 'The variant ID is required.',
-            'quantity.required' => 'The quantity is required.',
-            'quantity.min' => 'Quantity must be at least 1.',
-            'quantity.max' => 'Quantity cannot exceed 999.',
-            'attributes.array' => 'The attributes must be a valid array.',
-            'attributes.*.key.required_with' => 'Each attribute must have a key.',
-            'attributes.*.value.required_with' => 'Each attribute must have a value.',
+            'lines.required' => 'At least one line item is required.',
+            'lines.array' => 'Lines must be an array.',
+            'lines.min' => 'At least one line item is required.',
+            'lines.*.merchandise_id.required' => 'Each line item must have a merchandise ID.',
+            'lines.*.quantity.required' => 'Each line item must have a quantity.',
+            'lines.*.quantity.min' => 'Quantity must be at least 1.',
+            'lines.*.quantity.max' => 'Quantity cannot exceed 999.',
+            'lines.*.attributes.array' => 'Line item attributes must be a valid array.',
         ]);
     }
 }

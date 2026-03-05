@@ -156,6 +156,61 @@ class CartService extends BaseService implements CartServiceInterface
             throw $e;
         }
     }
+    /**
+     * Add multiple line items to cart
+     *
+     * @param string $cartId Cart ID
+     * @param array $lines Array of line items with merchandise_id and quantity
+     * @return CartDTO
+     */
+    public function addLineItems(string $cartId, array $lines): CartDTO
+    {
+        try {
+            $this->logPerformanceStart('addLineItems');
+
+            // Transform lines to Shopify format
+            $shopifyLines = array_map(function ($line) {
+                return [
+                    'merchandiseId' => $line['merchandise_id'],
+                    'quantity' => $line['quantity'],
+                    'attributes' => $line['attributes'] ?? [],
+                ];
+            }, $lines);
+
+            $variables = [
+                'cartId' => $cartId,
+                'lines' => $shopifyLines,
+                'country' => $this->getCurrencyCountryCode(),
+            ];
+
+            $response = $this->storefrontClient->queryWithCurrency('storefront/cart/add_line_item', $variables);
+
+            if (!empty($response['data']['cartLinesAdd']['userErrors'])) {
+                $errors = $response['data']['cartLinesAdd']['userErrors'];
+                throw new ShopifyApiException('Failed to add line items: ' . json_encode($errors));
+            }
+
+            if (empty($response['data']['cartLinesAdd']['cart'])) {
+                throw new ShopifyApiException('Add line items returned empty response');
+            }
+
+            $cart = CartDTO::fromShopifyResponse($response['data']['cartLinesAdd']['cart']);
+
+            $this->logPerformanceEnd('addLineItems', [
+                'cart_id' => $cartId,
+                'lines_count' => count($lines),
+            ]);
+
+            return $cart;
+        } catch (\Exception $e) {
+            $this->logErrorWithException('Failed to add line items', $e, [
+                'cart_id' => $cartId,
+                'lines_count' => count($lines),
+            ]);
+            throw $e;
+        }
+    }
+
 
     /**
      * Update a line item quantity

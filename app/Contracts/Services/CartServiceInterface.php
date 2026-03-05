@@ -33,6 +33,15 @@ interface CartServiceInterface
     public function addLineItem(string $cartId, string $variantId, int $quantity): CartDTO;
 
     /**
+     * Add a line item to cart
+     *
+     * @param string $cartId Cart identifier
+     * @param array $lines Line items to add
+     * @return CartDTO
+     */
+    public function addLineItems(string $cartId, array $lines): CartDTO;
+
+    /**
      * Update a line item quantity
      *
      * @param string $cartId Cart identifier

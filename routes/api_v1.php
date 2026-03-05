@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CartController;
@@ -109,7 +109,7 @@ Route::prefix('v1')->middleware([
         Route::get('/{cartId}', [CartController::class, 'show'])
             ->where('cartId', '.*')
             ->name('api.v1.cart.show');
-        Route::post('/{cartId}/items', [CartController::class, 'addItem'])
+        Route::post('/items', [CartController::class, 'addItem'])
             ->where('cartId', '.*')
             ->name('api.v1.cart.addItem');
         Route::put('/{cartId}/items/{lineId}', [CartController::class, 'updateItem'])
@@ -177,6 +177,17 @@ Route::prefix('v1')->middleware([
     Route::prefix('shop')->group(function () {
         Route::get('/currencies', [ShopController::class, 'currencies'])->name('api.v1.shop.currencies');
         Route::get('/markets', [ShopController::class, 'markets'])->name('api.v1.shop.markets');
+    });
+    
+    /**
+     * Theme Routes (Public - Guest Friendly)
+     * 
+     * GET /api/v1/theme/templates - Get available theme templates
+     * GET /api/v1/theme/templates/{name} - Get specific template by name
+     */
+    Route::prefix('theme')->group(function () {
+        Route::get('/templates', [\App\Http\Controllers\Api\V1\ThemeController::class, 'index'])->name('api.v1.theme.templates.index');
+        Route::get('/templates/{name}', [\App\Http\Controllers\Api\V1\ThemeController::class, 'show'])->name('api.v1.theme.templates.show');
     });
     
     /**

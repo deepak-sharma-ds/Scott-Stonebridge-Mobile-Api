@@ -4,6 +4,10 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Contracts\Services\CartServiceInterface;
 use App\Http\Controllers\Base\BaseApiController;
+use App\Http\Requests\Cart\AddToCartRequest;
+use App\Http\Requests\Cart\CreateCartRequest;
+use App\Http\Requests\Cart\UpdateBuyerIdentityRequest;
+use App\Http\Requests\Cart\UpdateCartRequest;
 use App\Http\Resources\Cart\CartResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -26,10 +30,10 @@ class CartController extends BaseApiController
     /**
      * Create a new cart
      * 
-     * @param Request $request
+     * @param CreateCartRequest $request
      * @return JsonResponse
      */
-    public function store(Request $request): JsonResponse
+    public function store(CreateCartRequest $request): JsonResponse
     {
         try {
             $accessToken = $request->input('access_token');
@@ -86,31 +90,16 @@ class CartController extends BaseApiController
     /**
      * Add item to cart
      * 
-     * @param string $cartId
-     * @param Request $request
+     * @param AddToCartRequest $request
      * @return JsonResponse
      */
-    public function addItem(string $cartId, Request $request): JsonResponse
+    public function addItem(AddToCartRequest $request): JsonResponse
     {
         try {
-            $variantId = $request->input('variant_id');
-            $quantity = (int) $request->input('quantity', 1);
+            $cartId = $request->input('cart_id');
+            $lines = $request->input('lines');
 
-            if (empty($variantId)) {
-                return $this->validationError(
-                    'Validation failed',
-                    ['variant_id' => ['The variant_id field is required']]
-                );
-            }
-
-            if ($quantity < 1) {
-                return $this->validationError(
-                    'Validation failed',
-                    ['quantity' => ['The quantity must be at least 1']]
-                );
-            }
-
-            $cart = $this->cartService->addLineItem($cartId, $variantId, $quantity);
+            $cart = $this->cartService->addLineItems($cartId, $lines);
 
             return $this->success(
                 'Item added to cart successfully',
@@ -142,10 +131,10 @@ class CartController extends BaseApiController
      * 
      * @param string $cartId
      * @param string $lineId
-     * @param Request $request
+     * @param UpdateCartRequest $request
      * @return JsonResponse
      */
-    public function updateItem(string $cartId, string $lineId, Request $request): JsonResponse
+    public function updateItem(string $cartId, string $lineId, UpdateCartRequest $request): JsonResponse
     {
         try {
             $quantity = (int) $request->input('quantity', 1);
@@ -225,10 +214,10 @@ class CartController extends BaseApiController
      * Update cart buyer identity
      * 
      * @param string $cartId
-     * @param \App\Http\Requests\Cart\UpdateBuyerIdentityRequest $request
+     * @param UpdateBuyerIdentityRequest $request
      * @return JsonResponse
      */
-    public function updateBuyerIdentity(string $cartId, \App\Http\Requests\Cart\UpdateBuyerIdentityRequest $request): JsonResponse
+    public function updateBuyerIdentity(string $cartId, UpdateBuyerIdentityRequest $request): JsonResponse
     {
         try {
             $email = $request->validated('email');
