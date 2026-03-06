@@ -27,6 +27,11 @@ mutation addLineItem(
                   currencyCode
                 }
 
+                compareAtPrice {
+                  amount
+                  currencyCode
+                }
+
                 image {
                   url
                   altText

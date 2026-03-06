@@ -23,6 +23,11 @@ query getCart($cartId: ID!, $country: CountryCode)
                 currencyCode
               }
 
+              compareAtPrice {
+                amount
+                currencyCode
+              }
+
               image {
                 url
                 altText

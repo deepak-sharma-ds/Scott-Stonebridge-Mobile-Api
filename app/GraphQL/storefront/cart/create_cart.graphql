@@ -22,6 +22,10 @@ mutation createCart($input: CartInput!, $country: CountryCode)
                   amount
                   currencyCode
                 }
+                compareAtPrice {
+                  amount
+                  currencyCode
+                }
                 image {
                   url
                   altText

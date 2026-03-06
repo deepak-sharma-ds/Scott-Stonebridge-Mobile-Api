@@ -22,6 +22,7 @@ class CartLineItemDTO extends BaseDTO
         public readonly string $title,
         public readonly int $quantity,
         public readonly array $price,
+        public readonly ?array $compareAtPrice,
         public readonly ?string $image,
         public readonly array $attributes,
     ) {
@@ -60,11 +61,15 @@ class CartLineItemDTO extends BaseDTO
             id: $data['id'],
             variantId: $merchandise['id'] ?? '',
             productId: $product['id'] ?? '',
-            title: $merchandise['title'] ?? $product['title'] ?? '',
+            title: $product['title'] ?? $merchandise['title'] ?? '',
             quantity: $data['quantity'] ?? 1,
             price: [
                 'amount' => $merchandise['price']['amount'] ?? $data['price']['amount'] ?? '0.00',
                 'currency' => $merchandise['price']['currencyCode'] ?? $data['price']['currencyCode'] ?? 'GBP',
+            ],
+            compareAtPrice: [
+                'amount' => $merchandise['compareAtPrice']['amount'] ?? null,
+                'currency' => $merchandise['compareAtPrice']['currencyCode'] ?? null,
             ],
             image: $merchandise['image']['url'] ?? $product['featuredImage']['url'] ?? null,
             attributes: $data['attributes'] ?? [],

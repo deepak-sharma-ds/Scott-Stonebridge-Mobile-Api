@@ -8,6 +8,7 @@ use App\DTOs\Cart\CartDTO;
 use App\Services\Base\BaseService;
 use App\Exceptions\ShopifyApiException;
 use App\Exceptions\ShopifyNotFoundException;
+use Illuminate\Support\Facades\Log;
 
 class CartService extends BaseService implements CartServiceInterface
 {
@@ -174,12 +175,12 @@ class CartService extends BaseService implements CartServiceInterface
                     'merchandiseId' => $line['merchandise_id'],
                     'quantity' => (int) $line['quantity'], // Ensure quantity is an integer
                 ];
-                
+
                 // Only add attributes if they exist and are not empty
                 if (!empty($line['attributes'])) {
                     $lineItem['attributes'] = $line['attributes'];
                 }
-                
+
                 return $lineItem;
             }, $lines);
 
@@ -190,7 +191,7 @@ class CartService extends BaseService implements CartServiceInterface
             ];
 
             // Debug: Log what we're sending
-            \Log::info('CartService addLineItems - Variables being sent:', [
+            Log::info('CartService addLineItems - Variables being sent:', [
                 'variables' => $variables,
                 'shopifyLines' => $shopifyLines,
                 'original_lines' => $lines,
@@ -199,7 +200,7 @@ class CartService extends BaseService implements CartServiceInterface
             $response = $this->storefrontClient->queryWithCurrency('storefront/cart/add_line_item', $variables);
 
             // Debug: Log the response
-            \Log::info('CartService addLineItems - Response received:', [
+            Log::info('CartService addLineItems - Response received:', [
                 'response' => $response,
             ]);
 

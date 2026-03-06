@@ -50,13 +50,14 @@ class CartDTO extends BaseDTO
     {
         // Handle both edge/node structure and flat array structure for line items
         $lines = $data['lines']['edges'] ?? $data['lines'] ?? [];
+        $lineItems = array_map(
+            fn($item) => CartLineItemDTO::fromShopifyResponse($item['node'] ?? $item),
+            $lines
+        );
 
         return new self(
             id: $data['id'],
-            lineItems: array_map(
-                fn($item) => CartLineItemDTO::fromShopifyResponse($item['node'] ?? $item),
-                $lines
-            ),
+            lineItems: $lineItems,
             checkoutUrl: $data['checkoutUrl'] ?? '',
             cost: [
                 'subtotal' => $data['cost']['subtotalAmount']['amount'] ?? '0.00',

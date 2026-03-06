@@ -27,6 +27,11 @@ mutation associateCustomer(
                   currencyCode
                 }
 
+                compareAtPrice {
+                  amount
+                  currencyCode
+                }
+
                 image {
                   url
                   altText

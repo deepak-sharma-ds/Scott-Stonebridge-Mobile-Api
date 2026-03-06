@@ -24,6 +24,11 @@ mutation removeLineItem($cartId: ID!, $lineIds: [ID!]!, $country: CountryCode)
                   currencyCode
                 }
 
+                compareAtPrice {
+                  amount
+                  currencyCode
+                }
+
                 image {
                   url
                   altText

@@ -29,8 +29,8 @@ class CartLineItemResource extends BaseApiResource
             'product_id' => $this->productId,
             'title' => $this->title,
             'quantity' => $this->quantity,
-            'price' => $this->price['amount'],
-            'currency' => $this->price['currency'],
+            'price' => ['amount' => $this->price['amount'], 'currency' => $this->price['currency']],
+            'compare_at_price' => $this->compareAtPrice ? ['amount' => $this->compareAtPrice['amount'], 'currency' => $this->compareAtPrice['currency']] : null,
             'image' => $this->image,
             'attributes' => $this->attributes,
         ];
