@@ -95,29 +95,19 @@ Route::prefix('v1')->middleware([
      * 
      * POST /api/v1/cart - Create a new cart
      * GET /api/v1/cart/{cartId} - Get cart details
-     * POST /api/v1/cart/{cartId}/items - Add item to cart
-     * PUT /api/v1/cart/{cartId}/items/{lineId} - Update cart item
-     * DELETE /api/v1/cart/{cartId}/items/{lineId} - Remove cart item
+     * POST /api/v1/cart/items/add - Add item to cart (cartId in body)
+     * PUT /api/v1/cart/items/update - Update cart item (cartId and lineId in body)
+     * DELETE /api/v1/cart/items/remove - Remove cart item (cartId and lineId in body)
      * PUT /api/v1/cart/{cartId}/buyer - Update buyer identity (authenticated)
-     * 
-     * Note: Shopify IDs contain special characters (gid://shopify/Cart/...) 
-     * The routes accept URL-encoded IDs automatically.
-     * Example: gid://shopify/Cart/abc123 should be sent as gid%3A%2F%2Fshopify%2FCart%2Fabc123
      */
     Route::prefix('cart')->group(function () {
         Route::post('/', [CartController::class, 'store'])->name('api.v1.cart.store');
         Route::get('/{cartId}', [CartController::class, 'show'])
             ->where('cartId', '.*')
             ->name('api.v1.cart.show');
-        Route::post('/items', [CartController::class, 'addItem'])
-            ->where('cartId', '.*')
-            ->name('api.v1.cart.addItem');
-        Route::put('/{cartId}/items/{lineId}', [CartController::class, 'updateItem'])
-            ->where(['cartId' => '.*', 'lineId' => '.*'])
-            ->name('api.v1.cart.updateItem');
-        Route::delete('/{cartId}/items/{lineId}', [CartController::class, 'removeItem'])
-            ->where(['cartId' => '.*', 'lineId' => '.*'])
-            ->name('api.v1.cart.removeItem');
+        Route::post('/items/add', [CartController::class, 'addItem'])->name('api.v1.cart.addItem');
+        Route::put('/items/update', [CartController::class, 'updateItem'])->name('api.v1.cart.updateItem');
+        Route::delete('/items/remove', [CartController::class, 'removeItem'])->name('api.v1.cart.removeItem');
         
         // Protected cart routes
         Route::middleware(['shopify.auth'])->group(function () {
@@ -182,12 +172,12 @@ Route::prefix('v1')->middleware([
     /**
      * Theme Routes (Public - Guest Friendly)
      * 
-     * GET /api/v1/theme/templates - Get available theme templates
-     * GET /api/v1/theme/templates/{name} - Get specific template by name
+     * GET /api/v1/theme/templates/{handle} - Get specific template by handle
+     * GET /api/v1/theme/templates/by-type - Get template by type and optional suffix
      */
     Route::prefix('theme')->group(function () {
-        Route::get('/templates', [\App\Http\Controllers\Api\V1\ThemeController::class, 'index'])->name('api.v1.theme.templates.index');
-        Route::get('/templates/{name}', [\App\Http\Controllers\Api\V1\ThemeController::class, 'show'])->name('api.v1.theme.templates.show');
+        Route::get('/templates/{handle}', [\App\Http\Controllers\Api\V1\ThemeController::class, 'show'])->name('api.v1.theme.templates.show');
+        Route::get('/templates/by-type', [\App\Http\Controllers\Api\V1\ThemeController::class, 'getByType'])->name('api.v1.theme.templates.by-type');
     });
     
     /**

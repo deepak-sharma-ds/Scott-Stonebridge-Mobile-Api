@@ -129,15 +129,29 @@ class CartController extends BaseApiController
     /**
      * Update cart item quantity
      * 
-     * @param string $cartId
-     * @param string $lineId
      * @param UpdateCartRequest $request
      * @return JsonResponse
      */
-    public function updateItem(string $cartId, string $lineId, UpdateCartRequest $request): JsonResponse
+    public function updateItem(UpdateCartRequest $request): JsonResponse
     {
         try {
+            $cartId = $request->input('cart_id');
+            $lineId = $request->input('line_id');
             $quantity = (int) $request->input('quantity', 1);
+
+            if (empty($cartId)) {
+                return $this->validationError(
+                    'Validation failed',
+                    ['cart_id' => ['The cart_id field is required']]
+                );
+            }
+
+            if (empty($lineId)) {
+                return $this->validationError(
+                    'Validation failed',
+                    ['line_id' => ['The line_id field is required']]
+                );
+            }
 
             if ($quantity < 0) {
                 return $this->validationError(
@@ -176,13 +190,29 @@ class CartController extends BaseApiController
     /**
      * Remove item from cart
      * 
-     * @param string $cartId
-     * @param string $lineId
+     * @param Request $request
      * @return JsonResponse
      */
-    public function removeItem(string $cartId, string $lineId): JsonResponse
+    public function removeItem(Request $request): JsonResponse
     {
         try {
+            $cartId = $request->input('cart_id');
+            $lineId = $request->input('line_id');
+
+            if (empty($cartId)) {
+                return $this->validationError(
+                    'Validation failed',
+                    ['cart_id' => ['The cart_id field is required']]
+                );
+            }
+
+            if (empty($lineId)) {
+                return $this->validationError(
+                    'Validation failed',
+                    ['line_id' => ['The line_id field is required']]
+                );
+            }
+
             $cart = $this->cartService->removeLineItem($cartId, $lineId);
 
             return $this->success(

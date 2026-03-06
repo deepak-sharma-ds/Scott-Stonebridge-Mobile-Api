@@ -14,6 +14,8 @@ use Illuminate\Support\Facades\Log;
  * 
  * Handles Shopify theme template endpoints for mobile app rendering.
  * Provides public access to theme templates for dynamic content display.
+ * 
+ * Uses Shopify Admin API to fetch theme template assets from Online Store 2.0.
  * Extends BaseApiController for standardized responses.
  */
 class ThemeController extends BaseApiController
@@ -23,50 +25,12 @@ class ThemeController extends BaseApiController
     ) {}
 
     /**
-     * List theme templates
-     * 
-     * Returns a paginated list of theme templates.
-     * Public endpoint - no authentication required.
-     * 
-     * @param Request $request
-     * @return JsonResponse
-     */
-    public function index(Request $request): JsonResponse
-    {
-        try {
-            $limit = $request->integer('limit', 10);
-            $cursor = $request->string('cursor')->toString();
-
-            $templates = $this->themeService->getTemplates($limit, $cursor ?: null);
-
-            return $this->successWithPagination(
-                'Theme templates retrieved successfully',
-                ThemeTemplateResource::collection($templates['items']),
-                $templates['pagination']
-            );
-        } catch (\Exception $e) {
-            Log::error('Failed to fetch theme templates', [
-                'correlation_id' => $this->getCorrelationId(),
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-
-            return $this->error(
-                'Failed to fetch theme templates',
-                ['error' => $e->getMessage()],
-                [],
-                500
-            );
-        }
-    }
-
-    /**
      * Get theme template by handle
      * 
      * Returns a specific theme template by its handle.
      * Public endpoint - no authentication required.
      * 
-     * @param string $handle
+     * @param string $handle Template handle (e.g., "page", "page.about", "product.custom")
      * @return JsonResponse
      */
     public function show(string $handle): JsonResponse
@@ -105,7 +69,7 @@ class ThemeController extends BaseApiController
     /**
      * Get theme template by type
      * 
-     * Returns a theme template by type and optional resource handle.
+     * Returns a theme template by type and optional suffix.
      * Useful for determining which template to use for a specific resource.
      * Public endpoint - no authentication required.
      * 
@@ -116,7 +80,7 @@ class ThemeController extends BaseApiController
     {
         try {
             $type = $request->input('type');
-            $resourceHandle = $request->input('resource_handle');
+            $suffix = $request->input('suffix');
 
             if (empty($type)) {
                 return $this->validationError(
@@ -125,7 +89,7 @@ class ThemeController extends BaseApiController
                 );
             }
 
-            $template = $this->themeService->getTemplateByType($type, $resourceHandle);
+            $template = $this->themeService->getTemplateByType($type, $suffix);
 
             return $this->success(
                 'Theme template retrieved successfully',
@@ -147,7 +111,7 @@ class ThemeController extends BaseApiController
             Log::info('Theme template not found', [
                 'correlation_id' => $this->getCorrelationId(),
                 'type' => $request->input('type'),
-                'resource_handle' => $request->input('resource_handle'),
+                'suffix' => $request->input('suffix'),
             ]);
 
             return $this->notFound('Theme template not found');
@@ -155,7 +119,7 @@ class ThemeController extends BaseApiController
             Log::error('Failed to fetch theme template by type', [
                 'correlation_id' => $this->getCorrelationId(),
                 'type' => $request->input('type'),
-                'resource_handle' => $request->input('resource_handle'),
+                'suffix' => $request->input('suffix'),
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);

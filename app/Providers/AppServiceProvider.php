@@ -84,7 +84,7 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->bind(
             \App\Contracts\Services\ThemeServiceInterface::class,
-            \App\Services\Shopify\ThemeService::class
+            \App\Services\Shopify\ThemeTemplateService::class
         );
 
         // Register Cache Strategy interface

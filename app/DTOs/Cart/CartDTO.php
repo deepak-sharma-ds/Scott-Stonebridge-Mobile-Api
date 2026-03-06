@@ -50,7 +50,7 @@ class CartDTO extends BaseDTO
     {
         // Handle both edge/node structure and flat array structure for line items
         $lines = $data['lines']['edges'] ?? $data['lines'] ?? [];
-        
+
         return new self(
             id: $data['id'],
             lineItems: array_map(

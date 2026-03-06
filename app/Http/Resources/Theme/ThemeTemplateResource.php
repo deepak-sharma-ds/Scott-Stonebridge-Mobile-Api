@@ -29,6 +29,7 @@ class ThemeTemplateResource extends BaseApiResource
             'suffix' => $this->suffix,
             'sections' => $this->sections,
             'settings' => $this->settings,
+            'order' => $this->order,
             'metadata' => $this->metadata,
             'created_at' => $this->createdAt,
             'updated_at' => $this->updatedAt,

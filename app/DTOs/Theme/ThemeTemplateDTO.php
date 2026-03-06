@@ -19,8 +19,9 @@ class ThemeTemplateDTO extends BaseDTO
         public readonly string $type,
         public readonly string $name,
         public readonly ?string $suffix,
-        public readonly ?array $sections,
-        public readonly ?array $settings,
+        public readonly array $sections,
+        public readonly array $settings,
+        public readonly ?array $order,
         public readonly ?array $metadata,
         public readonly string $createdAt,
         public readonly string $updatedAt,
@@ -44,7 +45,7 @@ class ThemeTemplateDTO extends BaseDTO
     /**
      * Create a ThemeTemplateDTO from Shopify API response data.
      * 
-     * @param array $data Raw template data from Shopify GraphQL response
+     * @param array $data Raw template data from Shopify Admin API response
      * @return self
      */
     public static function fromShopifyResponse(array $data): self
@@ -55,8 +56,9 @@ class ThemeTemplateDTO extends BaseDTO
             type: $data['type'] ?? 'default',
             name: $data['name'] ?? $data['handle'],
             suffix: $data['suffix'] ?? null,
-            sections: $data['sections'] ?? null,
-            settings: $data['settings'] ?? null,
+            sections: $data['sections'] ?? [],
+            settings: $data['settings'] ?? [],
+            order: $data['order'] ?? null,
             metadata: $data['metadata'] ?? null,
             createdAt: $data['createdAt'] ?? now()->toIso8601String(),
             updatedAt: $data['updatedAt'] ?? now()->toIso8601String(),

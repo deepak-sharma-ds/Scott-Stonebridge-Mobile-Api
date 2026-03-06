@@ -29,7 +29,7 @@ class CartService extends BaseService implements CartServiceInterface
             $this->logPerformanceStart('createCart');
 
             $input = [];
-            
+
             if ($accessToken) {
                 $input['buyerIdentity'] = [
                     'customerAccessToken' => $accessToken,
@@ -170,11 +170,17 @@ class CartService extends BaseService implements CartServiceInterface
 
             // Transform lines to Shopify format
             $shopifyLines = array_map(function ($line) {
-                return [
+                $lineItem = [
                     'merchandiseId' => $line['merchandise_id'],
-                    'quantity' => $line['quantity'],
-                    'attributes' => $line['attributes'] ?? [],
+                    'quantity' => (int) $line['quantity'], // Ensure quantity is an integer
                 ];
+                
+                // Only add attributes if they exist and are not empty
+                if (!empty($line['attributes'])) {
+                    $lineItem['attributes'] = $line['attributes'];
+                }
+                
+                return $lineItem;
             }, $lines);
 
             $variables = [
@@ -183,7 +189,19 @@ class CartService extends BaseService implements CartServiceInterface
                 'country' => $this->getCurrencyCountryCode(),
             ];
 
+            // Debug: Log what we're sending
+            \Log::info('CartService addLineItems - Variables being sent:', [
+                'variables' => $variables,
+                'shopifyLines' => $shopifyLines,
+                'original_lines' => $lines,
+            ]);
+
             $response = $this->storefrontClient->queryWithCurrency('storefront/cart/add_line_item', $variables);
+
+            // Debug: Log the response
+            \Log::info('CartService addLineItems - Response received:', [
+                'response' => $response,
+            ]);
 
             if (!empty($response['data']['cartLinesAdd']['userErrors'])) {
                 $errors = $response['data']['cartLinesAdd']['userErrors'];
@@ -230,7 +248,7 @@ class CartService extends BaseService implements CartServiceInterface
                 'lines' => [
                     [
                         'id' => $lineId,
-                        'quantity' => $quantity,
+                        'quantity' => (int) $quantity, // Ensure quantity is an integer
                     ],
                 ],
                 'country' => $this->getCurrencyCountryCode(),

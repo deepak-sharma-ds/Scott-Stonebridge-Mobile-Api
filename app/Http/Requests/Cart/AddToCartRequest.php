@@ -14,6 +14,7 @@ class AddToCartRequest extends BaseApiRequest
     public function rules(): array
     {
         return [
+            'cart_id' => ['required', 'string'],
             'lines' => ['required', 'array', 'min:1'],
             'lines.*.merchandise_id' => ['required', 'string'],
             'lines.*.quantity' => ['required', 'integer', 'min:1', 'max:999'],
@@ -29,6 +30,7 @@ class AddToCartRequest extends BaseApiRequest
     public function messages(): array
     {
         return array_merge(parent::messages(), [
+            'cart_id.required' => 'The cart ID is required.',
             'lines.required' => 'At least one line item is required.',
             'lines.array' => 'Lines must be an array.',
             'lines.min' => 'At least one line item is required.',

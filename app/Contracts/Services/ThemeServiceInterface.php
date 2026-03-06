@@ -9,32 +9,25 @@ use App\DTOs\Theme\ThemeTemplateDTO;
  * 
  * Defines the contract for Shopify theme template operations.
  * Provides access to theme templates for rendering dynamic content.
+ * 
+ * Uses Shopify Admin API to fetch theme template assets from Online Store 2.0.
  */
 interface ThemeServiceInterface
 {
     /**
-     * Get theme templates with pagination
-     * 
-     * @param int $limit Number of templates to retrieve
-     * @param string|null $cursor Pagination cursor
-     * @return array ['items' => ThemeTemplateDTO[], 'pagination' => array]
-     */
-    public function getTemplates(int $limit = 10, ?string $cursor = null): array;
-
-    /**
      * Get a single theme template by handle
      * 
-     * @param string $handle Template handle
+     * @param string $handle Template handle (e.g., "page", "page.about", "product.custom")
      * @return ThemeTemplateDTO
      */
     public function getTemplateByHandle(string $handle): ThemeTemplateDTO;
 
     /**
-     * Get template by type and resource
+     * Get template by type and optional suffix
      * 
      * @param string $type Template type (product, collection, page, article, etc.)
-     * @param string|null $resourceHandle Optional resource handle for specific templates
+     * @param string|null $suffix Optional template suffix for alternate templates
      * @return ThemeTemplateDTO
      */
-    public function getTemplateByType(string $type, ?string $resourceHandle = null): ThemeTemplateDTO;
+    public function getTemplateByType(string $type, ?string $suffix = null): ThemeTemplateDTO;
 }
