@@ -31,6 +31,7 @@ class CustomerResource extends BaseApiResource
             'full_name' => $this->getFullName(),
             'phone' => $this->phone,
             'addresses' => AddressResource::collection($this->addresses),
+            'default_address_id' => $this->defaultAddressId,
             'tags' => $this->tags,
             'accepts_marketing' => $this->acceptsMarketing,
             'has_addresses' => $this->hasAddresses(),

@@ -8,6 +8,9 @@ query getCustomerProfile($customerAccessToken: String!) {
     acceptsMarketing
     createdAt
     tags
+    defaultAddress {
+      id
+    }
 
     addresses(first: 250) {
       edges {

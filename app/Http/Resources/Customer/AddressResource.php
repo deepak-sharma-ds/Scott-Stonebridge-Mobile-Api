@@ -35,6 +35,7 @@ class AddressResource extends BaseApiResource
             'first_name' => $this->firstName,
             'last_name' => $this->lastName,
             'company' => $this->company,
+            'is_default' => $this->isDefault,
         ];
     }
 }

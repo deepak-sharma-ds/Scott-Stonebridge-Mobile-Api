@@ -156,12 +156,18 @@ class ProfileService extends BaseService implements ProfileServiceInterface
                 throw new ShopifyApiException('Add address returned empty response');
             }
 
+            $createdAddressId = $response['data']['customerAddressCreate']['address']['id'] ?? null;
+
+            if (($data['is_default'] ?? false) && $createdAddressId !== null) {
+                $this->setDefaultAddress($customerId, $createdAddressId);
+            }
+
             // Fetch updated profile to get complete data
             $profile = $this->getProfile($accessToken);
 
             $this->logPerformanceEnd('addAddress', [
                 'customer_id' => $customerId,
-                'address_id' => $response['data']['customerAddressCreate']['address']['id'] ?? null,
+                'address_id' => $createdAddressId,
             ]);
 
             return $profile;
@@ -191,6 +197,7 @@ class ProfileService extends BaseService implements ProfileServiceInterface
             $variables = [
                 'id' => $addressId,
                 'address' => $this->formatAddressInput($data),
+                'setAsDefault' => ($data['is_default'] ?? false) ? true : null,
             ];
 
             $response = $this->adminClient->query('admin/customer/customer_address_update', $variables);
@@ -313,5 +320,31 @@ class ProfileService extends BaseService implements ProfileServiceInterface
             'firstName' => $data['first_name'] ?? null,
             'lastName' => $data['last_name'] ?? null,
         ];
+    }
+
+    /**
+     * Set the customer's default address.
+     *
+     * Shopify handles default-address selection as a dedicated mutation for
+     * newly created addresses and as an optional argument for updates.
+     *
+     * @param string $customerId
+     * @param string $addressId
+     * @return void
+     * @throws ShopifyApiException
+     */
+    private function setDefaultAddress(string $customerId, string $addressId): void
+    {
+        $response = $this->adminClient->query('admin/customer/customer_update_default_address', [
+            'customerId' => $customerId,
+            'addressId' => $addressId,
+        ]);
+
+        if (!empty($response['data']['customerUpdateDefaultAddress']['userErrors'])) {
+            $errors = $response['data']['customerUpdateDefaultAddress']['userErrors'];
+            $errorMessage = 'Failed to set default address: ' . json_encode($errors);
+            $this->logError($errorMessage, ['errors' => $errors, 'address_id' => $addressId]);
+            throw new ShopifyApiException($errorMessage);
+        }
     }
 }

@@ -24,6 +24,7 @@ class ProfileDTO extends BaseDTO
         public readonly ?string $lastName,
         public readonly ?string $phone,
         public readonly array $addresses,
+        public readonly ?string $defaultAddressId,
         public readonly bool $acceptsMarketing,
         public readonly string $createdAt,
     ) {
@@ -55,6 +56,7 @@ class ProfileDTO extends BaseDTO
     {
         // Handle both edge/node structure and flat array structure for addresses
         $addresses = $data['addresses']['edges'] ?? $data['addresses'] ?? [];
+        $defaultAddressId = $data['defaultAddress']['id'] ?? null;
         
         return new self(
             id: $data['id'],
@@ -63,9 +65,13 @@ class ProfileDTO extends BaseDTO
             lastName: $data['lastName'] ?? null,
             phone: $data['phone'] ?? null,
             addresses: array_map(
-                fn($addr) => AddressDTO::fromShopifyResponse($addr['node'] ?? $addr),
+                fn($addr) => AddressDTO::fromShopifyResponse(array_merge(
+                    $addr['node'] ?? $addr,
+                    ['isDefault' => (($addr['node']['id'] ?? $addr['id'] ?? null) === $defaultAddressId)]
+                )),
                 $addresses
             ),
+            defaultAddressId: $defaultAddressId,
             acceptsMarketing: $data['acceptsMarketing'] ?? false,
             createdAt: $data['createdAt'],
         );
@@ -89,6 +95,7 @@ class ProfileDTO extends BaseDTO
             lastName: $customer->lastName,
             phone: $customer->phone,
             addresses: $customer->addresses,
+            defaultAddressId: $customer->defaultAddressId,
             acceptsMarketing: $customer->acceptsMarketing,
             createdAt: $customer->createdAt,
         );

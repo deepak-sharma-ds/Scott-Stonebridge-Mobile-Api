@@ -1,0 +1,14 @@
+mutation customerUpdateDefaultAddress($customerId: ID!, $addressId: ID!) {
+  customerUpdateDefaultAddress(customerId: $customerId, addressId: $addressId) {
+    customer {
+      id
+      defaultAddress {
+        id
+      }
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}

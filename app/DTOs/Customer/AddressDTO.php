@@ -27,6 +27,7 @@ class AddressDTO extends BaseDTO
         public readonly ?string $firstName,
         public readonly ?string $lastName,
         public readonly ?string $company,
+        public readonly bool $isDefault,
     ) {
         $this->validate();
     }
@@ -68,6 +69,7 @@ class AddressDTO extends BaseDTO
             firstName: $addressData['firstName'] ?? null,
             lastName: $addressData['lastName'] ?? null,
             company: $addressData['company'] ?? null,
+            isDefault: (bool) ($addressData['isDefault'] ?? false),
         );
     }
 }

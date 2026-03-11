@@ -23,6 +23,7 @@ class AddAddressRequest extends BaseApiRequest
             'phone' => ['sometimes', 'nullable', 'string', 'regex:/^\+?[1-9]\d{1,14}$/'],
             'first_name' => ['sometimes', 'nullable', 'string', 'max:255'],
             'last_name' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'is_default' => ['sometimes', 'boolean'],
         ];
     }
 
@@ -45,6 +46,7 @@ class AddAddressRequest extends BaseApiRequest
             'phone.regex' => 'Please provide a valid phone number in international format (e.g., +1234567890).',
             'first_name.max' => 'The first name cannot exceed 255 characters.',
             'last_name.max' => 'The last name cannot exceed 255 characters.',
+            'is_default.boolean' => 'The default address flag must be true or false.',
         ]);
     }
 }

@@ -1,10 +1,12 @@
 mutation customerAddressUpdate(
   $id: ID!,
-  $address: MailingAddressInput!
+  $address: MailingAddressInput!,
+  $setAsDefault: Boolean
 ) {
   customerAddressUpdate(
     id: $id,
-    address: $address
+    address: $address,
+    setAsDefault: $setAsDefault
   ) {
     address {
       id

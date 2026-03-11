@@ -30,6 +30,7 @@ class ProfileResource extends BaseApiResource
             'last_name' => $this->lastName,
             'phone' => $this->phone,
             'addresses' => AddressResource::collection($this->addresses),
+            'default_address_id' => $this->defaultAddressId,
             'accepts_marketing' => $this->acceptsMarketing,
             'created_at' => $this->createdAt,
         ];
