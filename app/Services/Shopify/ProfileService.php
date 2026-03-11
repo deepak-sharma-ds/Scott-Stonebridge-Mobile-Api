@@ -152,7 +152,7 @@ class ProfileService extends BaseService implements ProfileServiceInterface
                 throw new ShopifyApiException($errorMessage);
             }
 
-            if (empty($response['data']['customerAddressCreate']['customerAddress'])) {
+            if (empty($response['data']['customerAddressCreate']['address'])) {
                 throw new ShopifyApiException('Add address returned empty response');
             }
 
@@ -161,7 +161,7 @@ class ProfileService extends BaseService implements ProfileServiceInterface
 
             $this->logPerformanceEnd('addAddress', [
                 'customer_id' => $customerId,
-                'address_id' => $response['data']['customerAddressCreate']['customerAddress']['id'] ?? null,
+                'address_id' => $response['data']['customerAddressCreate']['address']['id'] ?? null,
             ]);
 
             return $profile;
@@ -203,7 +203,7 @@ class ProfileService extends BaseService implements ProfileServiceInterface
                 throw new ShopifyApiException($errorMessage);
             }
 
-            if (empty($response['data']['customerAddressUpdate']['customerAddress'])) {
+            if (empty($response['data']['customerAddressUpdate']['address'])) {
                 throw new ShopifyApiException('Update address returned empty response');
             }
 

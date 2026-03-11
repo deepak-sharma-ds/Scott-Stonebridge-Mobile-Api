@@ -6,7 +6,7 @@ mutation customerAddressUpdate(
     id: $id,
     address: $address
   ) {
-    customerAddress {
+    address {
       id
       firstName
       lastName

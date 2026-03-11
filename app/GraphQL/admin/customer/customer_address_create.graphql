@@ -6,7 +6,7 @@ mutation customerAddressCreate(
     customerId: $customerId,
     address: $address
   ) {
-    customerAddress {
+    address {
       id
       firstName
       lastName
