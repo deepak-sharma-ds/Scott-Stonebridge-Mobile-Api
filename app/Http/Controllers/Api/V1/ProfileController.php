@@ -212,18 +212,29 @@ class ProfileController extends BaseApiController
      * Update existing address
      * 
      * Updates an existing address for the authenticated customer.
+     * Address ID is provided in the request body.
      * 
      * @param UpdateAddressRequest $request
-     * @param string $addressId
      * @return JsonResponse
      */
-    public function updateAddress(UpdateAddressRequest $request, string $addressId): JsonResponse
+    public function updateAddress(UpdateAddressRequest $request): JsonResponse
     {
         try {
             $accessToken = $request->input('access_token') ?? $request->bearerToken();
 
             if (empty($accessToken)) {
                 return $this->unauthorized('Access token is required');
+            }
+
+            $addressId = $request->input('address_id');
+
+            if (empty($addressId)) {
+                return $this->error(
+                    'Address ID is required',
+                    ['error' => 'address_id field is required in request body'],
+                    [],
+                    422
+                );
             }
 
             $profile = $this->profileService->updateAddress(
@@ -240,7 +251,6 @@ class ProfileController extends BaseApiController
             Log::warning('Address update failed - authentication error', [
                 'correlation_id' => $this->getCorrelationId(),
                 'error' => $e->getMessage(),
-                'address_id' => $addressId,
             ]);
 
             return $this->unauthorized($e->getMessage());
@@ -248,7 +258,6 @@ class ProfileController extends BaseApiController
             Log::warning('Address not found', [
                 'correlation_id' => $this->getCorrelationId(),
                 'error' => $e->getMessage(),
-                'address_id' => $addressId,
             ]);
 
             return $this->notFound($e->getMessage());
@@ -256,7 +265,6 @@ class ProfileController extends BaseApiController
             Log::error('Address update failed - API error', [
                 'correlation_id' => $this->getCorrelationId(),
                 'error' => $e->getMessage(),
-                'address_id' => $addressId,
                 'data' => $request->validated(),
             ]);
 
@@ -270,7 +278,6 @@ class ProfileController extends BaseApiController
             Log::error('Failed to update address', [
                 'correlation_id' => $this->getCorrelationId(),
                 'error' => $e->getMessage(),
-                'address_id' => $addressId,
                 'trace' => $e->getTraceAsString(),
             ]);
 
@@ -287,18 +294,29 @@ class ProfileController extends BaseApiController
      * Delete address
      * 
      * Deletes an existing address for the authenticated customer.
+     * Address ID is provided in the request body.
      * 
      * @param Request $request
-     * @param string $addressId
      * @return JsonResponse
      */
-    public function destroyAddress(Request $request, string $addressId): JsonResponse
+    public function destroyAddress(Request $request): JsonResponse
     {
         try {
             $accessToken = $request->input('access_token') ?? $request->bearerToken();
 
             if (empty($accessToken)) {
                 return $this->unauthorized('Access token is required');
+            }
+
+            $addressId = $request->input('address_id');
+
+            if (empty($addressId)) {
+                return $this->error(
+                    'Address ID is required',
+                    ['error' => 'address_id field is required in request body'],
+                    [],
+                    422
+                );
             }
 
             $this->profileService->deleteAddress($accessToken, $addressId);
@@ -310,7 +328,6 @@ class ProfileController extends BaseApiController
             Log::warning('Address deletion failed - authentication error', [
                 'correlation_id' => $this->getCorrelationId(),
                 'error' => $e->getMessage(),
-                'address_id' => $addressId,
             ]);
 
             return $this->unauthorized($e->getMessage());
@@ -318,7 +335,6 @@ class ProfileController extends BaseApiController
             Log::warning('Address not found', [
                 'correlation_id' => $this->getCorrelationId(),
                 'error' => $e->getMessage(),
-                'address_id' => $addressId,
             ]);
 
             return $this->notFound($e->getMessage());
@@ -326,7 +342,6 @@ class ProfileController extends BaseApiController
             Log::error('Address deletion failed - API error', [
                 'correlation_id' => $this->getCorrelationId(),
                 'error' => $e->getMessage(),
-                'address_id' => $addressId,
             ]);
 
             return $this->error(
@@ -339,7 +354,6 @@ class ProfileController extends BaseApiController
             Log::error('Failed to delete address', [
                 'correlation_id' => $this->getCorrelationId(),
                 'error' => $e->getMessage(),
-                'address_id' => $addressId,
                 'trace' => $e->getTraceAsString(),
             ]);
 

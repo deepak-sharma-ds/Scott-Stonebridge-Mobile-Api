@@ -1,7 +1,7 @@
-mutation customerAddressDelete($id: ID!) {
-  customerAddressDelete(id: $id) {
-    deletedCustomerAddressId
-    userErrors {
+mutation customerAddressDelete($customerId: ID!, $addressId: ID!) {
+  customerAddressDelete(customerId: $customerId, addressId: $addressId) {
+    deletedAddressId
+    customerUserErrors {
       field
       message
     }

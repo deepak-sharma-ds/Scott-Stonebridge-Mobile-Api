@@ -5,6 +5,7 @@ namespace App\Services\Shopify;
 use App\Contracts\Services\ProfileServiceInterface;
 use App\Contracts\Services\CustomerServiceInterface;
 use App\Contracts\Shopify\AdminApiClientInterface;
+use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\Profile\ProfileDTO;
 use App\DTOs\Customer\CustomerDTO;
 use App\Exceptions\ShopifyApiException;
@@ -27,10 +28,12 @@ class ProfileService extends BaseService implements ProfileServiceInterface
      * Constructor
      * 
      * @param AdminApiClientInterface $adminClient Admin API client for mutations
+     * @param StorefrontApiClientInterface $storefrontClient Storefront API client for customer operations
      * @param CustomerServiceInterface $customerService Customer service for read operations
      */
     public function __construct(
         private readonly AdminApiClientInterface $adminClient,
+        private readonly StorefrontApiClientInterface $storefrontClient,
         private readonly CustomerServiceInterface $customerService
     ) {
         parent::__construct();
@@ -180,7 +183,8 @@ class ProfileService extends BaseService implements ProfileServiceInterface
     /**
      * Update an existing address
      * 
-     * Updates an address using the Admin API customer_address_update mutation.
+     * Updates an address using the Storefront API customerAddressUpdate mutation.
+     * If is_default is true, sets the address as default using a separate mutation.
      * Returns the updated profile with the modified address.
      * 
      * @param string $accessToken Customer access token
@@ -195,23 +199,35 @@ class ProfileService extends BaseService implements ProfileServiceInterface
             $this->logPerformanceStart('updateAddress');
 
             $variables = [
+                'customerAccessToken' => $accessToken,
                 'id' => $addressId,
                 'address' => $this->formatAddressInput($data),
-                'setAsDefault' => ($data['is_default'] ?? false) ? true : null,
             ];
 
-            $response = $this->adminClient->query('admin/customer/customer_address_update', $variables);
+            $response = $this->storefrontClient->query('storefront/customer/update_customer_address', $variables);
+
+            // Check for GraphQL errors first
+            if (!empty($response['errors'])) {
+                $errorMessage = 'Shopify GraphQL error: ' . json_encode($response['errors']);
+                $this->logError($errorMessage, ['errors' => $response['errors'], 'address_id' => $addressId]);
+                throw new ShopifyApiException($errorMessage);
+            }
 
             // Check for user errors in the response
-            if (!empty($response['data']['customerAddressUpdate']['userErrors'])) {
-                $errors = $response['data']['customerAddressUpdate']['userErrors'];
+            if (!empty($response['data']['customerAddressUpdate']['customerUserErrors'])) {
+                $errors = $response['data']['customerAddressUpdate']['customerUserErrors'];
                 $errorMessage = 'Failed to update address: ' . json_encode($errors);
                 $this->logError($errorMessage, ['errors' => $errors]);
                 throw new ShopifyApiException($errorMessage);
             }
 
-            if (empty($response['data']['customerAddressUpdate']['address'])) {
+            if (empty($response['data']['customerAddressUpdate']['customerAddress'])) {
                 throw new ShopifyApiException('Update address returned empty response');
+            }
+
+            // Set as default address if requested
+            if (!empty($data['is_default'])) {
+                $this->setDefaultAddressStorefront($accessToken, $addressId);
             }
 
             // Fetch updated profile to get complete data
@@ -234,7 +250,7 @@ class ProfileService extends BaseService implements ProfileServiceInterface
     /**
      * Delete an address from customer profile
      * 
-     * Deletes an address using the Admin API customer_address_delete mutation.
+     * Deletes an address using the Storefront API customerAddressDelete mutation.
      * This operation does not return a value on success.
      * 
      * @param string $accessToken Customer access token
@@ -248,14 +264,22 @@ class ProfileService extends BaseService implements ProfileServiceInterface
             $this->logPerformanceStart('deleteAddress');
 
             $variables = [
+                'customerAccessToken' => $accessToken,
                 'id' => $addressId,
             ];
 
-            $response = $this->adminClient->query('admin/customer/customer_address_delete', $variables);
+            $response = $this->storefrontClient->query('storefront/customer/delete_customer_address', $variables);
+
+            // Check for GraphQL errors first
+            if (!empty($response['errors'])) {
+                $errorMessage = 'Shopify GraphQL error: ' . json_encode($response['errors']);
+                $this->logError($errorMessage, ['errors' => $response['errors'], 'address_id' => $addressId]);
+                throw new ShopifyApiException($errorMessage);
+            }
 
             // Check for user errors in the response
-            if (!empty($response['data']['customerAddressDelete']['userErrors'])) {
-                $errors = $response['data']['customerAddressDelete']['userErrors'];
+            if (!empty($response['data']['customerAddressDelete']['customerUserErrors'])) {
+                $errors = $response['data']['customerAddressDelete']['customerUserErrors'];
                 $errorMessage = 'Failed to delete address: ' . json_encode($errors);
                 $this->logError($errorMessage, ['errors' => $errors]);
                 throw new ShopifyApiException($errorMessage);
@@ -320,6 +344,39 @@ class ProfileService extends BaseService implements ProfileServiceInterface
             'firstName' => $data['first_name'] ?? null,
             'lastName' => $data['last_name'] ?? null,
         ];
+    }
+
+    /**
+     * Set the customer's default address using Storefront API.
+     *
+     * Uses the customerDefaultAddressUpdate mutation to set an address as default.
+     *
+     * @param string $accessToken Customer access token
+     * @param string $addressId Address ID (Shopify GID)
+     * @return void
+     * @throws ShopifyApiException
+     */
+    private function setDefaultAddressStorefront(string $accessToken, string $addressId): void
+    {
+        $response = $this->storefrontClient->query('storefront/customer/set_default_address', [
+            'customerAccessToken' => $accessToken,
+            'addressId' => $addressId,
+        ]);
+
+        // Check for GraphQL errors
+        if (!empty($response['errors'])) {
+            $errorMessage = 'Failed to set default address (GraphQL error): ' . json_encode($response['errors']);
+            $this->logError($errorMessage, ['errors' => $response['errors'], 'address_id' => $addressId]);
+            throw new ShopifyApiException($errorMessage);
+        }
+
+        // Check for user errors
+        if (!empty($response['data']['customerDefaultAddressUpdate']['customerUserErrors'])) {
+            $errors = $response['data']['customerDefaultAddressUpdate']['customerUserErrors'];
+            $errorMessage = 'Failed to set default address: ' . json_encode($errors);
+            $this->logError($errorMessage, ['errors' => $errors, 'address_id' => $addressId]);
+            throw new ShopifyApiException($errorMessage);
+        }
     }
 
     /**

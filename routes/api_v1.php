@@ -210,21 +210,15 @@ Route::prefix('v1')->middleware([
          * GET /api/v1/profile - Get customer profile and addresses
          * PUT /api/v1/profile - Update customer profile
          * POST /api/v1/profile/addresses - Add new address
-         * PUT /api/v1/profile/addresses/{id} - Update address
-         * DELETE /api/v1/profile/addresses/{id} - Delete address
-         * 
-         * Note: Address IDs are Shopify IDs and may contain special characters
+         * PUT /api/v1/profile/addresses - Update address (address_id in body)
+         * DELETE /api/v1/profile/addresses - Delete address (address_id in body)
          */
         Route::prefix('profile')->group(function () {
             Route::get('/', [ProfileController::class, 'index'])->name('api.v1.profile.index');
             Route::put('/', [ProfileController::class, 'update'])->name('api.v1.profile.update');
             Route::post('/addresses', [ProfileController::class, 'storeAddress'])->name('api.v1.profile.addresses.store');
-            Route::put('/addresses/{id}', [ProfileController::class, 'updateAddress'])
-                ->where('id', '.*')
-                ->name('api.v1.profile.addresses.update');
-            Route::delete('/addresses/{id}', [ProfileController::class, 'destroyAddress'])
-                ->where('id', '.*')
-                ->name('api.v1.profile.addresses.destroy');
+            Route::put('/addresses', [ProfileController::class, 'updateAddress'])->name('api.v1.profile.addresses.update');
+            Route::delete('/addresses', [ProfileController::class, 'destroyAddress'])->name('api.v1.profile.addresses.destroy');
         });
         
         /**
