@@ -160,9 +160,7 @@ class ContentService extends BaseService implements ContentServiceInterface
     {
         $policyField = self::POLICY_TYPE_MAP[$type];
 
-        $response = $this->storefrontClient->query('storefront/content/policy_get', [
-            'type' => $policyField,
-        ]);
+        $response = $this->storefrontClient->query('storefront/content/policy_get');
 
         if (empty($response['data']['shop'][$policyField])) {
             throw new ShopifyApiException("Policy not found: {$type}");

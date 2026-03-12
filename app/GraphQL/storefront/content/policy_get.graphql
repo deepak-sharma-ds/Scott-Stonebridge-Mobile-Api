@@ -1,4 +1,4 @@
-query getShopPolicy($type: String!) {
+query getShopPolicy {
   shop {
     privacyPolicy {
       id
