@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Contracts\Services\ContactServiceInterface;
+use App\DTOs\Contact\ContactDTO;
 use App\Http\Controllers\Base\BaseApiController;
 use App\Http\Requests\Contact\ContactFormRequest;
 use Illuminate\Http\JsonResponse;
@@ -36,7 +37,8 @@ class ContactController extends BaseApiController
     public function store(ContactFormRequest $request): JsonResponse
     {
         try {
-            $this->contactService->submitContactForm($request->validated());
+            $contactDTO = ContactDTO::fromRequest($request->validated());
+            $this->contactService->submitContactForm($contactDTO);
 
             Log::info('Contact form submitted successfully', [
                 'correlation_id' => $this->getCorrelationId(),

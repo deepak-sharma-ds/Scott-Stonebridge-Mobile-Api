@@ -7,6 +7,18 @@ use App\Http\Requests\BaseApiRequest;
 class ContactFormRequest extends BaseApiRequest
 {
     /**
+     * Prepare the data for validation.
+     */
+    protected function prepareForValidation(): void
+    {
+        if (!$this->has('subject') || empty($this->subject)) {
+            $this->merge([
+                'subject' => 'General Inquiry',
+            ]);
+        }
+    }
+
+    /**
      * Get the validation rules that apply to the request.
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>

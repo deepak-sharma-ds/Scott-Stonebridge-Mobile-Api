@@ -45,13 +45,12 @@ class ContactFormMail extends Mailable
     public function build()
     {
         return $this->subject('New Contact Form Submission')
-            ->view('mail.contact-form')
+            ->view('mail.contact-us')
             ->with([
-                'name' => $this->contact->name,
+                'patient_name' => $this->contact->name,
                 'email' => $this->contact->email,
-                'subject' => $this->contact->subject,
-                'message' => $this->contact->message,
-                'phone' => $this->contact->phone,
+                'phone' => $this->contact->phone ?? 'Not provided',
+                'custom_text' => $this->contact->message,
             ]);
     }
 }
