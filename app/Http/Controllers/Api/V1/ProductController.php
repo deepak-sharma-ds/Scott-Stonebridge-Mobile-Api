@@ -40,13 +40,14 @@ class ProductController extends BaseApiController
                 'tag' => $request->input('tag', null),
             ];
 
-            $products = $this->productService->getAllProducts($limit, $cursor, $filters);
+            $result = $this->productService->getAllProducts($limit, $cursor, $filters);
 
             return $this->success(
                 'Products fetched successfully',
                 [
-                    'products' => ProductResource::collection($products),
-                ]
+                    'products' => ProductResource::collection($result['items']),
+                ],
+                ['pagination' => $result['pagination']]
             );
         } catch (\Exception $e) {
             return $this->error(
@@ -107,14 +108,15 @@ class ProductController extends BaseApiController
                 );
             }
 
-            $products = $this->productService->searchProducts($query, $limit, $cursor);
+            $result = $this->productService->searchProducts($query, $limit, $cursor);
 
             return $this->success(
                 'Products searched successfully',
                 [
-                    'products' => ProductResource::collection($products),
+                    'products' => ProductResource::collection($result['items']),
                     'query' => $query,
-                ]
+                ],
+                ['pagination' => $result['pagination']]
             );
         } catch (\Exception $e) {
             return $this->error(

@@ -13,9 +13,9 @@ interface ProductServiceInterface
      * @param int $limit Number of products to fetch
      * @param string|null $cursor Pagination cursor
      * @param array $filters Additional filters
-     * @return Collection Collection of ProductDTO instances
+     * @return array ['items' => Collection, 'pagination' => array]
      */
-    public function getAllProducts(int $limit, ?string $cursor, array $filters): Collection;
+    public function getAllProducts(int $limit, ?string $cursor, array $filters): array;
 
     /**
      * Get a single product by handle
@@ -31,9 +31,9 @@ interface ProductServiceInterface
      * @param string $query Search query
      * @param int $limit Number of products to fetch
      * @param string|null $cursor Pagination cursor
-     * @return Collection Collection of ProductDTO instances
+     * @return array ['items' => Collection, 'pagination' => array]
      */
-    public function searchProducts(string $query, int $limit, ?string $cursor): Collection;
+    public function searchProducts(string $query, int $limit, ?string $cursor): array;
 
     /**
      * Get featured products by tag

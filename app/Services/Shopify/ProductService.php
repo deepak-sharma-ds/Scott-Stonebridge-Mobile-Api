@@ -30,7 +30,7 @@ class ProductService extends BaseService implements ProductServiceInterface
      * @param array $filters Additional filters
      * @return Collection Collection of ProductDTO instances
      */
-    public function getAllProducts(int $limit, ?string $cursor, array $filters): Collection
+    public function getAllProducts(int $limit, ?string $cursor, array $filters): array
     {
         try {
             $this->logPerformanceStart('getAllProducts');
@@ -49,12 +49,20 @@ class ProductService extends BaseService implements ProductServiceInterface
             $products = collect($response['data']['products']['edges'] ?? [])
                 ->map(fn($edge) => ProductDTO::fromShopifyResponse($edge['node']));
 
+            $pageInfo = $response['data']['products']['pageInfo'] ?? [];
+
             $this->logPerformanceEnd('getAllProducts', [
                 'count' => $products->count(),
-                'has_next_page' => $response['data']['products']['pageInfo']['hasNextPage'] ?? false,
+                'has_next_page' => $pageInfo['hasNextPage'] ?? false,
             ]);
 
-            return $products;
+            return [
+                'items' => $products,
+                'pagination' => [
+                    'has_more' => $pageInfo['hasNextPage'] ?? false,
+                    'next_cursor' => $pageInfo['endCursor'] ?? null,
+                ],
+            ];
         } catch (\Exception $e) {
             $this->logErrorWithException('Failed to fetch products', $e, [
                 'limit' => $limit,
@@ -104,9 +112,9 @@ class ProductService extends BaseService implements ProductServiceInterface
      * @param string $query Search query
      * @param int $limit Number of products to fetch
      * @param string|null $cursor Pagination cursor
-     * @return Collection Collection of ProductDTO instances
+     * @return array Array with 'items' and 'pagination' keys
      */
-    public function searchProducts(string $query, int $limit, ?string $cursor): Collection
+    public function searchProducts(string $query, int $limit, ?string $cursor): array
     {
         try {
             $this->logPerformanceStart('searchProducts');
@@ -123,12 +131,21 @@ class ProductService extends BaseService implements ProductServiceInterface
             $products = collect($response['data']['products']['edges'] ?? [])
                 ->map(fn($edge) => ProductDTO::fromShopifyResponse($edge['node']));
 
+            $pageInfo = $response['data']['products']['pageInfo'] ?? [];
+
             $this->logPerformanceEnd('searchProducts', [
                 'query' => $query,
                 'count' => $products->count(),
+                'has_next_page' => $pageInfo['hasNextPage'] ?? false,
             ]);
 
-            return $products;
+            return [
+                'items' => $products,
+                'pagination' => [
+                    'has_more' => $pageInfo['hasNextPage'] ?? false,
+                    'next_cursor' => $pageInfo['endCursor'] ?? null,
+                ],
+            ];
         } catch (\Exception $e) {
             $this->logErrorWithException('Failed to search products', $e, [
                 'query' => $query,
