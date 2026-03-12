@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\ShopController;
+use App\Http\Controllers\Api\V1\ThemeController;
 use App\Http\Controllers\Api\V1\WishlistController;
 use Illuminate\Support\Facades\Route;
 
@@ -172,12 +173,18 @@ Route::prefix('v1')->middleware([
     /**
      * Theme Routes (Public - Guest Friendly)
      * 
+     * GET /api/v1/theme/active - Get active theme information
      * GET /api/v1/theme/templates/{handle} - Get specific template by handle
      * GET /api/v1/theme/templates/by-type - Get template by type and optional suffix
+     * GET /api/v1/theme/templates/json - Get template JSON by name
+     * GET /api/v1/theme/templates/html - Get rendered HTML for a page
      */
     Route::prefix('theme')->group(function () {
-        Route::get('/templates/{handle}', [\App\Http\Controllers\Api\V1\ThemeController::class, 'show'])->name('api.v1.theme.templates.show');
-        Route::get('/templates/by-type', [\App\Http\Controllers\Api\V1\ThemeController::class, 'getByType'])->name('api.v1.theme.templates.by-type');
+        Route::get('/active', [ThemeController::class, 'getActiveTheme'])->name('api.v1.theme.active');
+        Route::get('/templates/{handle}', [ThemeController::class, 'show'])->name('api.v1.theme.templates.show');
+        Route::get('/templates/by-type', [ThemeController::class, 'getByType'])->name('api.v1.theme.templates.by-type');
+        Route::get('/templates/json', [ThemeController::class, 'getTemplateJson'])->name('api.v1.theme.templates.json');
+        Route::get('/templates/html', [ThemeController::class, 'getRenderedHtml'])->name('api.v1.theme.templates.html');
     });
     
     /**

@@ -25,6 +25,7 @@ class ThemeTemplateDTO extends BaseDTO
         public readonly ?array $metadata,
         public readonly string $createdAt,
         public readonly string $updatedAt,
+        public readonly ?string $html = null,
     ) {
         $this->validate();
     }
@@ -62,6 +63,7 @@ class ThemeTemplateDTO extends BaseDTO
             metadata: $data['metadata'] ?? null,
             createdAt: $data['createdAt'] ?? now()->toIso8601String(),
             updatedAt: $data['updatedAt'] ?? now()->toIso8601String(),
+            html: $data['html'] ?? null,
         );
     }
 }

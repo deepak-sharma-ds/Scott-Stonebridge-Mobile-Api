@@ -7,9 +7,6 @@ use PHPUnit\Framework\TestCase;
 
 class AddressDTOTest extends TestCase
 {
-    /**
-     * Test that AddressDTO can be instantiated with valid data.
-     */
     public function test_can_create_address_dto_with_valid_data(): void
     {
         $dto = new AddressDTO(
@@ -24,6 +21,7 @@ class AddressDTOTest extends TestCase
             firstName: 'John',
             lastName: 'Doe',
             company: 'Acme Corp',
+            isDefault: true,
         );
 
         $this->assertEquals('gid://shopify/MailingAddress/123', $dto->id);
@@ -37,11 +35,9 @@ class AddressDTOTest extends TestCase
         $this->assertEquals('John', $dto->firstName);
         $this->assertEquals('Doe', $dto->lastName);
         $this->assertEquals('Acme Corp', $dto->company);
+        $this->assertTrue($dto->isDefault);
     }
 
-    /**
-     * Test that AddressDTO can be created with all null fields.
-     */
     public function test_can_create_address_with_all_null_fields(): void
     {
         $dto = new AddressDTO(
@@ -56,6 +52,7 @@ class AddressDTOTest extends TestCase
             firstName: null,
             lastName: null,
             company: null,
+            isDefault: false,
         );
 
         $this->assertNull($dto->id);
@@ -69,11 +66,9 @@ class AddressDTOTest extends TestCase
         $this->assertNull($dto->firstName);
         $this->assertNull($dto->lastName);
         $this->assertNull($dto->company);
+        $this->assertFalse($dto->isDefault);
     }
 
-    /**
-     * Test that AddressDTO can be created with partial data.
-     */
     public function test_can_create_address_with_partial_data(): void
     {
         $dto = new AddressDTO(
@@ -88,6 +83,7 @@ class AddressDTOTest extends TestCase
             firstName: 'John',
             lastName: 'Doe',
             company: null,
+            isDefault: false,
         );
 
         $this->assertEquals('gid://shopify/MailingAddress/123', $dto->id);
@@ -101,11 +97,9 @@ class AddressDTOTest extends TestCase
         $this->assertEquals('John', $dto->firstName);
         $this->assertEquals('Doe', $dto->lastName);
         $this->assertNull($dto->company);
+        $this->assertFalse($dto->isDefault);
     }
 
-    /**
-     * Test fromShopifyResponse() creates DTO from Shopify data with node format.
-     */
     public function test_from_shopify_response_creates_dto_with_node_format(): void
     {
         $shopifyData = [
@@ -121,6 +115,7 @@ class AddressDTOTest extends TestCase
                 'firstName' => 'John',
                 'lastName' => 'Doe',
                 'company' => 'Acme Corp',
+                'isDefault' => true,
             ],
         ];
 
@@ -137,11 +132,9 @@ class AddressDTOTest extends TestCase
         $this->assertEquals('John', $dto->firstName);
         $this->assertEquals('Doe', $dto->lastName);
         $this->assertEquals('Acme Corp', $dto->company);
+        $this->assertTrue($dto->isDefault);
     }
 
-    /**
-     * Test fromShopifyResponse() creates DTO from Shopify data without node format.
-     */
     public function test_from_shopify_response_creates_dto_without_node_format(): void
     {
         $shopifyData = [
@@ -152,6 +145,7 @@ class AddressDTOTest extends TestCase
             'zip' => 'SW1A 1AA',
             'firstName' => 'John',
             'lastName' => 'Doe',
+            'isDefault' => true,
         ];
 
         $dto = AddressDTO::fromShopifyResponse($shopifyData);
@@ -163,11 +157,9 @@ class AddressDTOTest extends TestCase
         $this->assertEquals('SW1A 1AA', $dto->zip);
         $this->assertEquals('John', $dto->firstName);
         $this->assertEquals('Doe', $dto->lastName);
+        $this->assertTrue($dto->isDefault);
     }
 
-    /**
-     * Test fromShopifyResponse() handles missing optional fields.
-     */
     public function test_from_shopify_response_handles_missing_optional_fields(): void
     {
         $shopifyData = [
@@ -187,16 +179,12 @@ class AddressDTOTest extends TestCase
         $this->assertNull($dto->firstName);
         $this->assertNull($dto->lastName);
         $this->assertNull($dto->company);
+        $this->assertFalse($dto->isDefault);
     }
 
-    /**
-     * Test fromShopifyResponse() handles completely empty data.
-     */
     public function test_from_shopify_response_handles_empty_data(): void
     {
-        $shopifyData = [];
-
-        $dto = AddressDTO::fromShopifyResponse($shopifyData);
+        $dto = AddressDTO::fromShopifyResponse([]);
 
         $this->assertNull($dto->id);
         $this->assertNull($dto->address1);
@@ -209,11 +197,9 @@ class AddressDTOTest extends TestCase
         $this->assertNull($dto->firstName);
         $this->assertNull($dto->lastName);
         $this->assertNull($dto->company);
+        $this->assertFalse($dto->isDefault);
     }
 
-    /**
-     * Test toArray() converts DTO to array.
-     */
     public function test_to_array_converts_dto_to_array(): void
     {
         $dto = new AddressDTO(
@@ -228,11 +214,11 @@ class AddressDTOTest extends TestCase
             firstName: 'John',
             lastName: 'Doe',
             company: 'Acme Corp',
+            isDefault: true,
         );
 
         $array = $dto->toArray();
 
-        $this->assertIsArray($array);
         $this->assertEquals('gid://shopify/MailingAddress/123', $array['id']);
         $this->assertEquals('123 Main Street', $array['address1']);
         $this->assertEquals('Apt 4B', $array['address2']);
@@ -244,11 +230,9 @@ class AddressDTOTest extends TestCase
         $this->assertEquals('John', $array['firstName']);
         $this->assertEquals('Doe', $array['lastName']);
         $this->assertEquals('Acme Corp', $array['company']);
+        $this->assertTrue($array['isDefault']);
     }
 
-    /**
-     * Test toArray() handles null fields.
-     */
     public function test_to_array_handles_null_fields(): void
     {
         $dto = new AddressDTO(
@@ -263,11 +247,11 @@ class AddressDTOTest extends TestCase
             firstName: 'John',
             lastName: 'Doe',
             company: null,
+            isDefault: false,
         );
 
         $array = $dto->toArray();
 
-        $this->assertIsArray($array);
         $this->assertEquals('gid://shopify/MailingAddress/123', $array['id']);
         $this->assertEquals('123 Main Street', $array['address1']);
         $this->assertNull($array['address2']);
@@ -279,5 +263,6 @@ class AddressDTOTest extends TestCase
         $this->assertEquals('John', $array['firstName']);
         $this->assertEquals('Doe', $array['lastName']);
         $this->assertNull($array['company']);
+        $this->assertFalse($array['isDefault']);
     }
 }
