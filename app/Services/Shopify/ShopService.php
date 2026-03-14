@@ -2,10 +2,13 @@
 
 namespace App\Services\Shopify;
 
+use App\Contracts\Services\CurrencyFlagServiceInterface;
 use App\Contracts\Services\ShopServiceInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
+use App\DTOs\Shop\MarketDTO;
 use App\DTOs\Shop\ShopDTO;
 use App\Services\Base\BaseService;
+use App\Services\CurrencyCountryMapService;
 use App\Traits\CacheWithFallback;
 use Illuminate\Support\Facades\Cache;
 
@@ -19,7 +22,8 @@ class ShopService extends BaseService implements ShopServiceInterface
     use CacheWithFallback;
 
     public function __construct(
-        protected StorefrontApiClientInterface $storefrontClient
+        protected StorefrontApiClientInterface $storefrontClient,
+        protected CurrencyFlagServiceInterface $currencyFlagService
     ) {
         parent::__construct();
     }
@@ -65,7 +69,37 @@ class ShopService extends BaseService implements ShopServiceInterface
     {
         $response = $this->storefrontClient->query('storefront/shop/markets');
 
-        return ShopDTO::fromShopifyResponse($response['data']);
+        $shopData = $response['data'];
+        $shop = $shopData['shop'] ?? [];
+        $localization = $shopData['localization'] ?? [];
+        $paymentSettings = $shop['paymentSettings'] ?? [];
+
+        // Extract enabled currencies
+        $enabledCurrencies = $paymentSettings['enabledPresentmentCurrencies'] ?? [];
+        
+        // Extract markets from available countries and add currency flags
+        $markets = [];
+        foreach ($localization['availableCountries'] ?? [] as $country) {
+            $market = MarketDTO::fromShopifyResponse($country);
+            
+            // Add currency flag URL
+            $flagUrl = $this->currencyFlagService->getFlagUrl(
+                $market->currencyCode,
+                $market->countryCode
+            );
+            
+            $markets[] = $market->withCurrencyFlag($flagUrl);
+        }
+
+        return new ShopDTO(
+            id: $shop['id'] ?? '',
+            name: $shop['name'] ?? 'Unknown Shop',
+            domain: $shop['primaryDomain']['host'] ?? '',
+            primaryCurrency: $paymentSettings['currencyCode'] ?? 'GBP',
+            enabledCurrencies: $enabledCurrencies,
+            markets: $markets,
+            countryCode: $paymentSettings['countryCode'] ?? 'GB'
+        );
     }
 
     /**
@@ -95,7 +129,7 @@ class ShopService extends BaseService implements ShopServiceInterface
             return $currencies;
         } catch (\Exception $e) {
             $this->logErrorWithException('Failed to fetch supported currencies', $e);
-            
+
             // Return fallback currencies if API fails
             return ['GBP', 'USD', 'EUR', 'CAD', 'AUD'];
         }
@@ -124,8 +158,8 @@ class ShopService extends BaseService implements ShopServiceInterface
         $this->forgetCacheWithFallback(['shop', 'currencies']);
         Cache::forget('shop:markets');
         Cache::forget('shop:currencies');
-        
+
         // Also clear the currency-to-country mapping cache
-        \App\Services\CurrencyCountryMapService::clearCache();
+        CurrencyCountryMapService::clearCache();
     }
 }

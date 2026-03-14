@@ -91,6 +91,11 @@ class AppServiceProvider extends ServiceProvider
             \App\Contracts\Services\NavigationServiceInterface::class,
             \App\Services\Shopify\NavigationService::class
         );
+        
+        $this->app->bind(
+            \App\Contracts\Services\CurrencyFlagServiceInterface::class,
+            \App\Services\Shopify\CurrencyFlagService::class
+        );
 
         // Register Cache Strategy interface
         $this->app->bind(

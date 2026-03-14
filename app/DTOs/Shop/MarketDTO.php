@@ -17,7 +17,8 @@ class MarketDTO extends BaseDTO
         public readonly string $currencyCode,
         public readonly string $currencyName,
         public readonly string $currencySymbol,
-        public readonly string $unitSystem
+        public readonly string $unitSystem,
+        public readonly ?string $currencyFlag = null
     ) {
         $this->validate();
     }
@@ -65,7 +66,7 @@ class MarketDTO extends BaseDTO
      */
     public function toArray(): array
     {
-        return [
+        $data = [
             'country_code' => $this->countryCode,
             'country_name' => $this->countryName,
             'currency_code' => $this->currencyCode,
@@ -73,5 +74,30 @@ class MarketDTO extends BaseDTO
             'currency_symbol' => $this->currencySymbol,
             'unit_system' => $this->unitSystem,
         ];
+
+        if ($this->currencyFlag !== null) {
+            $data['currency_flag'] = $this->currencyFlag;
+        }
+
+        return $data;
+    }
+
+    /**
+     * Create a new instance with currency flag
+     * 
+     * @param string $flagUrl
+     * @return self
+     */
+    public function withCurrencyFlag(string $flagUrl): self
+    {
+        return new self(
+            countryCode: $this->countryCode,
+            countryName: $this->countryName,
+            currencyCode: $this->currencyCode,
+            currencyName: $this->currencyName,
+            currencySymbol: $this->currencySymbol,
+            unitSystem: $this->unitSystem,
+            currencyFlag: $flagUrl
+        );
     }
 }

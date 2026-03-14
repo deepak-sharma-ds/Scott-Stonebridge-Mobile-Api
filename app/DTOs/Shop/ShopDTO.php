@@ -32,10 +32,6 @@ class ShopDTO extends BaseDTO
     {
         // Shop data from Shopify API is generally valid
         // Basic validation for required fields
-        if (empty($this->name)) {
-            $this->name = 'Unknown Shop';
-        }
-        
         if (empty($this->primaryCurrency)) {
             throw new \InvalidArgumentException('Primary currency is required');
         }
@@ -64,7 +60,7 @@ class ShopDTO extends BaseDTO
 
         return new self(
             id: $shop['id'] ?? '',
-            name: $shop['name'] ?? '',
+            name: $shop['name'] ?? 'Unknown Shop',
             domain: $shop['primaryDomain']['host'] ?? '',
             primaryCurrency: $paymentSettings['currencyCode'] ?? 'GBP',
             enabledCurrencies: $enabledCurrencies,
