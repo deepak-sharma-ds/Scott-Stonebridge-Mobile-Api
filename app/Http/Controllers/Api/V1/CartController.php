@@ -279,4 +279,3 @@ class CartController extends BaseApiController
         }
     }
 }
-

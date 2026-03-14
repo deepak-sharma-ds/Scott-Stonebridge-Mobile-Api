@@ -124,5 +124,8 @@ class ShopService extends BaseService implements ShopServiceInterface
         $this->forgetCacheWithFallback(['shop', 'currencies']);
         Cache::forget('shop:markets');
         Cache::forget('shop:currencies');
+        
+        // Also clear the currency-to-country mapping cache
+        \App\Services\CurrencyCountryMapService::clearCache();
     }
 }

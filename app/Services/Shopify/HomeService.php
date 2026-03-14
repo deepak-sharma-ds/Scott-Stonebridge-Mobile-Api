@@ -221,27 +221,4 @@ class HomeService extends BaseService implements HomeServiceInterface
             throw new ShopifyApiException('Failed to subscribe to newsletter: ' . $e->getMessage());
         }
     }
-
-    /**
-     * Get currency country code from request context
-     * 
-     * @return string
-     */
-    protected function getCurrencyCountryCode(): string
-    {
-        $currency = request()->header('X-Currency') 
-            ?? request()->get('currency')
-            ?? config('shopify.currency', 'GBP');
-
-        // Map currency to country code
-        $currencyMap = [
-            'GBP' => 'GB',
-            'USD' => 'US',
-            'EUR' => 'DE',
-            'CAD' => 'CA',
-            'AUD' => 'AU',
-        ];
-
-        return $currencyMap[strtoupper($currency)] ?? 'GB';
-    }
 }

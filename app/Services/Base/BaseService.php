@@ -2,7 +2,10 @@
 
 namespace App\Services\Base;
 
+use App\Contracts\Services\ShopServiceInterface;
 use App\Logging\CorrelationIdProcessor;
+use App\Services\CurrencyCountryMapService;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -311,28 +314,53 @@ abstract class BaseService
     }
 
     /**
-     * Get country code based on currency for logging context
+     * Get country code based on currency from Shopify markets
+     * 
+     * Dynamically fetches the country code for the given currency from Shopify markets.
+     * Falls back to a static mapping if markets data is unavailable.
      *
-     * @return string
+     * @return string Country code (e.g., 'GB', 'US', 'DE')
      */
     protected function getCurrencyCountryCode(): string
     {
         $currency = request()->get('currency', config('shopify.currency', 'GBP'));
 
-        $currencyToCountry = [
-            'GBP' => 'GB',
-            'USD' => 'US',
-            'EUR' => 'DE',
-            'CAD' => 'CA',
-            'AUD' => 'AU',
-            'JPY' => 'JP',
-            'CHF' => 'CH',
-            'NZD' => 'NZ',
-            'SEK' => 'SE',
-            'DKK' => 'DK',
-            'NOK' => 'NO',
-        ];
+        return CurrencyCountryMapService::getCountryCode($currency);
+    }
 
-        return $currencyToCountry[$currency] ?? 'GB';
+    /**
+     * Get country code from Shopify markets for a given currency
+     * 
+     * @param string $currency Currency code (e.g., 'GBP', 'USD')
+     * @return string|null Country code or null if not found
+     */
+    protected function getCountryCodeFromMarkets(string $currency): ?string
+    {
+        // Get markets from cache (cached for 24 hours in ShopService)
+        $markets = Cache::remember(
+            'currency_to_country_map',
+            86400, // 24 hours
+            function () {
+                try {
+                    $shopService = app(ShopServiceInterface::class);
+                    $shopData = $shopService->getMarkets();
+
+                    // Build currency to country mapping from markets
+                    $mapping = [];
+                    foreach ($shopData->markets as $market) {
+                        // Use the first country for each currency
+                        if (!isset($mapping[$market->currencyCode])) {
+                            $mapping[$market->currencyCode] = $market->countryCode;
+                        }
+                    }
+
+                    return $mapping;
+                } catch (\Exception $e) {
+                    return [];
+                }
+            }
+        );
+
+        return $markets[$currency] ?? null;
     }
 }
