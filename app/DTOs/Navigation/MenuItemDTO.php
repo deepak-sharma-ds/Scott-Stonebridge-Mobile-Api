@@ -1,0 +1,76 @@
+<?php
+
+namespace App\DTOs\Navigation;
+
+use App\DTOs\Base\BaseDTO;
+
+/**
+ * Menu Item DTO
+ * 
+ * Represents a single menu item with optional nested items
+ */
+class MenuItemDTO extends BaseDTO
+{
+    public function __construct(
+        public readonly string $id,
+        public readonly string $title,
+        public readonly string $url,
+        public readonly string $type,
+        public readonly array $items = []
+    ) {
+        $this->validate();
+    }
+
+    /**
+     * Validate the DTO data
+     * 
+     * @return void
+     */
+    protected function validate(): void
+    {
+        if (empty($this->title)) {
+            throw new \InvalidArgumentException('Menu item title is required');
+        }
+    }
+
+    /**
+     * Create from Shopify API response
+     * 
+     * @param array $data
+     * @return self
+     */
+    public static function fromShopifyResponse(array $data): self
+    {
+        $nestedItems = [];
+        
+        if (!empty($data['items'])) {
+            foreach ($data['items'] as $item) {
+                $nestedItems[] = self::fromShopifyResponse($item);
+            }
+        }
+
+        return new self(
+            id: $data['id'] ?? '',
+            title: $data['title'] ?? '',
+            url: $data['url'] ?? '',
+            type: $data['type'] ?? 'HTTP',
+            items: $nestedItems
+        );
+    }
+
+    /**
+     * Convert to array
+     * 
+     * @return array
+     */
+    public function toArray(): array
+    {
+        return [
+            'id' => $this->id,
+            'title' => $this->title,
+            'url' => $this->url,
+            'type' => $this->type,
+            'items' => array_map(fn($item) => $item->toArray(), $this->items),
+        ];
+    }
+}

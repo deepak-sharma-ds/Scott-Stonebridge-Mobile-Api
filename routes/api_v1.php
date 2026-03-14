@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\CartController;
 use App\Http\Controllers\Api\V1\ContactController;
 use App\Http\Controllers\Api\V1\ContentController;
 use App\Http\Controllers\Api\V1\HomeController;
+use App\Http\Controllers\Api\V1\NavigationController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProfileController;
@@ -196,6 +197,15 @@ Route::prefix('v1')->middleware([
     Route::prefix('home')->group(function () {
         Route::get('/', [HomeController::class, 'index'])->name('api.v1.home.index');
         Route::post('/subscribe', [HomeController::class, 'subscribe'])->name('api.v1.home.subscribe');
+    });
+    
+    /**
+     * Navigation Routes (Public - Guest Friendly)
+     * 
+     * GET /api/v1/navigation/{handle} - Get menu by handle (e.g., 'main-menu', 'footer')
+     */
+    Route::prefix('navigation')->group(function () {
+        Route::get('/{handle}', [NavigationController::class, 'show'])->name('api.v1.navigation.show');
     });
     
     // ============================================
