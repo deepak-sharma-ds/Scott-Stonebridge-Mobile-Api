@@ -24,6 +24,8 @@ class MenuItemResource extends BaseApiResource
             'id' => $this->id,
             'title' => $this->title,
             'url' => $this->url,
+            'api_endpoint' => $this->apiEndpoint,
+            'params' => $this->params,
             'type' => $this->type,
             'items' => self::collection($this->items),
         ];
