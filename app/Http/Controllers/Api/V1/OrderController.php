@@ -40,8 +40,9 @@ class OrderController extends BaseApiController
 
             $limit = (int) $request->input('limit', 20);
             $cursor = $request->input('cursor');
+            $fulfillmentStatus = $request->input('fulfillment_status');
 
-            $orders = $this->orderService->getOrders($accessToken, $limit, $cursor);
+            $orders = $this->orderService->getOrders($accessToken, $limit, $cursor, $fulfillmentStatus);
 
             return $this->success(
                 'Orders fetched successfully',
