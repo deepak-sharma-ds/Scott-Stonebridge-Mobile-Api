@@ -38,7 +38,7 @@ Route::prefix('v1')->middleware([
     // ============================================
     // Public Routes (No Authentication Required)
     // ============================================
-    
+
     /**
      * Product Routes
      * 
@@ -55,7 +55,7 @@ Route::prefix('v1')->middleware([
         Route::post('/featured', [ProductController::class, 'indexFeatured'])->name('api.v1.products.featured.post');
         Route::get('/{handle}', [ProductController::class, 'show'])->name('api.v1.products.show');
     });
-    
+
     /**
      * Collection Routes
      * 
@@ -70,7 +70,7 @@ Route::prefix('v1')->middleware([
         Route::get('/{handle}/products', [ProductController::class, 'showCollectionProducts'])->name('api.v1.collections.products');
         Route::post('/products', [ProductController::class, 'showCollectionProducts'])->name('api.v1.collections.products.post');
     });
-    
+
     /**
      * Authentication Routes
      * 
@@ -84,14 +84,14 @@ Route::prefix('v1')->middleware([
         Route::post('/register', [AuthController::class, 'register'])->name('api.v1.auth.register');
         Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->name('api.v1.auth.forgot-password');
         Route::post('/reset-password', [AuthController::class, 'resetPassword'])->name('api.v1.auth.reset-password');
-        
+
         // Protected auth routes
         Route::middleware(['shopify.auth'])->group(function () {
             Route::get('/me', [AuthController::class, 'me'])->name('api.v1.auth.me');
             Route::post('/logout', [AuthController::class, 'logout'])->name('api.v1.auth.logout');
         });
     });
-    
+
     /**
      * Cart Routes (Guest and Authenticated)
      * 
@@ -110,7 +110,7 @@ Route::prefix('v1')->middleware([
         Route::post('/items/add', [CartController::class, 'addItem'])->name('api.v1.cart.addItem');
         Route::put('/items/update', [CartController::class, 'updateItem'])->name('api.v1.cart.updateItem');
         Route::delete('/items/remove', [CartController::class, 'removeItem'])->name('api.v1.cart.removeItem');
-        
+
         // Protected cart routes
         Route::middleware(['shopify.auth'])->group(function () {
             Route::put('/{cartId}/buyer', [CartController::class, 'updateBuyerIdentity'])
@@ -118,7 +118,7 @@ Route::prefix('v1')->middleware([
                 ->name('api.v1.cart.updateBuyer');
         });
     });
-    
+
     /**
      * Content/CMS Routes (Public)
      * 
@@ -137,12 +137,12 @@ Route::prefix('v1')->middleware([
         Route::get('/{handle}', [ContentController::class, 'showPage'])->name('api.v1.pages.show');
         Route::post('/details', [ContentController::class, 'showPage'])->name('api.v1.pages.details');
     });
-    
+
     Route::prefix('policies')->group(function () {
         Route::get('/{type}', [ContentController::class, 'showPolicy'])->name('api.v1.policies.show');
         Route::post('/details', [ContentController::class, 'showPolicy'])->name('api.v1.policies.details');
     });
-    
+
     Route::prefix('blogs')->group(function () {
         Route::get('/', [ContentController::class, 'indexBlogs'])->name('api.v1.blogs.index');
         Route::post('/details', [ContentController::class, 'indexBlogs'])->name('api.v1.blogs.details');
@@ -150,16 +150,16 @@ Route::prefix('v1')->middleware([
         Route::get('/{blogHandle}/articles/{articleHandle}', [ContentController::class, 'showArticle'])->name('api.v1.blogs.articles.show');
         Route::post('/article', [ContentController::class, 'showArticle'])->name('api.v1.blogs.article');
     });
-    
+
     Route::post('/resolve', [ContentController::class, 'resolve'])->name('api.v1.resolve');
-    
+
     /**
      * Contact Route (Public with stricter rate limiting)
      * 
      * POST /api/v1/contact - Submit contact form
      */
     Route::post('/contact', [ContactController::class, 'store'])->name('api.v1.contact.store');
-    
+
     /**
      * Shop & Currency Routes (Public - Guest Friendly)
      * 
@@ -170,7 +170,7 @@ Route::prefix('v1')->middleware([
         Route::get('/currencies', [ShopController::class, 'currencies'])->name('api.v1.shop.currencies');
         Route::get('/markets', [ShopController::class, 'markets'])->name('api.v1.shop.markets');
     });
-    
+
     /**
      * Theme Routes (Public - Guest Friendly)
      * 
@@ -182,12 +182,12 @@ Route::prefix('v1')->middleware([
      */
     Route::prefix('theme')->group(function () {
         Route::get('/active', [ThemeController::class, 'getActiveTheme'])->name('api.v1.theme.active');
-        Route::get('/templates/{handle}', [ThemeController::class, 'show'])->name('api.v1.theme.templates.show');
-        Route::get('/templates/by-type', [ThemeController::class, 'getByType'])->name('api.v1.theme.templates.by-type');
         Route::get('/templates/json', [ThemeController::class, 'getTemplateJson'])->name('api.v1.theme.templates.json');
         Route::get('/templates/html', [ThemeController::class, 'getRenderedHtml'])->name('api.v1.theme.templates.html');
+        Route::get('/templates/by-type', [ThemeController::class, 'getByType'])->name('api.v1.theme.templates.by-type');
+        Route::get('/templates/{handle}', [ThemeController::class, 'show'])->name('api.v1.theme.templates.show');
     });
-    
+
     /**
      * Home Routes (Public - Guest Friendly)
      * 
@@ -198,7 +198,7 @@ Route::prefix('v1')->middleware([
         Route::get('/', [HomeController::class, 'index'])->name('api.v1.home.index');
         Route::post('/subscribe', [HomeController::class, 'subscribe'])->name('api.v1.home.subscribe');
     });
-    
+
     /**
      * Navigation Routes (Public - Guest Friendly)
      * 
@@ -207,13 +207,13 @@ Route::prefix('v1')->middleware([
     Route::prefix('navigation')->group(function () {
         Route::get('/{handle}', [NavigationController::class, 'show'])->name('api.v1.navigation.show');
     });
-    
+
     // ============================================
     // Protected Routes (Authentication Required)
     // ============================================
-    
+
     Route::middleware(['shopify.auth'])->group(function () {
-        
+
         /**
          * Profile Routes
          * 
@@ -230,7 +230,7 @@ Route::prefix('v1')->middleware([
             Route::put('/addresses', [ProfileController::class, 'updateAddress'])->name('api.v1.profile.addresses.update');
             Route::delete('/addresses', [ProfileController::class, 'destroyAddress'])->name('api.v1.profile.addresses.destroy');
         });
-        
+
         /**
          * Wishlist Routes
          * 
@@ -247,7 +247,7 @@ Route::prefix('v1')->middleware([
                 ->where('productId', '.*')
                 ->name('api.v1.wishlist.items.destroy');
         });
-        
+
         /**
          * Order Routes
          * 

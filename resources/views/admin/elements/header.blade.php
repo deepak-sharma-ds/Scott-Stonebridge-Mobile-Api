@@ -27,6 +27,11 @@
                     <div class="sb-nav-link-icon"><i class="fas fa-user"></i></div>
                     Manage Users
                 </a>
+                <a class="nav-link {{ request()->routeIs('admin.customer.entitlements.index') ? 'active' : '' }}"
+                    href="{{ route('admin.customer.entitlements.index') }}">
+                    <div class="sb-nav-link-icon"><i class="fas fa-list-check"></i></div>
+                    Customer Entitlements
+                </a>
                 @role('Admin')
                     @php
                         $isAvailibilityActive = request()->routeIs('admin.availability_templates.*') || request()->routeIs('admin.availability.*');
