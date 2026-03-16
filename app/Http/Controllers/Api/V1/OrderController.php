@@ -38,7 +38,7 @@ class OrderController extends BaseApiController
                 return $this->unauthorized('Access token is required');
             }
 
-            $limit = (int) $request->input('limit', 20);
+            $limit = (int) $request->input('limit', 250);
             $cursor = $request->input('cursor');
             $fulfillmentStatus = $request->input('fulfillment_status');
 

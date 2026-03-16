@@ -9,7 +9,7 @@ query getCustomerOrders(
   customer(customerAccessToken: $accessToken) {
     id
 
-    orders(first: $limit, after: $after, query: $orderQuery) {
+    orders(first: $limit, after: $after, query: $orderQuery, reverse: true) {
       edges {
         cursor
         node {
