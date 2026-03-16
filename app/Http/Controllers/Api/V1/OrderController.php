@@ -65,17 +65,24 @@ class OrderController extends BaseApiController
     /**
      * Get order detail
      * 
-     * @param string $orderId
      * @param Request $request
      * @return JsonResponse
      */
-    public function show(string $orderId, Request $request): JsonResponse
+    public function show(Request $request): JsonResponse
     {
         try {
             $accessToken = $request->input('access_token') ?? $request->bearerToken();
+            $orderId = $request->input('orderId');
 
             if (empty($accessToken)) {
                 return $this->unauthorized('Access token is required');
+            }
+
+            if (empty($orderId)) {
+                return $this->validationError(
+                    'Validation failed',
+                    ['orderId' => ['The order ID field is required']]
+                );
             }
 
             $order = $this->orderService->getOrderDetails($accessToken, $orderId);
@@ -98,4 +105,3 @@ class OrderController extends BaseApiController
         }
     }
 }
-

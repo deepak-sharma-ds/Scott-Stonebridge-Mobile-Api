@@ -2,12 +2,14 @@ query getCustomerOrders(
   $accessToken: String!
   $limit: Int!
   $after: String
+  $orderQuery: String
+  $lineItemLimit: Int!
   $country: CountryCode
 ) @inContext(country: $country) {
   customer(customerAccessToken: $accessToken) {
     id
 
-    orders(first: $limit, after: $after) {
+    orders(first: $limit, after: $after, query: $orderQuery) {
       edges {
         cursor
         node {
@@ -18,55 +20,167 @@ query getCustomerOrders(
           financialStatus
           fulfillmentStatus
 
-          totalPriceV2 {
+          totalPrice {
             amount
             currencyCode
           }
-          subtotalPriceV2 {
+          subtotalPrice {
             amount
             currencyCode
           }
-          totalTaxV2 {
+          totalShippingPrice {
+            amount
+            currencyCode
+          }
+          totalTax {
             amount
             currencyCode
           }
 
-          lineItems(first: 250) {
-            edges {
-              node {
+          billingAddress {
+            name
+            address1
+            address2
+            city
+            province
+            country
+            zip
+            phone
+          }
+
+          shippingAddress {
+            name
+            address1
+            address2
+            city
+            province
+            country
+            zip
+            phone
+          }
+
+          lineItems(first: $lineItemLimit) {
+            nodes {
+              title
+              quantity
+
+              discountedTotalPrice {
+                amount
+                currencyCode
+              }
+
+              originalTotalPrice {
+                amount
+                currencyCode
+              }
+
+              customAttributes {
+                key
+                value
+              }
+
+              variant {
+                id
                 title
-                quantity
+                sku
 
-                discountedTotalPrice {
-                  amount
-                  currencyCode
+                image {
+                  url
+                  altText
                 }
 
-                variant {
+                product {
                   id
                   title
+                  handle
+                }
+              }
+            }
+          }
 
-                  image {
-                    url
+          discountApplications(first: $lineItemLimit) {
+            nodes {
+              __typename
+
+              ... on DiscountCodeApplication {
+                code
+                allocationMethod
+                targetSelection
+                targetType
+                value {
+                  __typename
+                  ... on MoneyV2 {
+                    amount
+                    currencyCode
                   }
+                  ... on PricingPercentageValue {
+                    percentage
+                  }
+                }
+              }
 
-                  product {
-                    title
-                    handle
+              ... on AutomaticDiscountApplication {
+                title
+                allocationMethod
+                targetSelection
+                targetType
+                value {
+                  __typename
+                  ... on MoneyV2 {
+                    amount
+                    currencyCode
+                  }
+                  ... on PricingPercentageValue {
+                    percentage
+                  }
+                }
+              }
+
+              ... on ManualDiscountApplication {
+                title
+                allocationMethod
+                targetSelection
+                targetType
+                value {
+                  __typename
+                  ... on MoneyV2 {
+                    amount
+                    currencyCode
+                  }
+                  ... on PricingPercentageValue {
+                    percentage
+                  }
+                }
+              }
+
+              ... on ScriptDiscountApplication {
+                title
+                allocationMethod
+                targetSelection
+                targetType
+                value {
+                  __typename
+                  ... on MoneyV2 {
+                    amount
+                    currencyCode
+                  }
+                  ... on PricingPercentageValue {
+                    percentage
                   }
                 }
               }
             }
           }
 
-          shippingAddress {
-            name
-            address1
-            city
-            province
-            country
-            zip
+          successfulFulfillments(first: $lineItemLimit) {
+            trackingCompany
+            trackingInfo {
+              number
+              url
+            }
           }
+
+          statusUrl
         }
       }
 

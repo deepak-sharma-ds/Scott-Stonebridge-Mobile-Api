@@ -150,7 +150,13 @@ class AuthService extends BaseService implements AuthServiceInterface
 
             if (!empty($response['data']['customerRecover']['customerUserErrors'])) {
                 $errors = $response['data']['customerRecover']['customerUserErrors'];
-                throw new ShopifyApiException('Password recovery failed: ' . json_encode($errors));
+                // throw new ShopifyApiException('Password recovery failed: ' . json_encode($errors));
+                throw new ShopifyApiException(
+                    'Password recovery failed',
+                    0,
+                    null,
+                    ['shopify_errors' => $errors]
+                );
             }
 
             $this->logPerformanceEnd('forgotPassword', ['email' => $email]);
@@ -255,7 +261,7 @@ class AuthService extends BaseService implements AuthServiceInterface
         foreach ($errors as $error) {
             $code = $error['code'] ?? 'UNKNOWN';
             $message = $error['message'] ?? 'Unknown error';
-            
+
             // Provide user-friendly messages for common errors
             switch ($code) {
                 case 'UNIDENTIFIED_CUSTOMER':

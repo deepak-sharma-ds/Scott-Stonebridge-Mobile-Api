@@ -25,8 +25,13 @@ class OrderDTO extends BaseDTO
         public readonly array $totalPrice,
         public readonly array $subtotalPrice,
         public readonly array $totalTax,
+        public readonly ?array $totalShippingPrice,
         public readonly array $lineItems,
+        public readonly ?array $billingAddress,
         public readonly ?array $shippingAddress,
+        public readonly array $discountApplications,
+        public readonly array $successfulFulfillments,
+        public readonly ?string $statusUrl,
     ) {
         $this->validate();
     }
@@ -54,8 +59,16 @@ class OrderDTO extends BaseDTO
      */
     public static function fromShopifyResponse(array $data): self
     {
-        // Handle both edge/node structure and flat array structure for line items
-        $lineItems = $data['lineItems']['edges'] ?? $data['lineItems'] ?? [];
+        $lineItems = $data['lineItems']['edges']
+            ?? $data['lineItems']['nodes']
+            ?? $data['lineItems']
+            ?? [];
+        $discountApplications = $data['discountApplications']['nodes']
+            ?? $data['discountApplications']['edges']
+            ?? $data['discountApplications']
+            ?? [];
+        $successfulFulfillments = $data['successfulFulfillments']
+            ?? [];
         
         return new self(
             id: $data['id'],
@@ -76,11 +89,25 @@ class OrderDTO extends BaseDTO
                 'amount' => $data['totalTaxV2']['amount'] ?? $data['totalTax']['amount'] ?? '0.00',
                 'currency' => $data['totalTaxV2']['currencyCode'] ?? $data['totalTax']['currencyCode'] ?? 'GBP',
             ],
+            totalShippingPrice: isset($data['totalShippingPrice']) ? [
+                'amount' => $data['totalShippingPrice']['amount'] ?? '0.00',
+                'currency' => $data['totalShippingPrice']['currencyCode'] ?? 'GBP',
+            ] : null,
             lineItems: array_map(
                 fn($item) => OrderLineItemDTO::fromShopifyResponse($item['node'] ?? $item),
                 $lineItems
             ),
+            billingAddress: $data['billingAddress'] ?? null,
             shippingAddress: $data['shippingAddress'] ?? null,
+            discountApplications: array_map(
+                fn($item) => $item['node'] ?? $item,
+                $discountApplications
+            ),
+            successfulFulfillments: array_map(
+                fn($item) => $item['node'] ?? $item,
+                $successfulFulfillments
+            ),
+            statusUrl: $data['statusUrl'] ?? null,
         );
     }
 

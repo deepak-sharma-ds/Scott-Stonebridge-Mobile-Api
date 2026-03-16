@@ -35,6 +35,8 @@ class OrderService extends BaseService implements OrderServiceInterface
                 'accessToken' => $accessToken,
                 'limit' => $limit,
                 'after' => $cursor,
+                'orderQuery' => null,
+                'lineItemLimit' => $limit,
                 'country' => $this->getCurrencyCountryCode(),
             ];
 
@@ -44,8 +46,8 @@ class OrderService extends BaseService implements OrderServiceInterface
                 throw new ShopifyNotFoundException('Customer not found or invalid access token');
             }
 
-            $orders = collect($response['data']['customer']['orders']['edges'] ?? [])
-                ->map(fn($edge) => OrderDTO::fromShopifyResponse($edge['node']));
+            $orders = $this->extractOrderNodes($response)
+                ->map(fn($order) => OrderDTO::fromShopifyResponse($order));
 
             // Apply fulfillment status filter
             if ($fulfillmentStatus !== null) {
@@ -115,11 +117,12 @@ class OrderService extends BaseService implements OrderServiceInterface
         try {
             $this->logPerformanceStart('getOrderDetails');
 
-            // First, verify the customer has access to this order by fetching their orders
             $variables = [
                 'accessToken' => $accessToken,
-                'limit' => 250, // Fetch all orders to find the specific one
+                'orderQuery' => $this->normalizeOrderQuery($orderId),
+                'limit' => 1,
                 'after' => null,
+                'lineItemLimit' => 250,
                 'country' => $this->getCurrencyCountryCode(),
             ];
 
@@ -129,17 +132,13 @@ class OrderService extends BaseService implements OrderServiceInterface
                 throw new ShopifyNotFoundException('Customer not found or invalid access token');
             }
 
-            $orders = collect($response['data']['customer']['orders']['edges'] ?? []);
-            
-            $orderEdge = $orders->first(function ($edge) use ($orderId) {
-                return $edge['node']['id'] === $orderId;
-            });
+            $orderData = $this->extractOrderNodes($response)->first();
 
-            if (!$orderEdge) {
+            if (!$orderData) {
                 throw new ShopifyNotFoundException("Order not found: {$orderId}");
             }
 
-            $order = OrderDTO::fromShopifyResponse($orderEdge['node']);
+            $order = OrderDTO::fromShopifyResponse($orderData);
 
             $this->logPerformanceEnd('getOrderDetails', [
                 'order_id' => $orderId,
@@ -152,5 +151,39 @@ class OrderService extends BaseService implements OrderServiceInterface
             ]);
             throw $e;
         }
+    }
+
+    /**
+     * Extract order nodes from a Shopify orders connection.
+     */
+    protected function extractOrderNodes(array $response): Collection
+    {
+        $orders = data_get($response, 'data.customer.orders', []);
+
+        if (!empty($orders['edges'])) {
+            return collect($orders['edges'])
+                ->map(fn($edge) => $edge['node'] ?? null)
+                ->filter();
+        }
+
+        return collect($orders['nodes'] ?? [])->filter();
+    }
+
+    /**
+     * Normalize a raw order id or query into Shopify's customer order search syntax.
+     */
+    protected function normalizeOrderQuery(string $orderId): string
+    {
+        $orderQuery = trim($orderId);
+
+        if (str_starts_with($orderQuery, 'id:')) {
+            return $orderQuery;
+        }
+
+        // if (str_starts_with($orderQuery, 'gid://')) {
+        //     return "id:{$orderQuery}";
+        // }
+
+        return $orderQuery;
     }
 }

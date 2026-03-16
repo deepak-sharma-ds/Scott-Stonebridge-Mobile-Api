@@ -258,8 +258,8 @@ Route::prefix('v1')->middleware([
          */
         Route::prefix('orders')->group(function () {
             Route::get('/', [OrderController::class, 'index'])->name('api.v1.orders.index');
-            Route::get('/{orderId}', [OrderController::class, 'show'])
-                ->where('orderId', '.*')
+            Route::get('/details', [OrderController::class, 'show'])
+                // ->where('orderId', '.*')
                 ->name('api.v1.orders.show');
         });
     });

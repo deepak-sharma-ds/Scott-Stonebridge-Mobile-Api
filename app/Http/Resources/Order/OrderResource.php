@@ -33,11 +33,16 @@ class OrderResource extends BaseApiResource
             'total_price' => $this->totalPrice['amount'],
             'subtotal_price' => $this->subtotalPrice['amount'],
             'total_tax' => $this->totalTax['amount'],
+            'total_shipping_price' => $this->totalShippingPrice['amount'] ?? null,
             'currency' => $this->totalPrice['currency'],
             'line_items' => OrderLineItemResource::collection($this->lineItems),
             'total_items' => $this->getTotalItems(),
             'unique_items' => count($this->lineItems),
+            'billing_address' => $this->billingAddress,
             'shipping_address' => $this->shippingAddress,
+            'discount_applications' => $this->discountApplications,
+            'successful_fulfillments' => $this->successfulFulfillments,
+            'status_url' => $this->statusUrl,
         ];
     }
 }
