@@ -38,8 +38,8 @@ class ProductService extends BaseService implements ProductServiceInterface
             $variables = [
                 'limit' => $limit,
                 'after' => $cursor,
-                'sortKey' => $filters['sortKey'] ?? 'TITLE',
-                'reverse' => $filters['reverse'] ?? false,
+                'sortKey' => strtoupper((string) ($filters['sortKey'] ?? 'TITLE')),
+                'reverse' => filter_var($filters['reverse'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 'query' => $filters['query'] ?? null,
                 'country' => $this->getCurrencyCountryCode(),
             ];
@@ -72,6 +72,7 @@ class ProductService extends BaseService implements ProductServiceInterface
             throw $e;
         }
     }
+
 
     /**
      * Get a single product by handle
@@ -130,6 +131,20 @@ class ProductService extends BaseService implements ProductServiceInterface
 
             $products = collect($response['data']['products']['edges'] ?? [])
                 ->map(fn($edge) => ProductDTO::fromShopifyResponse($edge['node']));
+
+            // Apply accurate price sorting if PRICE sortKey is used
+            // Shopify's API sorts by base price, but we need to sort by actual min variant price
+            if (isset($filters['sortKey']) && strtoupper($filters['sortKey']) === 'PRICE') {
+                $products = $products->sort(function ($a, $b) use ($filters) {
+                    $minPriceA = collect($a->variants)->min(fn($v) => (float) $v->price);
+                    $minPriceB = collect($b->variants)->min(fn($v) => (float) $v->price);
+                    
+                    $result = $minPriceA <=> $minPriceB;
+                    
+                    // Apply reverse if needed
+                    return ($filters['reverse'] ?? false) ? -$result : $result;
+                })->values();
+            }
 
             $pageInfo = $response['data']['products']['pageInfo'] ?? [];
 

@@ -33,9 +33,14 @@ class ProductController extends BaseApiController
         try {
             $limit = (int) $request->input('limit', 20);
             $cursor = $request->input('cursor');
+            
+            // Map snake_case request params to camelCase for service
+            $sortKey = strtoupper($request->input('sort_key', 'TITLE'));
+            $reverse = filter_var($request->input('reverse', false), FILTER_VALIDATE_BOOLEAN);
+            
             $filters = [
-                'sortKey' => $request->input('sort_key', 'TITLE'),
-                'reverse' => $request->boolean('reverse', false),
+                'sortKey' => $sortKey,
+                'reverse' => $reverse,
                 'query' => $request->input('query'),
                 'tag' => $request->input('tag', null),
             ];

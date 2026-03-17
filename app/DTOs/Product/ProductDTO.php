@@ -56,6 +56,17 @@ class ProductDTO extends BaseDTO
      */
     public static function fromShopifyResponse(array $data): self
     {
+        // Map variants from Shopify response
+        $variants = array_map(
+            fn($v) => ProductVariantDTO::fromShopifyResponse($v['node'] ?? $v),
+            $data['variants']['edges'] ?? $data['variants'] ?? []
+        );
+
+        // Sort variants by price (ascending)
+        usort($variants, function ($a, $b) {
+            return (float) $a->price <=> (float) $b->price;
+        });
+
         return new self(
             id: $data['id'],
             title: $data['title'],
@@ -66,16 +77,15 @@ class ProductDTO extends BaseDTO
             tags: $data['tags'] ?? [],
             availableForSale: $data['availableForSale'] ?? false,
             images: array_map(
-                fn($img) => [
-                    'url' => $img['url'] ?? $img['src'] ?? '',
-                    'alt' => $img['altText'] ?? $img['alt'] ?? null,
+                fn($edge) => [
+                    'url' => $edge['node']['url'] ?? $edge['url'] ?? $edge['src'] ?? '',
+                    'alt' => $edge['node']['altText'] ?? $edge['altText'] ?? $edge['alt'] ?? null,
+                    'width' => $edge['node']['width'] ?? null,
+                    'height' => $edge['node']['height'] ?? null,
                 ],
                 $data['images']['edges'] ?? $data['images'] ?? []
             ),
-            variants: array_map(
-                fn($v) => ProductVariantDTO::fromShopifyResponse($v['node'] ?? $v),
-                $data['variants']['edges'] ?? $data['variants'] ?? []
-            ),
+            variants: $variants,
             options: $data['options'] ?? [],
             publishedAt: $data['publishedAt'] ?? null,
             updatedAt: $data['updatedAt'] ?? null,
