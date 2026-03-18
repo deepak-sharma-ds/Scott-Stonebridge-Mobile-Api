@@ -77,10 +77,28 @@ query getCart($cartId: ID!, $country: CountryCode)
     buyerIdentity {
       email
       phone
+      countryCode
       customer {
         id
         email
+        firstName
+        lastName
       }
+      deliveryAddressPreferences {
+        ... on MailingAddress {
+          address1
+          address2
+          city
+          provinceCode
+          countryCodeV2
+          zip
+        }
+      }
+    }
+
+    attributes {
+      key
+      value
     }
   }
 }

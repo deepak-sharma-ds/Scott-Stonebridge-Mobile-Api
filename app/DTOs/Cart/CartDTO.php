@@ -55,10 +55,13 @@ class CartDTO extends BaseDTO
             $lines
         );
 
+        // Build proper checkout URL with key from cart ID
+        $checkoutUrl = self::buildCheckoutUrlFromCartId($data['id'], $data['checkoutUrl'] ?? '');
+
         return new self(
             id: $data['id'],
             lineItems: $lineItems,
-            checkoutUrl: $data['checkoutUrl'] ?? '',
+            checkoutUrl: $checkoutUrl,
             cost: [
                 'subtotal' => $data['cost']['subtotalAmount']['amount'] ?? '0.00',
                 'total' => $data['cost']['totalAmount']['amount'] ?? '0.00',
@@ -68,6 +71,47 @@ class CartDTO extends BaseDTO
             createdAt: $data['createdAt'] ?? now()->toIso8601String(),
             updatedAt: $data['updatedAt'] ?? now()->toIso8601String(),
         );
+    }
+
+    /**
+     * Build checkout URL with authentication key from cart ID
+     * 
+     * Shopify cart IDs contain the cart token and optional key:
+     * Format: gid://shopify/Cart/TOKEN?key=KEY
+     * 
+     * The checkout URL should be: https://shop.com/cart/c/TOKEN?key=ENCODED_KEY
+     * 
+     * @param string $cartId Full cart ID from Shopify
+     * @param string $baseCheckoutUrl Base checkout URL from Shopify response
+     * @return string Complete checkout URL with authentication key
+     */
+    private static function buildCheckoutUrlFromCartId(string $cartId, string $baseCheckoutUrl): string
+    {
+        // If the base checkout URL already has a key parameter, use it as-is
+        if (str_contains($baseCheckoutUrl, '?key=')) {
+            return $baseCheckoutUrl;
+        }
+
+        // Parse cart ID to extract token and key
+        // Format: gid://shopify/Cart/hWN9zGWJF7tz56kV7ZaED7yg?key=f4e3e831adf36bc0f80ffd628939a18c
+        if (preg_match('/gid:\/\/shopify\/Cart\/([^\?]+)(?:\?key=(.+))?/', $cartId, $matches)) {
+            $cartToken = $matches[1];
+            $cartKey = $matches[2] ?? null;
+
+            if ($cartKey && $baseCheckoutUrl) {
+                // Extract the shop domain from base checkout URL
+                if (preg_match('/^(https?:\/\/[^\/]+)/', $baseCheckoutUrl, $urlMatches)) {
+                    $shopDomain = $urlMatches[1];
+                    
+                    // Build the full checkout URL with the key
+                    // The key needs to be properly encoded for the URL
+                    return $shopDomain . '/cart/c/' . $cartToken . '?key=' . $cartKey;
+                }
+            }
+        }
+
+        // Fallback to base checkout URL if we can't parse the cart ID
+        return $baseCheckoutUrl;
     }
 
     /**

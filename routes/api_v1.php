@@ -104,8 +104,7 @@ Route::prefix('v1')->middleware([
      */
     Route::prefix('cart')->group(function () {
         Route::post('/', [CartController::class, 'store'])->name('api.v1.cart.store');
-        Route::get('/{cartId}', [CartController::class, 'show'])
-            ->where('cartId', '.*')
+        Route::get('/details', [CartController::class, 'show'])
             ->name('api.v1.cart.show');
         Route::post('/items/add', [CartController::class, 'addItem'])->name('api.v1.cart.addItem');
         Route::put('/items/update', [CartController::class, 'updateItem'])->name('api.v1.cart.updateItem');

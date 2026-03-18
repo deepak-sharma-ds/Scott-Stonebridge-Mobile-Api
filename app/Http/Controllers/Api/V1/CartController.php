@@ -61,12 +61,19 @@ class CartController extends BaseApiController
     /**
      * Get cart by ID
      * 
-     * @param string $cartId
+     * @param Request $request
      * @return JsonResponse
      */
-    public function show(string $cartId): JsonResponse
+    public function show(Request $request): JsonResponse
     {
         try {
+            $cartId = $request->input('cart_id');
+            if (empty($cartId)) {
+                return $this->validationError(
+                    'Validation failed',
+                    ['cart_id' => ['The cart_id field is required']]
+                );
+            }
             $cart = $this->cartService->getCart($cartId);
 
             return $this->success(
