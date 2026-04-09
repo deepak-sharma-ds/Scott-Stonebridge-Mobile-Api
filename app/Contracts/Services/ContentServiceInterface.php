@@ -3,6 +3,7 @@
 namespace App\Contracts\Services;
 
 use App\DTOs\Content\ArticleDTO;
+use App\DTOs\Content\MediaImageDTO;
 use App\DTOs\Content\PageDTO;
 
 /**
@@ -56,6 +57,14 @@ interface ContentServiceInterface
      * @return ArticleDTO
      */
     public function getArticle(string $blogHandle, string $articleHandle): ArticleDTO;
+
+    /**
+     * Get a single Shopify media image by ID.
+     *
+     * @param string $id Shopify media image GID
+     * @return MediaImageDTO
+     */
+    public function getMediaImage(string $id): MediaImageDTO;
 
     /**
      * Resolve URL to resource type

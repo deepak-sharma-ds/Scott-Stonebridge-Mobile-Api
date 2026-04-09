@@ -6,6 +6,7 @@ use App\Contracts\Services\ContentServiceInterface;
 use App\Http\Controllers\Base\BaseApiController;
 use App\Http\Resources\Content\ArticleResource;
 use App\Http\Resources\Content\BlogResource;
+use App\Http\Resources\Content\MediaImageResource;
 use App\Http\Resources\Content\PageResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -267,6 +268,56 @@ class ContentController extends BaseApiController
 
             return $this->error(
                 'Failed to fetch article',
+                ['error' => $e->getMessage()],
+                [],
+                500
+            );
+        }
+    }
+
+    /**
+     * Get a single Shopify media image by ID from the request body.
+     *
+     * Public endpoint - no authentication required.
+     *
+     * @param Request $request
+     * @return JsonResponse
+     */
+    public function showMediaImage(Request $request): JsonResponse
+    {
+        try {
+            $id = $request->input('id');
+
+            if (empty($id)) {
+                return $this->validationError(
+                    'Validation failed',
+                    ['id' => ['The id field is required']]
+                );
+            }
+
+            $mediaImage = $this->contentService->getMediaImage($id);
+
+            return $this->success(
+                'Media image retrieved successfully',
+                new MediaImageResource($mediaImage)
+            );
+        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+            Log::info('Media image not found', [
+                'correlation_id' => $this->getCorrelationId(),
+                'id' => $request->input('id'),
+            ]);
+
+            return $this->notFound('Media image not found');
+        } catch (\Exception $e) {
+            Log::error('Failed to fetch media image', [
+                'correlation_id' => $this->getCorrelationId(),
+                'id' => $request->input('id'),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+
+            return $this->error(
+                'Failed to fetch media image',
                 ['error' => $e->getMessage()],
                 [],
                 500

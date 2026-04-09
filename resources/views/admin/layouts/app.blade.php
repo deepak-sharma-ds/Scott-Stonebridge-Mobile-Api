@@ -31,7 +31,7 @@
     <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
         <!-- Navbar Brand-->
         <a class="navbar-brand ps-3" href="{{ url('/admin/dashboard') }}">
-            <img src="{{ url('media/configuration-images/' . config('Site.logo')) }}" alt="Logo">
+            <img src="{{ asset('storage/configuration-images/' . config('Site.logo')) }}" alt="Logo">
         </a>
         <!-- Sidebar Toggle-->
         <button class="btn btn-link btn-sm order-1 order-lg-0 me-4 me-lg-0" id="sidebarToggle" href="#!"><i

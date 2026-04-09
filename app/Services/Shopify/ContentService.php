@@ -7,6 +7,7 @@ use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\Content\PageDTO;
 use App\DTOs\Content\BlogDTO;
 use App\DTOs\Content\ArticleDTO;
+use App\DTOs\Content\MediaImageDTO;
 use App\Exceptions\ShopifyApiException;
 use App\Exceptions\ShopifyNotFoundException;
 use App\Services\Base\BaseService;
@@ -370,6 +371,37 @@ class ContentService extends BaseService implements ContentServiceInterface
     }
 
     /**
+     * Get a single Shopify media image by ID.
+     *
+     * @param string $id Shopify media image GID
+     * @return MediaImageDTO
+     * @throws ShopifyApiException
+     */
+    public function getMediaImage(string $id): MediaImageDTO
+    {
+        try {
+            $this->logPerformanceStart('getMediaImage');
+
+            $mediaImage = $this->cacheWithFallback(
+                $this->cacheStrategy->getCacheKey('media_image', ['id' => $id]),
+                3600,
+                fn() => $this->fetchMediaImage($id),
+                ['media_image', md5($id)]
+            );
+
+            $this->logPerformanceEnd('getMediaImage', [
+                'id' => $id,
+                'url' => $mediaImage->url,
+            ]);
+
+            return $mediaImage;
+        } catch (\Exception $e) {
+            $this->logErrorWithException('Failed to fetch media image', $e, ['id' => $id]);
+            throw $e;
+        }
+    }
+
+    /**
      * Fetch article from Shopify API
      * 
      * @param string $blogHandle Blog handle
@@ -389,6 +421,32 @@ class ContentService extends BaseService implements ContentServiceInterface
         }
 
         return ArticleDTO::fromShopifyResponse($response['data']['blog']['articleByHandle']);
+    }
+
+    /**
+     * Fetch media image from Shopify API.
+     *
+     * @param string $id Shopify media image GID
+     * @return MediaImageDTO
+     * @throws ShopifyApiException
+     */
+    private function fetchMediaImage(string $id): MediaImageDTO
+    {
+        $response = $this->storefrontClient->query('storefront/content/get_media_image', [
+            'id' => $id,
+        ]);
+
+        $node = $response['data']['node'] ?? null;
+
+        if (empty($node) || empty($node['image']['url'])) {
+            throw new ShopifyNotFoundException("Media image not found: {$id}");
+        }
+
+        if (empty($node['id'])) {
+            $node['id'] = $id;
+        }
+
+        return MediaImageDTO::fromShopifyResponse($node);
     }
 
     /**

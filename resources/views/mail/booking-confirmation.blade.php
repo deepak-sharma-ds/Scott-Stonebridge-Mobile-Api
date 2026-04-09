@@ -9,7 +9,7 @@
 
     <!-- Logo -->
     <div style="text-align: center; margin-bottom: 30px;">
-        <img src="{{ url('media/configuration-images/'.config('Site.logo')) }}" alt="Company Logo" style="max-height: 80px;">
+        <img src="{{ asset('storage/configuration-images/'.config('Site.logo')) }}" alt="Company Logo" style="max-height: 80px;">
     </div>
 
     <h2 style="color: #2c3e50;">Booking Confirmation</h2>

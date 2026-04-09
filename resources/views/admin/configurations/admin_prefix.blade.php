@@ -132,7 +132,7 @@
 
 												<div class="img-parent-box">
 													@if($configuration->value)
-														<img src="{{ url('media/configuration-images/' . $configuration->value) }}" alt="{{ $configuration->value }}" id="img{{ $configuration->id }}" class="configurationPrefixImg img-for-onchange">
+														<img src="{{ asset('storage/configuration-images/' . $configuration->value) }}" alt="{{ $configuration->value }}" id="img{{ $configuration->id }}" class="configurationPrefixImg img-for-onchange">
 													@endif
 
 			                                        <div class="form-file d-inline-block">
@@ -151,7 +151,7 @@
 														@foreach ($images as $key => $image)
 														<div class=" col-6 col-lg-4 col-xl-3 p-0 pe-2 mb-1" id="RemoveBannerImg_{{ $key }}-{{ $configuration->id }}">
 															<div class="custom-image-delete" >
-																<img src="{{ url('media/configuration-images/' . $image) }}" alt="{{ $image }}" class="rounded w-100 object-fit-cover" height="80px">
+																<img src="{{ asset('storage/configuration-images/' . $image) }}" alt="{{ $image }}" class="rounded w-100 object-fit-cover" height="80px">
 																
 																<a href="javascript:void(0);" rdx-link="{{ route('admin.configurations.remove_config_image', ['id'=>$configuration->id,'name'=>$image]) }}" class="rdxUpdateAjax delete-btn text-danger" rdx-delete-box="RemoveBannerImg_{{ $key }}-{{ $configuration->id }}"><i class="far fa-times-circle"></i></a>
 															</div>

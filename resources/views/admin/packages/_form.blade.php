@@ -37,7 +37,7 @@
     <input type="file" name="cover_image" id="cover_image" class="form-control" accept="image/*">
     @if (!empty($package->cover_image))
         <div class="mt-2">
-            <img src="{{ url('media/' . $package->cover_image) }}" alt="Cover Image" width="120"
+            <img src="{{ asset('storage/' . $package->cover_image) }}" alt="Cover Image" width="120"
                 class="img-thumbnail">
         </div>
     @endif

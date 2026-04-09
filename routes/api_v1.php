@@ -150,6 +150,10 @@ Route::prefix('v1')->middleware([
         Route::post('/article', [ContentController::class, 'showArticle'])->name('api.v1.blogs.article');
     });
 
+    Route::prefix('media')->group(function () {
+        Route::post('/image', [ContentController::class, 'showMediaImage'])->name('api.v1.media.image');
+    });
+
     Route::post('/resolve', [ContentController::class, 'resolve'])->name('api.v1.resolve');
 
     /**
