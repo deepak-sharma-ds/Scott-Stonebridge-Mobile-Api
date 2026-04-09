@@ -8,6 +8,7 @@ use App\DTOs\Content\PageDTO;
 use App\DTOs\Content\BlogDTO;
 use App\DTOs\Content\ArticleDTO;
 use App\Exceptions\ShopifyApiException;
+use App\Exceptions\ShopifyNotFoundException;
 use App\Services\Base\BaseService;
 use App\Services\Cache\ShopifyCacheStrategy;
 use App\Traits\CacheWithFallback;
@@ -103,7 +104,7 @@ class ContentService extends BaseService implements ContentServiceInterface
         ]);
 
         if (empty($response['data']['pageByHandle'])) {
-            throw new ShopifyApiException("Page not found: {$handle}");
+            throw new ShopifyNotFoundException("Page not found: {$handle}");
         }
 
         return PageDTO::fromShopifyResponse($response['data']['pageByHandle']);
@@ -163,7 +164,7 @@ class ContentService extends BaseService implements ContentServiceInterface
         $response = $this->storefrontClient->query('storefront/content/policy_get');
 
         if (empty($response['data']['shop'][$policyField])) {
-            throw new ShopifyApiException("Policy not found: {$type}");
+            throw new ShopifyNotFoundException("Policy not found: {$type}");
         }
 
         return PageDTO::fromShopifyResponse($response['data']['shop'][$policyField]);
@@ -308,7 +309,7 @@ class ContentService extends BaseService implements ContentServiceInterface
         ]);
 
         if (empty($response['data']['blog'])) {
-            throw new ShopifyApiException("Blog not found: {$blogHandle}");
+            throw new ShopifyNotFoundException("Blog not found: {$blogHandle}");
         }
 
         $edges = $response['data']['blog']['articles']['edges'] ?? [];
@@ -384,7 +385,7 @@ class ContentService extends BaseService implements ContentServiceInterface
         ]);
 
         if (empty($response['data']['blog']['articleByHandle'])) {
-            throw new ShopifyApiException("Article not found: {$blogHandle}/{$articleHandle}");
+            throw new ShopifyNotFoundException("Article not found: {$blogHandle}/{$articleHandle}");
         }
 
         return ArticleDTO::fromShopifyResponse($response['data']['blog']['articleByHandle']);

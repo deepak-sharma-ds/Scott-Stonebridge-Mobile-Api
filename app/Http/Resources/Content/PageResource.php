@@ -29,6 +29,8 @@ class PageResource extends BaseApiResource
             'handle' => $this->handle,
             'body' => $this->body,
             'body_summary' => $this->bodySummary,
+            'seo' => $this->seo,
+            'metafields' => $this->metafields,
             'metadata' => $this->metadata,
             'created_at' => $this->createdAt,
             'updated_at' => $this->updatedAt,

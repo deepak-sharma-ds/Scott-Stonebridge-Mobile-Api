@@ -131,6 +131,10 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
 	// Manage customer entitlements of audio purchases
 	Route::get('customer-entitlements', [CustomerEntitlementController::class, 'index'])
 		->name('admin.customer.entitlements.index');
+	Route::get('customer-entitlements/{customerEntitlement}/edit', [CustomerEntitlementController::class, 'edit'])
+		->name('admin.customer.entitlements.edit');
+	Route::put('customer-entitlements/{customerEntitlement}', [CustomerEntitlementController::class, 'update'])
+		->name('admin.customer.entitlements.update');
 });
 
 Route::prefix('admin')->name('admin.')->group(function () {

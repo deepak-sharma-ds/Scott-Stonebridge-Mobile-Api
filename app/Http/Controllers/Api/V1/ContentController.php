@@ -35,9 +35,18 @@ class ContentController extends BaseApiController
      * @param string $handle
      * @return JsonResponse
      */
-    public function showPage(string $handle): JsonResponse
+    public function showPage(Request $request, ?string $handle = null): JsonResponse
     {
         try {
+            $handle = $handle ?: $request->input('handle');
+
+            if (empty($handle)) {
+                return $this->validationError(
+                    'Validation failed',
+                    ['handle' => ['The handle field is required']]
+                );
+            }
+
             $page = $this->contentService->getPageByHandle($handle);
 
             return $this->success(
@@ -77,9 +86,18 @@ class ContentController extends BaseApiController
      * @param string $type
      * @return JsonResponse
      */
-    public function showPolicy(string $type): JsonResponse
+    public function showPolicy(Request $request, ?string $type = null): JsonResponse
     {
         try {
+            $type = $type ?: $request->input('type');
+
+            if (empty($type)) {
+                return $this->validationError(
+                    'Validation failed',
+                    ['type' => ['The type field is required']]
+                );
+            }
+
             $policy = $this->contentService->getPolicyByType($type);
 
             return $this->success(

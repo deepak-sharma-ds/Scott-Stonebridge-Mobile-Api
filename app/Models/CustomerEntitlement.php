@@ -10,4 +10,8 @@ class CustomerEntitlement extends Model
     use SoftDeletes;
 
     protected $fillable = ['shopify_customer_id', 'email', 'package_tag', 'is_download_allowed'];
+
+    protected $casts = [
+        'is_download_allowed' => 'boolean',
+    ];
 }

@@ -1,0 +1,13 @@
+query findCustomerByEmail($first: Int!, $query: String!) {
+  customers(first: $first, query: $query) {
+    edges {
+      node {
+        id
+        email
+        firstName
+        lastName
+        tags
+      }
+    }
+  }
+}
