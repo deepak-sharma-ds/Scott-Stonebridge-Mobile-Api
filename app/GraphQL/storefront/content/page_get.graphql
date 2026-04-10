@@ -32,6 +32,9 @@ query getPage($handle: String!) {
         { namespace: "custom", key: "tickets_available" }
         { namespace: "custom", key: "event_form_text" }
         { namespace: "custom", key: "event_form" }
+        { namespace: "custom", key: "profile_image" }
+        { namespace: "custom", key: "event_text_heading" }
+        { namespace: "custom", key: "event_text_description" }
       ]
     ) {
       key
