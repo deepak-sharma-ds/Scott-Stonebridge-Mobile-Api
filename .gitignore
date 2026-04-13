@@ -20,6 +20,7 @@ yarn-error.log
 /.idea
 /.nova
 /.vscode
+/.claude
 /.kiro
 /postman
 /docs

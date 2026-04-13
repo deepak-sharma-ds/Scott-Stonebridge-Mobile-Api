@@ -12,28 +12,32 @@ class AudioStreamController extends Controller
 {
     public function stream($audioId, $file = 'playlist.m3u8')
     {
-        $audio = Audio::findOrFail($audioId);
-        $basePath = storage_path("app/private/{$audio->hls_path}");
+        try {
+            $audio = Audio::findOrFail($audioId);
+            $basePath = storage_path("app/private/{$audio->hls_path}");
 
-        $target = "{$basePath}/{$file}";
-        if (!file_exists($target)) {
-            abort(404, 'File not found');
+            $target = "{$basePath}/{$file}";
+            if (!file_exists($target)) {
+                abort(404, 'File not found');
+            }
+
+            $ext = pathinfo($target, PATHINFO_EXTENSION);
+            $mime = match ($ext) {
+                'm3u8' => 'application/vnd.apple.mpegurl',
+                'ts'   => 'video/mp2t',
+                'key'  => 'application/octet-stream',
+                default => 'application/octet-stream'
+            };
+
+            return response()->file($target, [
+                'Content-Type' => $mime,
+                'Cache-Control' => 'no-cache, must-revalidate',
+                'Access-Control-Allow-Origin' => config('app.env') == 'production' ? 'https://scottstonebridge.com' : 'https://chapter-verse-ds.myshopify.com',
+                'Access-Control-Allow-Methods' => 'GET, OPTIONS',
+                'Access-Control-Allow-Headers' => '*',
+            ]);
+        } catch (\Throwable $th) {
+            abort(500, 'Error streaming audio');
         }
-
-        $ext = pathinfo($target, PATHINFO_EXTENSION);
-        $mime = match ($ext) {
-            'm3u8' => 'application/vnd.apple.mpegurl',
-            'ts'   => 'video/mp2t',
-            'key'  => 'application/octet-stream',
-            default => 'application/octet-stream'
-        };
-
-        return response()->file($target, [
-            'Content-Type' => $mime,
-            'Cache-Control' => 'no-cache, must-revalidate',
-            'Access-Control-Allow-Origin' => config('app.env')=='production' ? 'https://scottstonebridge.com' : 'https://chapter-verse-ds.myshopify.com',
-            'Access-Control-Allow-Methods' => 'GET, OPTIONS',
-            'Access-Control-Allow-Headers' => '*',
-        ]);
     }
 }

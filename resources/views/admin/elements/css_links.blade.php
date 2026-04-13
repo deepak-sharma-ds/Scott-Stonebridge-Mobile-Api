@@ -1,13 +1,14 @@
-<!-- Google Fonts -->
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
-    rel="stylesheet">
+{{-- ─── Admin CSS Links ───────────────────────────────────────────
+     Loads the Tailwind-based admin design system compiled by Vite.
+     External CDN links are kept minimal — only font-awesome icons
+     and daterangepicker (used on specific pages).
+─────────────────────────────────────────────────────────────── --}}
 
-<link href="{{ asset('/admin') }}/css/styles.css" rel="stylesheet" />
-<link href="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/style.min.css" rel="stylesheet" />
-<link href="{{ asset('/admin') }}/css/custom_styles.css" rel="stylesheet" />
-<link href="{{ asset('/admin') }}/css/selecttwo.css" rel="stylesheet" />
-<link href="{{ asset('/admin') }}/css/custom.css" rel="stylesheet" />
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css" />
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" />
+{{-- Vite-compiled admin CSS (Tailwind + design tokens + components) --}}
+@vite(['resources/css/admin.css'])
+
+{{-- Font Awesome icons (local copy already in public/icons) --}}
+<link rel="stylesheet" href="{{ asset('icons/font-awesome/css/all.min.css') }}">
+
+{{-- DateRangePicker styles (needed on booking / analytics pages) --}}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daterangepicker/daterangepicker.css">

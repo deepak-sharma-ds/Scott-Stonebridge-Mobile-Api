@@ -12,12 +12,10 @@ return [
     ],
 
     'allowed_methods' => ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    'allowed_origins' => ['https://scottstonebridge.com', 'https://chapter-verse-ds.myshopify.com'],
+    'allowed_origins' => ['https://scottstonebridge.com', 'https://chapter-verse-ds.myshopify.com', 'http://scott-stonebridge-mobile-api.test'],
     'allowed_origins_patterns' => [],
     'allowed_headers' => ['Content-Type', 'Authorization', 'ngrok-skip-browser-warning', '*'],
     'exposed_headers' => [],
     'max_age' => 3600,
     'supports_credentials' => false,  // unless you need cookies
 ];
-
-

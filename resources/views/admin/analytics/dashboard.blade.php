@@ -23,79 +23,7 @@
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         }
 
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            background-attachment: fixed;
-            min-height: 100vh;
-            position: relative;
-            overflow-x: hidden;
-        }
-
-        /* ====== ANIMATED BACKGROUND ====== */
-        body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background:
-                radial-gradient(circle at 20% 30%, rgba(255, 255, 255, 0.15) 0%, transparent 50%),
-                radial-gradient(circle at 80% 70%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
-            animation: backgroundPulse 15s ease-in-out infinite;
-            pointer-events: none;
-            z-index: 0;
-        }
-
-        @keyframes backgroundPulse {
-
-            0%,
-            100% {
-                opacity: 1;
-            }
-
-            50% {
-                opacity: 0.7;
-            }
-        }
-
-        /* Floating particles */
-        .dashboard-wrapper {
-            position: relative;
-            z-index: 1;
-        }
-
-        .particle {
-            position: fixed;
-            width: 4px;
-            height: 4px;
-            background: rgba(255, 255, 255, 0.5);
-            border-radius: 50%;
-            pointer-events: none;
-            animation: float 20s infinite;
-        }
-
-        @keyframes float {
-
-            0%,
-            100% {
-                transform: translateY(0) translateX(0);
-                opacity: 0;
-            }
-
-            10% {
-                opacity: 1;
-            }
-
-            90% {
-                opacity: 1;
-            }
-
-            100% {
-                transform: translateY(-100vh) translateX(100px);
-                opacity: 0;
-            }
-        }
+        /* body background handled by admin layout */
 
         /* ====== GLASS CARDS ====== */
         .glass-card {
@@ -198,39 +126,25 @@
         }
 
         /* ====== PAGE HEADER ====== */
-        .page-header {
-            background: rgba(255, 255, 255, 0.15);
-            backdrop-filter: blur(20px);
-            border-radius: 20px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            animation: fadeInDown 0.6s ease-out;
-        }
+        /* .page-header gradient background is provided by admin.css */
+        .page-header { animation: fadeInDown 0.6s ease-out; }
 
         @keyframes fadeInDown {
-            from {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            from { opacity: 0; transform: translateY(-20px); }
+            to   { opacity: 1; transform: translateY(0); }
         }
 
         .dashboard-title {
-            font-size: 2.5rem;
+            font-size: 2rem;
             font-weight: 900;
             color: #ffffff;
-            text-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
             margin: 0;
             letter-spacing: -0.5px;
         }
 
         .dashboard-subtitle {
-            color: rgba(255, 255, 255, 0.9);
+            color: rgba(255, 255, 255, 0.85);
             font-size: 1rem;
             margin-top: 0.5rem;
             font-weight: 500;
@@ -238,11 +152,10 @@
 
         /* ====== SECTION TITLES ====== */
         .section-title {
-            font-size: 1.5rem;
+            font-size: 1.25rem;
             font-weight: 700;
             margin-bottom: 1.5rem;
-            color: #ffffff;
-            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            color: var(--text-primary, #1e293b);
             position: relative;
             display: inline-block;
         }
@@ -492,15 +405,7 @@
 @endsection
 
 @section('content')
-    <div class="dashboard-wrapper">
-        <!-- Floating particles -->
-        <div class="particle" style="left: 10%; animation-delay: 0s;"></div>
-        <div class="particle" style="left: 25%; animation-delay: 3s;"></div>
-        <div class="particle" style="left: 50%; animation-delay: 6s;"></div>
-        <div class="particle" style="left: 75%; animation-delay: 9s;"></div>
-        <div class="particle" style="left: 90%; animation-delay: 12s;"></div>
-
-        <div class="container-fluid">
+    <div class="container-fluid">
             <!-- Page Header -->
             <div class="page-header">
                 <h1 class="dashboard-title">Analytics Dashboard</h1>
@@ -675,7 +580,6 @@
 
             </div>
         </div>
-    </div>
 @endsection
 
 @section('custom_js_scripts')
