@@ -35,6 +35,7 @@ query getPage($handle: String!) {
         { namespace: "custom", key: "profile_image" }
         { namespace: "custom", key: "event_text_heading" }
         { namespace: "custom", key: "event_text_description" }
+        { namespace: "custom", key: "mid_banner_section" }
       ]
     ) {
       key
