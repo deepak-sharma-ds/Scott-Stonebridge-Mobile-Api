@@ -1,6 +1,8 @@
 @extends('admin.layouts.app')
 
 @section('content')
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
     <div class="container-fluid">
 
         {{-- Page Header --}}
@@ -11,13 +13,13 @@
                 '<a href="' .
                 route('audios.create') .
                 '" class="btn btn-primary">
-                                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 0.5rem;">
-                                                <path d="M9 18V5l12-2v13"></path>
-                                                <circle cx="6" cy="18" r="3"></circle>
-                                                <circle cx="18" cy="16" r="3"></circle>
-                                            </svg>
-                                            Add Audio
-                                        </a>',
+                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 0.5rem;">
+                                                        <path d="M9 18V5l12-2v13"></path>
+                                                        <circle cx="6" cy="18" r="3"></circle>
+                                                        <circle cx="18" cy="16" r="3"></circle>
+                                                    </svg>
+                                                    Add Audio
+                                                </a>',
         ])
 
         {{-- Alert Messages --}}
@@ -162,10 +164,10 @@
                                         'message' =>
                                             'No audio files found. Upload your first audio to get started!',
                                         'icon' => '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 1rem; opacity: 0.5;">
-                                                                                                                            <path d="M9 18V5l12-2v13"></path>
-                                                                                                                            <circle cx="6" cy="18" r="3"></circle>
-                                                                                                                            <circle cx="18" cy="16" r="3"></circle>
-                                                                                                                        </svg>',
+                                                                                                                                                                <path d="M9 18V5l12-2v13"></path>
+                                                                                                                                                                <circle cx="6" cy="18" r="3"></circle>
+                                                                                                                                                                <circle cx="18" cy="16" r="3"></circle>
+                                                                                                                                                            </svg>',
                                     ])
                                 </td>
                             </tr>

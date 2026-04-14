@@ -34,6 +34,12 @@ use InvalidArgumentException;
 class ContentService extends BaseService implements ContentServiceInterface
 {
     use CacheWithFallback;
+
+    /**
+     * Shopify MediaImage GID prefix returned by file_reference metafields.
+     */
+    private const MEDIA_IMAGE_GID_PREFIX = 'gid://shopify/MediaImage/';
+
     /**
      * Policy type mapping from API types to Shopify policy fields
      */
@@ -108,7 +114,138 @@ class ContentService extends BaseService implements ContentServiceInterface
             throw new ShopifyNotFoundException("Page not found: {$handle}");
         }
 
-        return PageDTO::fromShopifyResponse($response['data']['pageByHandle']);
+        $pageData = $this->resolvePageMediaImageMetafields($response['data']['pageByHandle']);
+
+        return PageDTO::fromShopifyResponse($pageData);
+    }
+
+    /**
+     * Replace MediaImage GIDs in page metafield values with image URLs.
+     *
+     * @param array<string, mixed> $pageData
+     * @return array<string, mixed>
+     */
+    private function resolvePageMediaImageMetafields(array $pageData): array
+    {
+        if (empty($pageData['metafields']) || !is_array($pageData['metafields'])) {
+            return $pageData;
+        }
+
+        $resolvedUrls = [];
+
+        foreach ($pageData['metafields'] as &$metafield) {
+            if (!is_array($metafield) || !array_key_exists('value', $metafield)) {
+                continue;
+            }
+
+            $metafield['value'] = $this->resolveMediaImageReferences(
+                $metafield['value'],
+                $resolvedUrls
+            );
+        }
+
+        unset($metafield);
+
+        return $pageData;
+    }
+
+    /**
+     * Resolve a single value or JSON/list value containing MediaImage GIDs.
+     *
+     * @param mixed $value
+     * @param array<string, string> $resolvedUrls
+     * @return mixed
+     */
+    private function resolveMediaImageReferences(mixed $value, array &$resolvedUrls): mixed
+    {
+        [$resolvedValue, $changed] = $this->resolveMediaImageReferenceValue($value, $resolvedUrls);
+
+        return $changed ? $resolvedValue : $value;
+    }
+
+    /**
+     * Resolve MediaImage references and report whether the value changed.
+     *
+     * @param mixed $value
+     * @param array<string, string> $resolvedUrls
+     * @return array{0: mixed, 1: bool}
+     */
+    private function resolveMediaImageReferenceValue(mixed $value, array &$resolvedUrls): array
+    {
+        if (is_string($value)) {
+            $trimmedValue = trim($value);
+
+            if ($this->isMediaImageGid($trimmedValue)) {
+                $url = $this->resolveMediaImageUrl($trimmedValue, $resolvedUrls);
+
+                return $url ? [$url, true] : [$value, false];
+            }
+
+            $decodedValue = json_decode($trimmedValue, true);
+
+            if (json_last_error() === JSON_ERROR_NONE && is_array($decodedValue)) {
+                [$resolvedDecodedValue, $changed] = $this->resolveMediaImageReferenceValue(
+                    $decodedValue,
+                    $resolvedUrls
+                );
+
+                return $changed ? [$resolvedDecodedValue, true] : [$value, false];
+            }
+
+            return [$value, false];
+        }
+
+        if (is_array($value)) {
+            $changed = false;
+            $resolvedArray = [];
+
+            foreach ($value as $key => $item) {
+                [$resolvedItem, $itemChanged] = $this->resolveMediaImageReferenceValue(
+                    $item,
+                    $resolvedUrls
+                );
+
+                $resolvedArray[$key] = $resolvedItem;
+                $changed = $changed || $itemChanged;
+            }
+
+            return [$changed ? $resolvedArray : $value, $changed];
+        }
+
+        return [$value, false];
+    }
+
+    /**
+     * Resolve and cache a MediaImage GID to its URL for this page response.
+     *
+     * @param array<string, string> $resolvedUrls
+     */
+    private function resolveMediaImageUrl(string $id, array &$resolvedUrls): ?string
+    {
+        if (isset($resolvedUrls[$id])) {
+            return $resolvedUrls[$id];
+        }
+
+        try {
+            $resolvedUrls[$id] = $this->getMediaImage($id)->url;
+
+            return $resolvedUrls[$id];
+        } catch (\Throwable $e) {
+            $this->logWarning('Failed to resolve page media image metafield', [
+                'id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+    }
+
+    /**
+     * Determine whether a metafield value is a Shopify MediaImage GID.
+     */
+    private function isMediaImageGid(string $value): bool
+    {
+        return str_starts_with($value, self::MEDIA_IMAGE_GID_PREFIX);
     }
 
     /**
