@@ -40,26 +40,9 @@
                     Your browser does not support the audio element.
                 </audio> --}}
                 @if ($audio->is_hls_ready && $audio->hls_path)
-                    {{-- ✅ Show current HLS conversion status --}}
-                    <video id="audio-player-{{ $audio->id }}" controls style="width: 300px; height: 40px;"></video>
-
-                    <script>
-                        document.addEventListener('DOMContentLoaded', function() {
-                            const audio{{ $audio->id }} = document.getElementById('audio-player-{{ $audio->id }}');
-                            const src = "{{ route('audio.stream', ['audio' => $audio->id, 'file' => 'playlist.m3u8']) }}";
-
-                            if (Hls.isSupported()) {
-                                const hls = new Hls();
-                                hls.loadSource(src);
-                                hls.attachMedia(audio{{ $audio->id }});
-                            } else if (audio{{ $audio->id }}.canPlayType('application/vnd.apple.mpegurl')) {
-                                audio{{ $audio->id }}.src = src;
-                            } else {
-                                audio{{ $audio->id }}.outerHTML =
-                                    '<span class="text-danger">HLS not supported in this browser.</span>';
-                            }
-                        });
-                    </script>
+                    {{-- ✅ HLS player — initialized via @section('custom_js_scripts') below --}}
+                    <audio id="audio-player-{{ $audio->id }}" controls style="width: 300px; height: 40px;"
+                        data-hls-src="{{ route('audio.stream', ['audio' => $audio->id, 'file' => 'playlist.m3u8']) }}"></audio>
                     <div class="mt-3">
                         <h6 class="text-muted">Conversion Status:</h6>
                         @if ($audio->is_hls_ready)
@@ -111,6 +94,49 @@
 
 @section('custom_js_scripts')
     <script>
+        // ─── HLS preview player ───────────────────────────────────────────────
+        (function () {
+            function initFormHlsPlayer() {
+                var el = document.querySelector('audio[data-hls-src]');
+                if (!el) return;
+
+                var src = el.getAttribute('data-hls-src');
+
+                if (typeof Hls === 'undefined') {
+                    console.warn('[HLS Admin] HLS.js not loaded.');
+                    return;
+                }
+
+                if (el._hlsInstance) {
+                    el._hlsInstance.destroy();
+                    el._hlsInstance = null;
+                }
+
+                if (Hls.isSupported()) {
+                    var hls = new Hls({ enableWorker: false });
+                    hls.on(Hls.Events.ERROR, function (event, data) {
+                        if (data.fatal) {
+                            console.error('[HLS Admin] Fatal error:', data.type, data.details);
+                        }
+                    });
+                    hls.loadSource(src);
+                    hls.attachMedia(el);
+                    el._hlsInstance = hls;
+                } else if (el.canPlayType('application/vnd.apple.mpegurl')) {
+                    el.src = src;
+                } else {
+                    el.outerHTML = '<span class="text-danger">HLS not supported in this browser.</span>';
+                }
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initFormHlsPlayer);
+            } else {
+                initFormHlsPlayer();
+            }
+        })();
+
+        // ─── Auto-detect duration from file upload ────────────────────────────
         document.addEventListener('DOMContentLoaded', function() {
             const fileInput = document.getElementById('file');
             const durationInput = document.getElementById('duration_seconds');

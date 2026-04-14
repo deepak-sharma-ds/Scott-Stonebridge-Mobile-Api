@@ -1,8 +1,6 @@
 @extends('admin.layouts.app')
 
 @section('content')
-    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-
     <div class="container-fluid">
 
         {{-- Page Header --}}
@@ -68,28 +66,10 @@
                                     @if ($audio->is_hls_ready && $audio->hls_path)
                                         <div
                                             style="background: rgba(102, 126, 234, 0.05); padding: 0.5rem; border-radius: 10px; border: 1px solid rgba(102, 126, 234, 0.1);">
-                                            <video id="audio-player-{{ $audio->id }}" controls
-                                                style="width: 100%; height: 40px; border-radius: 8px;"></video>
+                                            <audio id="audio-player-{{ $audio->id }}" controls
+                                                style="width: 100%; height: 40px; border-radius: 8px;"
+                                                data-hls-src="{{ route('audio.stream', ['audio' => $audio->id, 'file' => 'playlist.m3u8']) }}"></audio>
                                         </div>
-
-                                        <script>
-                                            document.addEventListener('DOMContentLoaded', function() {
-                                                let audioId = '{{ $audio->id }}';
-                                                let audio{{ $audio->id }} = document.getElementById('audio-player-' + audioId);
-                                                const src = "{{ route('audio.stream', ['audio' => $audio->id, 'file' => 'playlist.m3u8']) }}";
-
-                                                if (Hls.isSupported()) {
-                                                    const hls = new Hls();
-                                                    hls.loadSource(src);
-                                                    hls.attachMedia(audio{{ $audio->id }});
-                                                } else if (audio{{ $audio->id }}.canPlayType('application/vnd.apple.mpegurl')) {
-                                                    audio{{ $audio->id }}.src = src;
-                                                } else {
-                                                    audio{{ $audio->id }}.outerHTML =
-                                                        '<span class="text-danger" style="font-size: 0.875rem;">HLS not supported</span>';
-                                                }
-                                            });
-                                        </script>
                                     @else
                                         <div
                                             style="text-align: center; padding: 1rem; background: rgba(245, 158, 11, 0.05); border-radius: 10px; border: 1px solid rgba(245, 158, 11, 0.2);">
@@ -185,4 +165,65 @@
         </div>
 
     </div>
+@endsection
+
+@section('custom_js_scripts')
+<script>
+(function () {
+    function initHlsPlayers() {
+        if (typeof Hls === 'undefined') {
+            console.warn('[HLS Admin] HLS.js not loaded — audio players disabled.');
+            return;
+        }
+
+        document.querySelectorAll('audio[data-hls-src]').forEach(function (el) {
+            var src = el.getAttribute('data-hls-src');
+            if (!src) return;
+
+            // Destroy any pre-existing instance (e.g. hot-reload / Turbo navigation)
+            if (el._hlsInstance) {
+                el._hlsInstance.destroy();
+                el._hlsInstance = null;
+            }
+
+            if (Hls.isSupported()) {
+                var hls = new Hls({ enableWorker: false });
+
+                hls.on(Hls.Events.ERROR, function (event, data) {
+                    if (data.fatal) {
+                        console.error('[HLS Admin] Fatal error on #' + el.id, data.type, data.details);
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                hls.startLoad();
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                hls.recoverMediaError();
+                                break;
+                            default:
+                                hls.destroy();
+                        }
+                    }
+                });
+
+                hls.loadSource(src);
+                hls.attachMedia(el);
+                el._hlsInstance = hls;
+
+            } else if (el.canPlayType('application/vnd.apple.mpegurl')) {
+                // Safari native HLS
+                el.src = src;
+            } else {
+                el.outerHTML = '<span class="text-danger" style="font-size:0.875rem;">HLS not supported in this browser.</span>';
+            }
+        });
+    }
+
+    // Robust timing: works whether DOMContentLoaded already fired or not
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initHlsPlayers);
+    } else {
+        initHlsPlayers();
+    }
+})();
+</script>
 @endsection
