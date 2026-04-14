@@ -41,8 +41,8 @@
                 </audio> --}}
                 @if ($audio->is_hls_ready && $audio->hls_path)
                     {{-- ✅ HLS player — initialized via @section('custom_js_scripts') below --}}
-                    <audio id="audio-player-{{ $audio->id }}" controls style="width: 300px; height: 40px;"
-                        data-hls-src="{{ route('audio.stream', ['audio' => $audio->id, 'file' => 'playlist.m3u8']) }}"></audio>
+                    <video id="audio-player-{{ $audio->id }}" controls style="width: 300px; height: 40px;"
+                        data-hls-src="{{ route('audio.stream', ['audio' => $audio->id, 'file' => 'playlist.m3u8']) }}"></video>
                     <div class="mt-3">
                         <h6 class="text-muted">Conversion Status:</h6>
                         @if ($audio->is_hls_ready)
@@ -97,7 +97,7 @@
         // ─── HLS preview player ───────────────────────────────────────────────
         (function () {
             function initFormHlsPlayer() {
-                var el = document.querySelector('audio[data-hls-src]');
+                var el = document.querySelector('video[data-hls-src]');
                 if (!el) return;
 
                 var src = el.getAttribute('data-hls-src');
@@ -113,10 +113,11 @@
                 }
 
                 if (Hls.isSupported()) {
-                    var hls = new Hls({ enableWorker: false });
+                    var hls = new Hls();
                     hls.on(Hls.Events.ERROR, function (event, data) {
                         if (data.fatal) {
                             console.error('[HLS Admin] Fatal error:', data.type, data.details);
+                            hls.destroy();
                         }
                     });
                     hls.loadSource(src);

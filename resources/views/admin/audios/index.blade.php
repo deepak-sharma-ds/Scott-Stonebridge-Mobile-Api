@@ -66,9 +66,9 @@
                                     @if ($audio->is_hls_ready && $audio->hls_path)
                                         <div
                                             style="background: rgba(102, 126, 234, 0.05); padding: 0.5rem; border-radius: 10px; border: 1px solid rgba(102, 126, 234, 0.1);">
-                                            <audio id="audio-player-{{ $audio->id }}" controls
+                                            <video id="audio-player-{{ $audio->id }}" controls
                                                 style="width: 100%; height: 40px; border-radius: 8px;"
-                                                data-hls-src="{{ route('audio.stream', ['audio' => $audio->id, 'file' => 'playlist.m3u8']) }}"></audio>
+                                                data-hls-src="{{ route('audio.stream', ['audio' => $audio->id, 'file' => 'playlist.m3u8']) }}"></video>
                                         </div>
                                     @else
                                         <div
@@ -176,7 +176,7 @@
             return;
         }
 
-        document.querySelectorAll('audio[data-hls-src]').forEach(function (el) {
+        document.querySelectorAll('video[data-hls-src]').forEach(function (el) {
             var src = el.getAttribute('data-hls-src');
             if (!src) return;
 
@@ -187,21 +187,28 @@
             }
 
             if (Hls.isSupported()) {
-                var hls = new Hls({ enableWorker: false });
+                var hls = new Hls();
+                var mediaErrorRecovered = false;
 
                 hls.on(Hls.Events.ERROR, function (event, data) {
-                    if (data.fatal) {
-                        console.error('[HLS Admin] Fatal error on #' + el.id, data.type, data.details);
-                        switch (data.type) {
-                            case Hls.ErrorTypes.NETWORK_ERROR:
-                                hls.startLoad();
-                                break;
-                            case Hls.ErrorTypes.MEDIA_ERROR:
-                                hls.recoverMediaError();
-                                break;
-                            default:
-                                hls.destroy();
+                    if (!data.fatal) return;
+                    console.error('[HLS Admin] Fatal error on #' + el.id, data.type, data.details);
+
+                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                        // Transient network issue — retry once
+                        hls.startLoad();
+                    } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR &&
+                               data.details !== Hls.ErrorDetails.FRAG_PARSING_ERROR) {
+                        // Media decode error (not a parse/decrypt failure) — attempt recovery once
+                        if (!mediaErrorRecovered) {
+                            mediaErrorRecovered = true;
+                            hls.recoverMediaError();
+                        } else {
+                            hls.destroy();
                         }
+                    } else {
+                        // fragParsingError or unrecoverable — destroy cleanly
+                        hls.destroy();
                     }
                 });
 
