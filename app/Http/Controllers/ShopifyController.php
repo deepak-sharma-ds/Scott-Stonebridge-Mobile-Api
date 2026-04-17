@@ -59,14 +59,48 @@ class ShopifyController extends Controller
 
             $log->info('Shopify Webhook Received:', $data);
 
+            $properties = [];
+
+            if (!empty($data['line_items'])) {
+                foreach ($data['line_items'] as $item) {
+                    if (!empty($item['properties'])) {
+                        foreach ($item['properties'] as $prop) {
+                            $properties[$prop['name']] = $prop['value'];
+                        }
+                    }
+                }
+            }
+
             // Map or validate data according to your booking structure
+            // $bookingData = [
+            //     'order_id' => $data['id'] ?? null,
+            //     'name' => $data['name'] ?? $data['customer']['first_name'] . ' ' . $data['customer']['last_name'] ?? null,
+            //     'email' => $data['email'] ?? $data['customer']['email'] ?? null,
+            //     'phone' => $data['phone'] ?? null,
+            //     'availability_date' => $data['availability_date'] ?? now()->toDateString(),
+            //     'time_slot_id' => $data['time_slot_id'] ?? null,
+            // ];
             $bookingData = [
                 'order_id' => $data['id'] ?? null,
-                'name' => $data['name'] ?? $data['customer']['first_name'] . ' ' . $data['customer']['last_name'] ?? null,
-                'email' => $data['email'] ?? $data['customer']['email'] ?? null,
-                'phone' => $data['phone'] ?? null,
-                'availability_date' => $data['availability_date'] ?? now()->toDateString(),
-                'time_slot_id' => $data['time_slot_id'] ?? null,
+
+                'name' => $properties['name']
+                    ?? ($data['customer']['first_name'] . ' ' . $data['customer']['last_name'] ?? null),
+
+                'email' => $properties['email']
+                    ?? $data['email']
+                    ?? $data['customer']['email']
+                    ?? null,
+
+                'phone' => $properties['phone']
+                    ?? $data['phone']
+                    ?? null,
+
+                'availability_date' => $properties['availability_date']
+                    ?? now()->toDateString(),
+
+                'time_slot_id' => isset($properties['time_slot_id'])
+                    ? (int) $properties['time_slot_id']
+                    : null,
             ];
             if (empty($bookingData['time_slot_id'])) {
                 return response()->json([
