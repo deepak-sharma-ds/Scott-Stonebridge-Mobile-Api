@@ -102,7 +102,7 @@ class HlsController extends Controller
             $audio = Audio::findOrFail($audioId);
 
             // Validate signature
-            $expected = hash_hmac('sha256', $audioId . '-' . $customerId, env('APP_KEY'));
+            $expected = hash_hmac('sha256', $audioId . '-' . $customerId, config('app.key', env('APP_KEY')));
             if (!hash_equals($expected, $signature)) {
                 abort(403, 'Invalid download signature');
             }

@@ -11,13 +11,13 @@
                 '<a href="' .
                 route('audios.create') .
                 '" class="btn btn-primary">
-                                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 0.5rem;">
-                                                        <path d="M9 18V5l12-2v13"></path>
-                                                        <circle cx="6" cy="18" r="3"></circle>
-                                                        <circle cx="18" cy="16" r="3"></circle>
-                                                    </svg>
-                                                    Add Audio
-                                                </a>',
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 0.5rem;">
+                        <path d="M9 18V5l12-2v13"></path>
+                        <circle cx="6" cy="18" r="3"></circle>
+                        <circle cx="18" cy="16" r="3"></circle>
+                    </svg>
+                    Add Audio
+                </a>',
         ])
 
         {{-- Alert Messages --}}
@@ -144,10 +144,10 @@
                                         'message' =>
                                             'No audio files found. Upload your first audio to get started!',
                                         'icon' => '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 1rem; opacity: 0.5;">
-                                                                                                                                                                <path d="M9 18V5l12-2v13"></path>
-                                                                                                                                                                <circle cx="6" cy="18" r="3"></circle>
-                                                                                                                                                                <circle cx="18" cy="16" r="3"></circle>
-                                                                                                                                                            </svg>',
+                                                        <path d="M9 18V5l12-2v13"></path>
+                                                        <circle cx="6" cy="18" r="3"></circle>
+                                                        <circle cx="18" cy="16" r="3"></circle>
+                                                    </svg>',
                                     ])
                                 </td>
                             </tr>
@@ -168,69 +168,71 @@
 @endsection
 
 @section('custom_js_scripts')
-<script>
-(function () {
-    function initHlsPlayers() {
-        if (typeof Hls === 'undefined') {
-            console.warn('[HLS Admin] HLS.js not loaded — audio players disabled.');
-            return;
-        }
+    <script>
+        (function() {
+            function initHlsPlayers() {
+                if (typeof Hls === 'undefined') {
+                    console.warn('[HLS Admin] HLS.js not loaded — audio players disabled.');
+                    return;
+                }
 
-        document.querySelectorAll('video[data-hls-src]').forEach(function (el) {
-            var src = el.getAttribute('data-hls-src');
-            if (!src) return;
+                document.querySelectorAll('video[data-hls-src]').forEach(function(el) {
+                    var src = el.getAttribute('data-hls-src');
+                    if (!src) return;
 
-            // Destroy any pre-existing instance (e.g. hot-reload / Turbo navigation)
-            if (el._hlsInstance) {
-                el._hlsInstance.destroy();
-                el._hlsInstance = null;
-            }
+                    // Destroy any pre-existing instance (e.g. hot-reload / Turbo navigation)
+                    if (el._hlsInstance) {
+                        el._hlsInstance.destroy();
+                        el._hlsInstance = null;
+                    }
 
-            if (Hls.isSupported()) {
-                var hls = new Hls();
-                var mediaErrorRecovered = false;
+                    if (Hls.isSupported()) {
+                        var hls = new Hls();
+                        var mediaErrorRecovered = false;
 
-                hls.on(Hls.Events.ERROR, function (event, data) {
-                    if (!data.fatal) return;
-                    console.error('[HLS Admin] Fatal error on #' + el.id, data.type, data.details);
+                        hls.on(Hls.Events.ERROR, function(event, data) {
+                            if (!data.fatal) return;
+                            console.error('[HLS Admin] Fatal error on #' + el.id, data.type, data
+                                .details);
 
-                    if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
-                        // Transient network issue — retry once
-                        hls.startLoad();
-                    } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR &&
-                               data.details !== Hls.ErrorDetails.FRAG_PARSING_ERROR) {
-                        // Media decode error (not a parse/decrypt failure) — attempt recovery once
-                        if (!mediaErrorRecovered) {
-                            mediaErrorRecovered = true;
-                            hls.recoverMediaError();
-                        } else {
-                            hls.destroy();
-                        }
+                            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                                // Transient network issue — retry once
+                                hls.startLoad();
+                            } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR &&
+                                data.details !== Hls.ErrorDetails.FRAG_PARSING_ERROR) {
+                                // Media decode error (not a parse/decrypt failure) — attempt recovery once
+                                if (!mediaErrorRecovered) {
+                                    mediaErrorRecovered = true;
+                                    hls.recoverMediaError();
+                                } else {
+                                    hls.destroy();
+                                }
+                            } else {
+                                // fragParsingError or unrecoverable — destroy cleanly
+                                hls.destroy();
+                            }
+                        });
+
+                        hls.loadSource(src);
+                        hls.attachMedia(el);
+                        el._hlsInstance = hls;
+
+                    } else if (el.canPlayType('application/vnd.apple.mpegurl')) {
+                        // Safari native HLS
+                        el.src = src;
                     } else {
-                        // fragParsingError or unrecoverable — destroy cleanly
-                        hls.destroy();
+                        el.outerHTML =
+                            '<span class="text-danger" style="font-size:0.875rem;">HLS not supported in this browser.</span>';
                     }
                 });
-
-                hls.loadSource(src);
-                hls.attachMedia(el);
-                el._hlsInstance = hls;
-
-            } else if (el.canPlayType('application/vnd.apple.mpegurl')) {
-                // Safari native HLS
-                el.src = src;
-            } else {
-                el.outerHTML = '<span class="text-danger" style="font-size:0.875rem;">HLS not supported in this browser.</span>';
             }
-        });
-    }
 
-    // Robust timing: works whether DOMContentLoaded already fired or not
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initHlsPlayers);
-    } else {
-        initHlsPlayers();
-    }
-})();
-</script>
+            // Robust timing: works whether DOMContentLoaded already fired or not
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initHlsPlayers);
+            } else {
+                initHlsPlayers();
+            }
+        })();
+    </script>
 @endsection
