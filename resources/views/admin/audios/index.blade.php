@@ -11,13 +11,13 @@
                 '<a href="' .
                 route('audios.create') .
                 '" class="btn btn-primary">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 0.5rem;">
-                                        <path d="M9 18V5l12-2v13"></path>
-                                        <circle cx="6" cy="18" r="3"></circle>
-                                        <circle cx="18" cy="16" r="3"></circle>
-                                    </svg>
-                                    Add Audio
-                                </a>',
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 0.5rem;">
+                        <path d="M9 18V5l12-2v13"></path>
+                        <circle cx="6" cy="18" r="3"></circle>
+                        <circle cx="18" cy="16" r="3"></circle>
+                    </svg>
+                    Add Audio
+                </a>',
         ])
 
         {{-- Alert Messages --}}
@@ -67,26 +67,9 @@
                                         <div
                                             style="background: rgba(102, 126, 234, 0.05); padding: 0.5rem; border-radius: 10px; border: 1px solid rgba(102, 126, 234, 0.1);">
                                             <video id="audio-player-{{ $audio->id }}" controls
-                                                style="width: 100%; height: 40px; border-radius: 8px;"></video>
+                                                style="width: 100%; height: 40px; border-radius: 8px;"
+                                                data-hls-src="{{ route('audio.stream', ['audio' => $audio->id, 'file' => 'playlist.m3u8']) }}"></video>
                                         </div>
-
-                                        <script>
-                                            document.addEventListener('DOMContentLoaded', function() {
-                                                const audio{{ $audio->id }} = document.getElementById('audio-player-{{ $audio->id }}');
-                                                const src = "{{ route('audio.stream', ['audio' => $audio->id, 'file' => 'playlist.m3u8']) }}";
-
-                                                if (Hls.isSupported()) {
-                                                    const hls = new Hls();
-                                                    hls.loadSource(src);
-                                                    hls.attachMedia(audio{{ $audio->id }});
-                                                } else if (audio{{ $audio->id }}.canPlayType('application/vnd.apple.mpegurl')) {
-                                                    audio{{ $audio->id }}.src = src;
-                                                } else {
-                                                    audio{{ $audio->id }}.outerHTML =
-                                                        '<span class="text-danger" style="font-size: 0.875rem;">HLS not supported</span>';
-                                                }
-                                            });
-                                        </script>
                                     @else
                                         <div
                                             style="text-align: center; padding: 1rem; background: rgba(245, 158, 11, 0.05); border-radius: 10px; border: 1px solid rgba(245, 158, 11, 0.2);">
@@ -161,10 +144,10 @@
                                         'message' =>
                                             'No audio files found. Upload your first audio to get started!',
                                         'icon' => '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 1rem; opacity: 0.5;">
-                                                                                        <path d="M9 18V5l12-2v13"></path>
-                                                                                        <circle cx="6" cy="18" r="3"></circle>
-                                                                                        <circle cx="18" cy="16" r="3"></circle>
-                                                                                    </svg>',
+                                                        <path d="M9 18V5l12-2v13"></path>
+                                                        <circle cx="6" cy="18" r="3"></circle>
+                                                        <circle cx="18" cy="16" r="3"></circle>
+                                                    </svg>',
                                     ])
                                 </td>
                             </tr>
@@ -182,4 +165,74 @@
         </div>
 
     </div>
+@endsection
+
+@section('custom_js_scripts')
+    <script>
+        (function() {
+            function initHlsPlayers() {
+                if (typeof Hls === 'undefined') {
+                    console.warn('[HLS Admin] HLS.js not loaded — audio players disabled.');
+                    return;
+                }
+
+                document.querySelectorAll('video[data-hls-src]').forEach(function(el) {
+                    var src = el.getAttribute('data-hls-src');
+                    if (!src) return;
+
+                    // Destroy any pre-existing instance (e.g. hot-reload / Turbo navigation)
+                    if (el._hlsInstance) {
+                        el._hlsInstance.destroy();
+                        el._hlsInstance = null;
+                    }
+
+                    if (Hls.isSupported()) {
+                        var hls = new Hls();
+                        var mediaErrorRecovered = false;
+
+                        hls.on(Hls.Events.ERROR, function(event, data) {
+                            if (!data.fatal) return;
+                            console.error('[HLS Admin] Fatal error on #' + el.id, data.type, data
+                                .details);
+
+                            if (data.type === Hls.ErrorTypes.NETWORK_ERROR) {
+                                // Transient network issue — retry once
+                                hls.startLoad();
+                            } else if (data.type === Hls.ErrorTypes.MEDIA_ERROR &&
+                                data.details !== Hls.ErrorDetails.FRAG_PARSING_ERROR) {
+                                // Media decode error (not a parse/decrypt failure) — attempt recovery once
+                                if (!mediaErrorRecovered) {
+                                    mediaErrorRecovered = true;
+                                    hls.recoverMediaError();
+                                } else {
+                                    hls.destroy();
+                                }
+                            } else {
+                                // fragParsingError or unrecoverable — destroy cleanly
+                                hls.destroy();
+                            }
+                        });
+
+                        hls.loadSource(src);
+                        hls.attachMedia(el);
+                        el._hlsInstance = hls;
+
+                    } else if (el.canPlayType('application/vnd.apple.mpegurl')) {
+                        // Safari native HLS
+                        el.src = src;
+                    } else {
+                        el.outerHTML =
+                            '<span class="text-danger" style="font-size:0.875rem;">HLS not supported in this browser.</span>';
+                    }
+                });
+            }
+
+            // Robust timing: works whether DOMContentLoaded already fired or not
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', initHlsPlayers);
+            } else {
+                initHlsPlayers();
+            }
+        })();
+    </script>
 @endsection

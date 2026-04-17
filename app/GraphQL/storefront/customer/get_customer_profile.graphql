@@ -5,6 +5,12 @@ query getCustomerProfile($customerAccessToken: String!) {
     lastName
     email
     phone
+    acceptsMarketing
+    createdAt
+    tags
+    defaultAddress {
+      id
+    }
 
     addresses(first: 250) {
       edges {

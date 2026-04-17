@@ -139,11 +139,11 @@ class BookingService
                 'description' => "Booking confirmed.\nPhone: " . $data['phone'],
                 'start'       => [
                     'dateTime' => $startDateTime->toRfc3339String(),
-                    'timeZone' => 'Asia/Kolkata',
+                    'timeZone' => config('app.timezone', 'Europe/London'),
                 ],
                 'end'         => [
                     'dateTime' => $endDateTime->toRfc3339String(),
-                    'timeZone' => 'Asia/Kolkata',
+                    'timeZone' => config('app.timezone', 'Europe/London'),
                 ],
                 'attendees' => [
                     ['email' => $data['email']],

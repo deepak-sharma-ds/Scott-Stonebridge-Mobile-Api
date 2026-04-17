@@ -1,0 +1,12 @@
+mutation releaseFulfillmentHold($fulfillmentOrderId: ID!) {
+  fulfillmentOrderReleaseHold(id: $fulfillmentOrderId) {
+    fulfillmentOrder {
+      id
+      status
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}

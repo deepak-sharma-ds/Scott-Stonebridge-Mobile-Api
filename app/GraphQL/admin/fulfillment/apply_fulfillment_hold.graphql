@@ -1,0 +1,18 @@
+mutation applyFulfillmentHold($fulfillmentOrderId: ID!, $reason: FulfillmentHoldReason!, $reasonNotes: String) {
+  fulfillmentOrderHold(
+    id: $fulfillmentOrderId
+    fulfillmentHold: {
+      reason: $reason
+      reasonNotes: $reasonNotes
+    }
+  ) {
+    fulfillmentOrder {
+      id
+      status
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}

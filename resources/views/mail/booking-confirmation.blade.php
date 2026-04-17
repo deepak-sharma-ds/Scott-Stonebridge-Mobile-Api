@@ -2,6 +2,7 @@
 <html lang="en" style="font-family: Arial, sans-serif; background-color: #f6f6f6; padding: 20px;">
 <head>
     <meta charset="UTF-8" />
+    <meta name="robots" content="noindex, nofollow">
     <title>Booking Confirmation</title>
 </head>
 <body style="max-width: 600px; margin: auto; background: white; padding: 20px; border-radius: 8px; color: #333;">

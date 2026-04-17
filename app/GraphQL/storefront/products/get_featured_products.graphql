@@ -1,4 +1,9 @@
-query getFeaturedProducts($tag: String!, $limit: Int!, $after: String) {
+query getFeaturedProducts(
+  $tag: String!
+  $limit: Int!
+  $after: String
+  $country: CountryCode
+) @inContext(country: $country) {
   collectionByHandle(handle: $tag) {
     id
     title

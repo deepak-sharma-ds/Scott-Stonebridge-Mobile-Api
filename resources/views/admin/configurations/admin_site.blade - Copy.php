@@ -133,7 +133,7 @@
                                 <div class="col-sm-6 form-group">
                                     <div class="img-parent-box">
                                         @if(config('Site.admin_favicon'))
-                                            <img src="{{ asset('storage/configuration-images/'.config('Site.admin_favicon')) }}" alt="{{ config('Site.admin_favicon') }}" class="configurationPrefixImg img-for-onchange">
+                                            <img src="{{ asset('storage/configuration-images/' . config('Site.admin_favicon')) }}" alt="{{ config('Site.admin_favicon') }}" class="configurationPrefixImg img-for-onchange">
                                         @endif
                                         <div class="form-file d-inline-block">
                                             <input type="file" accept=".png, .jpg, .jpeg, .svg" name="Site[admin_favicon]" id="SiteFavicon" class="form-file-input img-input-onchange ps-2 form-control">
@@ -147,7 +147,7 @@
                                 <div class="col-sm-6 form-group">
                                     <div class="img-parent-box">
                                         @if(config('Site.admin_icon_logo'))
-                                            <img src="{{ asset('storage/configuration-images/'.config('Site.admin_icon_logo')) }}" alt="{{ config('Site.admin_icon_logo') }}" class="configurationPrefixImg img-for-onchange">
+                                            <img src="{{ asset('storage/configuration-images/' . config('Site.admin_icon_logo')) }}" alt="{{ config('Site.admin_icon_logo') }}" class="configurationPrefixImg img-for-onchange">
                                         @endif
                                         <div class="form-file d-inline-block">
                                             <input type="file" accept=".png, .jpg, .jpeg, .svg" name="Site[admin_icon_logo]" id="SiteIconLogo" class="form-file-input img-input-onchange ps-2 form-control">

@@ -1,0 +1,143 @@
+query getCollectionProducts(
+  $handle: String!
+  $limit: Int!
+  $after: String
+  $sortKey: ProductCollectionSortKeys
+  $reverse: Boolean
+  $country: CountryCode
+) @inContext(country: $country) {
+  collectionByHandle(handle: $handle) {
+    id
+    title
+    handle
+    description
+    descriptionHtml
+    updatedAt
+
+    image {
+      url
+      altText
+      width
+      height
+    }
+
+    products(
+      first: $limit
+      after: $after
+      sortKey: $sortKey
+      reverse: $reverse
+    ) {
+      edges {
+        cursor
+        node {
+          id
+          title
+          handle
+          description
+          descriptionHtml
+          vendor
+          productType
+          tags
+          availableForSale
+          totalInventory
+          publishedAt
+          updatedAt
+          onlineStoreUrl
+
+          options {
+            id
+            name
+            values
+          }
+
+          images(first: 250) {
+            edges {
+              node {
+                id
+                url
+                altText
+                width
+                height
+              }
+            }
+          }
+
+          variants(first: 250) {
+            edges {
+              node {
+                id
+                title
+                sku
+                availableForSale
+                quantityAvailable
+                weight
+                weightUnit
+
+                selectedOptions {
+                  name
+                  value
+                }
+
+                price {
+                  amount
+                  currencyCode
+                }
+
+                compareAtPrice {
+                  amount
+                  currencyCode
+                }
+
+                image {
+                  url
+                  altText
+                  width
+                  height
+                }
+              }
+            }
+          }
+
+          priceRange {
+            minVariantPrice {
+              amount
+              currencyCode
+            }
+            maxVariantPrice {
+              amount
+              currencyCode
+            }
+          }
+
+          compareAtPriceRange {
+            minVariantPrice {
+              amount
+              currencyCode
+            }
+            maxVariantPrice {
+              amount
+              currencyCode
+            }
+          }
+
+          collections(first: 10) {
+            edges {
+              node {
+                id
+                handle
+                title
+              }
+            }
+          }
+        }
+      }
+
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+      }
+    }
+  }
+}

@@ -16,6 +16,7 @@ use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\AvailabilitySlotController;
 use App\Http\Controllers\Admin\AvailabilityTemplateController;
 use App\Http\Controllers\Admin\CustomerController;
+use App\Http\Controllers\Admin\CustomerEntitlementController;
 use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\ReportingController;
 use App\Http\Controllers\ProfileController;
@@ -126,6 +127,14 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
 	// Route::get('/stream/audio/{id}', [AudioStreamController::class, 'stream'])
 	// 	->name('audio.stream');
 	// ->middleware('auth'); // or your custom auth for Shopify tag
+
+	// Manage customer entitlements of audio purchases
+	Route::get('customer-entitlements', [CustomerEntitlementController::class, 'index'])
+		->name('admin.customer.entitlements.index');
+	Route::get('customer-entitlements/{customerEntitlement}/edit', [CustomerEntitlementController::class, 'edit'])
+		->name('admin.customer.entitlements.edit');
+	Route::put('customer-entitlements/{customerEntitlement}', [CustomerEntitlementController::class, 'update'])
+		->name('admin.customer.entitlements.update');
 });
 
 Route::prefix('admin')->name('admin.')->group(function () {
@@ -139,5 +148,5 @@ Route::prefix('admin')->name('admin.')->group(function () {
 });
 
 Route::get('/admin/media/hls/{audio}/{file?}', [AudioStreamController::class, 'stream'])
-		->where('file', '.*')
-		->name('audio.stream');
+	->where('file', '.*')
+	->name('audio.stream');

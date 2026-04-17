@@ -51,7 +51,7 @@ class AudioAccessController extends Controller
                     ? route('audio.download', [
                         'audioId' => $audio->id,
                         'customerId' => $shopifyCustomerId,
-                        'signature' => hash_hmac('sha256', $audio->id . '-' . $shopifyCustomerId, env('APP_KEY'))
+                        'signature' => hash_hmac('sha256', $audio->id . '-' . $shopifyCustomerId, config('app.key', env('APP_KEY')))
                     ])
                     : null,
             ];

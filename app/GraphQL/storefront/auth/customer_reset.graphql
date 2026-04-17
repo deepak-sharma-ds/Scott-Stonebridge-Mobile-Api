@@ -1,0 +1,19 @@
+mutation customerReset($id: ID!, $input: CustomerResetInput!) {
+  customerReset(id: $id, input: $input) {
+    customer {
+      id
+      email
+    }
+    
+    customerAccessToken {
+      accessToken
+      expiresAt
+    }
+    
+    customerUserErrors {
+      field
+      message
+      code
+    }
+  }
+}

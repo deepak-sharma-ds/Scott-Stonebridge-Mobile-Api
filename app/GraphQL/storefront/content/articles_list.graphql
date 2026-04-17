@@ -1,0 +1,47 @@
+query getArticles($blogHandle: String!, $limit: Int!, $after: String) {
+  blog(handle: $blogHandle) {
+    id
+    title
+    handle
+
+    articles(first: $limit, after: $after, sortKey: PUBLISHED_AT, reverse: true) {
+      edges {
+        cursor
+        node {
+          id
+          title
+          handle
+          excerpt
+          excerptHtml
+          contentHtml
+          publishedAt
+          tags
+
+          authorV2 {
+            name
+            email
+          }
+
+          image {
+            url
+            altText
+            width
+            height
+          }
+          
+          seo {
+            title
+            description
+          }
+        }
+      }
+      
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+      }
+    }
+  }
+}

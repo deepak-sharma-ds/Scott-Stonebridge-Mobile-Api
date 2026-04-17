@@ -1,0 +1,24 @@
+query getBlogs($limit: Int!, $after: String) {
+  blogs(first: $limit, after: $after) {
+    edges {
+      cursor
+      node {
+        id
+        title
+        handle
+        
+        seo {
+          title
+          description
+        }
+      }
+    }
+    
+    pageInfo {
+      hasNextPage
+      hasPreviousPage
+      startCursor
+      endCursor
+    }
+  }
+}

@@ -1,249 +1,219 @@
 @extends('admin.layouts.app')
 
+@section('page-title', 'Edit Availability Templates')
+
 @section('content')
-    <style>
-        /* Fade-up stagger animation */
-        @keyframes fadeUp {
-            from {
-                opacity: 0;
-                transform: translateY(25px) scale(0.97);
-            }
+<div class="container-fluid">
 
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
-        }
+    {{-- Page Header --}}
+    @include('admin.components.page-header', [
+        'title'    => 'Edit Availability Templates',
+        'subtitle' => 'Add or modify your recurring weekly availability schedule',
+        'action'   => '
+            <a href="' . route('admin.availability_templates.index') . '" class="btn btn-secondary">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+                Back to Overview
+            </a>',
+    ])
 
-        .day-card {
-            animation: fadeUp 0.4s ease forwards;
-            animation-delay: calc(var(--i) * 0.07s);
-        }
+    @php
+        $days      = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+        $templates = App\Models\AvailabilityTemplate::where('user_id', auth()->id())->get();
+    @endphp
 
-        /* Hover glow */
-        .day-card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
-            transition: 0.25s ease;
-        }
+    <form method="POST" action="{{ route('admin.availability_templates.store') }}">
+        @csrf
 
-        /* Editable slot row */
-        .slot-edit-row {
-            background: #fff;
-            border: 1px solid #e5e7ef;
-            padding: 12px;
-            border-radius: 14px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-            transition: 0.2s ease;
-        }
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:1rem;margin-bottom:1.5rem;">
 
-        .slot-edit-row:hover {
-            transform: translateX(4px);
-            box-shadow: 0 6px 14px rgba(0, 0, 0, 0.12);
-        }
+            @foreach($days as $i => $day)
+                @php $daySlots = $templates->where('day_of_week', $day); @endphp
 
-        /* Collapse header */
-        .day-header {
-            background: linear-gradient(135deg, #eef1ff, #fafbff);
-            border-radius: 16px 16px 0 0;
-            padding: 16px 22px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
+                <div x-data="{ open: true }"
+                     class="card"
+                     style="animation:slideInUp 0.4s {{ ($i * 0.07) }}s both;overflow:hidden;">
 
-        /* Chevron rotation */
-        .day-toggle.collapsed i {
-            transform: rotate(0deg);
-        }
+                    {{-- Day header --}}
+                    <div style="display:flex;justify-content:space-between;align-items:center;
+                                padding:1rem 1.25rem;
+                                background:linear-gradient(135deg,rgba(99,102,241,0.06),rgba(139,92,246,0.04));
+                                border-bottom:1px solid var(--card-border);">
+                        <div style="display:flex;align-items:center;gap:0.625rem;">
+                            <div style="width:8px;height:8px;border-radius:50%;background:var(--color-primary);"></div>
+                            <span style="font-weight:700;color:var(--color-primary);font-size:0.9375rem;">
+                                {{ $day }}
+                            </span>
+                        </div>
+                        <button type="button" @click="open = !open"
+                                style="border:none;background:rgba(99,102,241,0.08);
+                                       color:var(--color-primary);
+                                       width:28px;height:28px;border-radius:7px;
+                                       cursor:pointer;display:flex;align-items:center;justify-content:center;"
+                                aria-label="Toggle">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="2.5"
+                                 style="transition:transform 0.2s;"
+                                 :style="open ? '' : 'transform:rotate(-90deg)'">
+                                <polyline points="6 9 12 15 18 9"></polyline>
+                            </svg>
+                        </button>
+                    </div>
 
-        .day-toggle i {
-            transform: rotate(180deg);
-            transition: 0.25s ease;
-        }
+                    {{-- Slots body --}}
+                    <div x-show="open"
+                         x-transition:enter="transition ease-out duration-200"
+                         x-transition:enter-start="opacity-0"
+                         x-transition:enter-end="opacity-100"
+                         style="padding:1rem 1.25rem;">
 
-        /* Add button pulse */
-        .add-slot:hover {
-            transform: scale(1.06);
-        }
-
-        /* Delete animation */
-        @keyframes fadeOut {
-            from {
-                opacity: 1;
-                transform: scale(1);
-            }
-
-            to {
-                opacity: 0;
-                transform: scale(0.9);
-            }
-        }
-
-        .removed {
-            animation: fadeOut .25s forwards;
-        }
-
-        /* SLOT PILL */
-        .slot-pill {
-            background: linear-gradient(135deg, #0B27C6, #F24FD8);
-            color: white;
-            padding: 8px 12px;
-            border-radius: 14px;
-            font-size: 13px;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
-            transition: 0.2s ease;
-        }
-
-        .slot-pill:hover {
-            transform: scale(1.05);
-            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.20);
-        }
-    </style>
-
-    <div class="container">
-
-        <!-- Page Header -->
-        <div class="row page-titles mx-0 mb-3">
-            <div class="col-sm-6 p-0">
-                <h4 class="welcome-text">Edit Availability Templates</h4>
-            </div>
-            <div class="col-sm-6 p-0 d-flex justify-content-sm-end">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="{{ route('admin.dashboard') }}">Dashboard</a></li>
-                    <li class="breadcrumb-item"><a href="{{ route('admin.availability_templates.index') }}">Templates</a></li>
-                    <li class="breadcrumb-item active">Edit Weekly Templates</li>
-                </ol>
-            </div>
-        </div>
-
-        <!-- FORM START -->
-        <form method="POST" action="{{ route('admin.availability_templates.store') }}">
-            @csrf
-
-            @php
-                $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-                $templates = App\Models\AvailabilityTemplate::where('user_id', auth()->id())->get();
-            @endphp
-
-            <div class="card p-4 shadow-lg border-0"
-                style="border-radius:22px; background: linear-gradient(145deg,#ffffff,#eef2ff);">
-
-                <div class="text-center mb-4">
-                    <h3 class="fw-bold text-primary mb-1">Customize Weekly Availability</h3>
-                    <p class="text-muted">Add or modify your recurring availability schedule</p>
-                </div>
-
-                <div class="row g-4">
-                    @foreach ($days as $i => $day)
-                        @php
-                            $daySlots = $templates->where('day_of_week', $day);
-                        @endphp
-
-                        <div class="col-md-6" style="--i:{{ $i }}">
-                            <div class="day-card shadow-sm border-0 h-100"
-                                style="border-radius:18px; background:rgba(255,255,255,0.7); backdrop-filter:blur(9px);">
-
-                                <!-- Header -->
-                                <div class="day-header">
-                                    <h5 class="fw-bold text-primary m-0">{{ $day }}</h5>
-
-                                    <button type="button" class="btn btn-light btn-sm day-toggle" data-bs-toggle="collapse"
-                                        data-bs-target="#collapse-{{ $day }}">
-                                        <i class="fa-solid fa-chevron-down"></i>
+                        <div id="slots-{{ $day }}">
+                            @foreach($daySlots as $k => $slot)
+                                <div class="slot-edit-row slot-row" data-slot-index="{{ $k }}">
+                                    <input type="time"
+                                           name="templates[{{ $day }}][{{ $k }}][start]"
+                                           value="{{ $slot->start_time }}"
+                                           class="form-control" style="flex:1;">
+                                    <span style="color:var(--text-muted);font-weight:600;flex-shrink:0;">—</span>
+                                    <input type="time"
+                                           name="templates[{{ $day }}][{{ $k }}][end]"
+                                           value="{{ $slot->end_time }}"
+                                           class="form-control" style="flex:1;">
+                                    <button type="button"
+                                            class="remove-slot"
+                                            style="border:none;background:var(--color-danger-muted);
+                                                   color:var(--color-danger);
+                                                   width:30px;height:30px;border-radius:7px;
+                                                   cursor:pointer;display:flex;align-items:center;
+                                                   justify-content:center;flex-shrink:0;
+                                                   transition:all var(--t-fast);"
+                                            onmouseover="this.style.background='var(--color-danger)';this.style.color='#fff'"
+                                            onmouseout="this.style.background='var(--color-danger-muted)';this.style.color='var(--color-danger)'"
+                                            aria-label="Remove slot">
+                                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                                             stroke="currentColor" stroke-width="2.5">
+                                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                                            <line x1="6"  y1="6" x2="18" y2="18"></line>
+                                        </svg>
                                     </button>
                                 </div>
-
-                                <!-- Body -->
-                                <div id="collapse-{{ $day }}" class="collapse show">
-                                    <div class="card-body">
-
-                                        <div id="slots-{{ $day }}">
-                                            @foreach ($daySlots as $k => $slot)
-                                                <div class="slot-edit-row mb-2 slot-row">
-                                                    <input type="time"
-                                                        name="templates[{{ $day }}][{{ $k }}][start]"
-                                                        value="{{ $slot->start_time }}" class="form-control w-auto slot-pill">
-
-                                                    <input type="time"
-                                                        name="templates[{{ $day }}][{{ $k }}][end]"
-                                                        value="{{ $slot->end_time }}" class="form-control w-auto slot-pill">
-
-                                                    <button type="button" class="btn btn-danger btn-sm remove-slot">
-                                                        <i class="fa-solid fa-xmark"></i>
-                                                    </button>
-                                                </div>
-                                            @endforeach
-                                        </div>
-
-                                        <button type="button" class="btn btn-outline-primary btn-sm mt-2 add-slot"
-                                            data-day="{{ $day }}">
-                                            <i class="fa-solid fa-plus"></i> Add Slot
-                                        </button>
-
-                                    </div>
-                                </div>
-
-                            </div>
+                            @endforeach
                         </div>
-                    @endforeach
-                </div>
 
-                <div class="text-end mt-4">
-                    <button class="btn btn-primary px-5 py-2 fw-bold">
-                        Save Templates
-                    </button>
-                </div>
+                        <button type="button"
+                                class="add-slot"
+                                data-day="{{ $day }}"
+                                style="margin-top:0.625rem;display:inline-flex;align-items:center;gap:0.375rem;
+                                       padding:0.4375rem 0.875rem;border-radius:8px;
+                                       border:1.5px dashed var(--color-primary);
+                                       background:var(--color-primary-muted);
+                                       color:var(--color-primary);
+                                       font-size:0.8125rem;font-weight:600;cursor:pointer;
+                                       transition:all var(--t-fast);"
+                                onmouseover="this.style.background='var(--color-primary)';this.style.color='#fff';this.style.borderStyle='solid'"
+                                onmouseout="this.style.background='var(--color-primary-muted)';this.style.color='var(--color-primary)';this.style.borderStyle='dashed'">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                                 stroke="currentColor" stroke-width="2.5">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            Add Slot
+                        </button>
 
-            </div>
-        </form>
-    </div>
+                    </div>
+                </div>
+            @endforeach
+
+        </div>
+
+        {{-- Save Button --}}
+        <div class="card p-4" style="display:flex;justify-content:flex-end;gap:0.625rem;">
+            <a href="{{ route('admin.availability_templates.index') }}" class="btn btn-secondary">
+                Cancel
+            </a>
+            <button type="submit" class="btn btn-primary" style="padding:0.625rem 2rem;">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                    <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                    <polyline points="7 3 7 8 15 8"></polyline>
+                </svg>
+                Save Templates
+            </button>
+        </div>
+
+    </form>
+
+</div>
+@endsection
+
+@section('custom_css_links')
+<style>
+    .slot-edit-row {
+        display: flex;
+        align-items: center;
+        gap: 0.625rem;
+        margin-bottom: 0.5rem;
+        animation: slideInUp 0.25s ease both;
+    }
+    @keyframes fadeOut {
+        from { opacity:1; transform:scale(1); }
+        to   { opacity:0; transform:scale(0.9); }
+    }
+    .slot-row.removing {
+        animation: fadeOut 0.2s forwards;
+    }
+</style>
 @endsection
 
 @section('custom_js_scripts')
-    <script>
-        document.addEventListener("DOMContentLoaded", function() {
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    'use strict';
 
-            document.querySelectorAll(".add-slot").forEach(btn => {
-                btn.addEventListener("click", () => {
-                    const day = btn.dataset.day;
-                    const container = document.getElementById("slots-" + day);
-                    const index = container.querySelectorAll(".slot-row").length;
+    // ── Add Slot ──
+    document.querySelectorAll('.add-slot').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var day       = btn.dataset.day;
+            var container = document.getElementById('slots-' + day);
+            var index     = container.querySelectorAll('.slot-row').length;
 
-                    container.insertAdjacentHTML("beforeend", `
-                <div class="slot-edit-row mb-2 slot-row newly-added">
-                    <input type="time"
-                           name="templates[${day}][${index}][start]"
-                           class="form-control w-auto slot-pill"
-                           required>
+            var row = document.createElement('div');
+            row.className = 'slot-edit-row slot-row';
 
-                    <input type="time"
-                           name="templates[${day}][${index}][end]"
-                           class="form-control w-auto slot-pill"
-                           required>
+            row.innerHTML =
+                '<input type="time" name="templates[' + day + '][' + index + '][start]" class="form-control" style="flex:1;" required>' +
+                '<span style="color:var(--text-muted);font-weight:600;flex-shrink:0;">—</span>' +
+                '<input type="time" name="templates[' + day + '][' + index + '][end]" class="form-control" style="flex:1;" required>' +
+                '<button type="button" class="remove-slot"' +
+                '        style="border:none;background:var(--color-danger-muted);color:var(--color-danger);' +
+                '               width:30px;height:30px;border-radius:7px;cursor:pointer;' +
+                '               display:flex;align-items:center;justify-content:center;flex-shrink:0;"' +
+                '        onmouseover="this.style.background=\'var(--color-danger)\';this.style.color=\'#fff\'"' +
+                '        onmouseout="this.style.background=\'var(--color-danger-muted)\';this.style.color=\'var(--color-danger)\'"' +
+                '        aria-label="Remove slot">' +
+                '    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">' +
+                '        <line x1="18" y1="6" x2="6" y2="18"></line>' +
+                '        <line x1="6"  y1="6" x2="18" y2="18"></line>' +
+                '    </svg>' +
+                '</button>';
 
-                    <button type="button" class="btn btn-danger btn-sm remove-slot">
-                        <i class="fa-solid fa-xmark"></i>
-                    </button>
-                </div>
-            `);
-                });
-            });
+            container.appendChild(row);
 
-            document.addEventListener("click", function(e) {
-                if (e.target.closest(".remove-slot")) {
-                    const row = e.target.closest(".slot-row");
-                    row.classList.add("removed");
-                    setTimeout(() => row.remove(), 250);
-                }
-            });
+            // Focus first input of new row
+            row.querySelector('input[type="time"]').focus();
         });
-    </script>
+    });
+
+    // ── Remove Slot (event delegation) ──
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.remove-slot');
+        if (!btn) return;
+        var row = btn.closest('.slot-row');
+        if (!row) return;
+        row.classList.add('removing');
+        setTimeout(function () { row.remove(); }, 220);
+    });
+});
+</script>
 @endsection

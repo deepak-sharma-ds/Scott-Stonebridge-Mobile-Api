@@ -1,23 +1,23 @@
 {{-- Extends layout --}}
 @extends('admin.layouts.app')
 
+@section('page-title', 'Settings Configuration')
+
 {{-- Content --}}
 @section('content')
 <div class="container-fluid">
-	<div class="row page-titles mx-0 mb-3">
-		<div class="col-sm-6 p-0">
-			<div class="welcome-text">
-				<h4>Configuration</h4>
-				<span>{{ Str::ucfirst($prefix) }} Configuration</span>
-			</div>
-		</div>
-		<div class="col-sm-6 p-0 justify-content-sm-end mt-2 mt-sm-0 d-flex">
-			<ol class="breadcrumb">
-				<li class="breadcrumb-item"><a href="{{ route('admin.configurations.admin_index') }}">Configuration</a></li>
-				<li class="breadcrumb-item active"><a href="javascript:void(0)">{{ Str::ucfirst($prefix) }}</a></li>
-			</ol>
-		</div>
-	</div>
+
+    @include('admin.components.page-header', [
+        'title'    => Str::ucfirst($prefix) . ' Configuration',
+        'subtitle' => 'Manage theme and system settings',
+        'action'   => '
+            <a href="' . route('admin.configurations.admin_index') . '" class="btn btn-secondary">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+                Back to Configurations
+            </a>',
+    ])
 
 	<div class="row">
 		<div class="col-xl-12">

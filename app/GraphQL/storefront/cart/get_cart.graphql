@@ -1,0 +1,104 @@
+query getCart($cartId: ID!, $country: CountryCode)
+@inContext(country: $country) {
+  cart(id: $cartId) {
+    id
+    checkoutUrl
+    createdAt
+    updatedAt
+
+    lines(first: 250) {
+      edges {
+        node {
+          id
+          quantity
+
+          merchandise {
+            ... on ProductVariant {
+              id
+              title
+              sku
+
+              price {
+                amount
+                currencyCode
+              }
+
+              compareAtPrice {
+                amount
+                currencyCode
+              }
+
+              image {
+                url
+                altText
+              }
+
+              product {
+                id
+                title
+                handle
+              }
+            }
+          }
+
+          cost {
+            totalAmount {
+              amount
+              currencyCode
+            }
+            subtotalAmount {
+              amount
+              currencyCode
+            }
+          }
+        }
+      }
+    }
+
+    cost {
+      totalAmount {
+        amount
+        currencyCode
+      }
+      subtotalAmount {
+        amount
+        currencyCode
+      }
+      totalTaxAmount {
+        amount
+        currencyCode
+      }
+      totalDutyAmount {
+        amount
+        currencyCode
+      }
+    }
+
+    buyerIdentity {
+      email
+      phone
+      countryCode
+      customer {
+        id
+        email
+        firstName
+        lastName
+      }
+      deliveryAddressPreferences {
+        ... on MailingAddress {
+          address1
+          address2
+          city
+          provinceCode
+          countryCodeV2
+          zip
+        }
+      }
+    }
+
+    attributes {
+      key
+      value
+    }
+  }
+}

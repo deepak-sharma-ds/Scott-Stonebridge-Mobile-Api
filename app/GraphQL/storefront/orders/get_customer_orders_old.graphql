@@ -1,0 +1,180 @@
+query CustomerOrderById(
+  $accessToken: String!
+  $orderQuery: String!
+  $limit: Int!
+  $country: CountryCode
+) @inContext(country: $country) {
+  customer(customerAccessToken: $accessToken) {
+    id
+    email
+    firstName
+    lastName
+
+    orders(first: 1, query: $orderQuery) {
+      nodes {
+        id
+        name
+        orderNumber
+        processedAt
+        financialStatus
+        fulfillmentStatus
+
+        subtotalPrice {
+          amount
+          currencyCode
+        }
+        totalPrice {
+          amount
+          currencyCode
+        }
+        totalShippingPrice {
+          amount
+          currencyCode
+        }
+        totalTax {
+          amount
+          currencyCode
+        }
+
+        billingAddress {
+          name
+          address1
+          address2
+          city
+          province
+          country
+          zip
+          phone
+        }
+
+        shippingAddress {
+          name
+          address1
+          address2
+          city
+          province
+          country
+          zip
+          phone
+        }
+
+        lineItems(first: $limit) {
+          nodes {
+            title
+            quantity
+            discountedTotalPrice {
+              amount
+              currencyCode
+            }
+            originalTotalPrice {
+              amount
+              currencyCode
+            }
+            customAttributes {
+              key
+              value
+            }
+            variant {
+              id
+              title
+              sku
+              image {
+                url
+                altText
+              }
+              product {
+                id
+                title
+                handle
+              }
+            }
+          }
+        }
+
+        discountApplications(first: $limit) {
+          nodes {
+            __typename
+
+            ... on DiscountCodeApplication {
+              code
+              allocationMethod
+              targetSelection
+              targetType
+              value {
+                __typename
+                ... on MoneyV2 {
+                  amount
+                  currencyCode
+                }
+                ... on PricingPercentageValue {
+                  percentage
+                }
+              }
+            }
+
+            ... on AutomaticDiscountApplication {
+              title
+              allocationMethod
+              targetSelection
+              targetType
+              value {
+                __typename
+                ... on MoneyV2 {
+                  amount
+                  currencyCode
+                }
+                ... on PricingPercentageValue {
+                  percentage
+                }
+              }
+            }
+
+            ... on ManualDiscountApplication {
+              title
+              allocationMethod
+              targetSelection
+              targetType
+              value {
+                __typename
+                ... on MoneyV2 {
+                  amount
+                  currencyCode
+                }
+                ... on PricingPercentageValue {
+                  percentage
+                }
+              }
+            }
+
+            ... on ScriptDiscountApplication {
+              title
+              allocationMethod
+              targetSelection
+              targetType
+              value {
+                __typename
+                ... on MoneyV2 {
+                  amount
+                  currencyCode
+                }
+                ... on PricingPercentageValue {
+                  percentage
+                }
+              }
+            }
+          }
+        }
+
+        successfulFulfillments(first: $limit) {
+          trackingCompany
+          trackingInfo {
+            number
+            url
+          }
+        }
+
+        statusUrl
+      }
+    }
+  }
+}

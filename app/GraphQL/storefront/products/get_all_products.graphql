@@ -4,7 +4,8 @@ query getAllProducts(
   $sortKey: ProductSortKeys
   $reverse: Boolean
   $query: String
-) {
+  $country: CountryCode
+) @inContext(country: $country) {
   products(
     first: $limit
     after: $after

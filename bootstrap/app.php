@@ -27,7 +27,17 @@ return Application::configure(basePath: dirname(__DIR__))
             // 'role' => \Spatie\Permission\Middleware\RoleMiddleware::class,
             // 'permission' => \Spatie\Permission\Middleware\PermissionMiddleware::class,
             // 'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
+            
+            // Legacy middleware (kept for backward compatibility)
             'shopify.customer.auth' => \App\Http\Middleware\ShopifyCustomerAuth::class,
+            
+            // New refactored middleware
+            'correlation.id' => \App\Http\Middleware\CorrelationIdMiddleware::class,
+            'currency' => \App\Http\Middleware\CurrencyMiddleware::class,
+            'rate.limit' => \App\Http\Middleware\RateLimitMiddleware::class,
+            'shopify.auth' => \App\Http\Middleware\ShopifyAuthMiddleware::class,
+            'api.logging' => \App\Http\Middleware\ApiLoggingMiddleware::class,
+            'response.cache' => \App\Http\Middleware\ResponseCacheMiddleware::class,
         ]);
     })
     ->withSchedule(function (Illuminate\Console\Scheduling\Schedule $schedule) {

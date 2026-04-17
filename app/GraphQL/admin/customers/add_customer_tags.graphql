@@ -1,0 +1,14 @@
+mutation addCustomerTags($id: ID!, $tags: [String!]!) {
+  tagsAdd(id: $id, tags: $tags) {
+    node {
+      id
+      ... on Customer {
+        tags
+      }
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}

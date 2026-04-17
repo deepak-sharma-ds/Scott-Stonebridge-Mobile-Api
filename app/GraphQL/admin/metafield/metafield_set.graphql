@@ -1,0 +1,33 @@
+mutation metafieldSet(
+  $namespace: String!,
+  $key: String!,
+  $value: String!,
+  $type: String!,
+  $ownerId: ID!
+) {
+  metafieldsSet(
+    metafields: [
+      {
+        namespace: $namespace
+        key: $key
+        value: $value
+        type: $type
+        ownerId: $ownerId
+      }
+    ]
+  ) {
+    metafields {
+      id
+      namespace
+      key
+      value
+      type
+      createdAt
+      updatedAt
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}

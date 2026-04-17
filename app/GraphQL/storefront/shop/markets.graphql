@@ -1,0 +1,28 @@
+query GetShopMarkets {
+  shop {
+    id
+    name
+    primaryDomain {
+      url
+      host
+    }
+    paymentSettings {
+      enabledPresentmentCurrencies
+      supportedDigitalWallets
+      countryCode
+      currencyCode
+    }
+  }
+  localization {
+    availableCountries {
+      currency {
+        isoCode
+        name
+        symbol
+      }
+      isoCode
+      name
+      unitSystem
+    }
+  }
+}
