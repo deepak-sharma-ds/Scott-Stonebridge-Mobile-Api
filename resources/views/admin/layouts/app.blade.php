@@ -145,7 +145,9 @@
 
         @include('admin.elements.alert_message')
 
-        @yield('content')
+        <div style="flex: 1 1 auto;">
+            @yield('content')
+        </div>
 
         @include('admin.elements.footer')
     </main>

@@ -58,7 +58,7 @@
                                     <tr>
                                         <td> {{ $configuration->name }} </td>
                                         <td> {!! $configuration->value !!} </td>
-                                        <td width="150px">
+                                        <td class="text-center" width="150px">
                                             <a href="{{ route('admin.configurations.admin_moveup', $configuration->id) }}" class="btn btn-primary shadow btn-xs sharp mr-1"><i class="fa fa-chevron-up" aria-hidden="true"></i></a>
                                             <a href="{{ route('admin.configurations.admin_movedown', $configuration->id) }}" class="btn btn-primary shadow btn-xs sharp mr-1"><i class="fa fa-chevron-down" aria-hidden="true"></i></a>
                                             <a href="{{ route('admin.configurations.admin_edit', $configuration->id) }}" class="btn btn-primary shadow btn-xs sharp mr-1"><i class="fas fa-pencil-alt"></i></a>

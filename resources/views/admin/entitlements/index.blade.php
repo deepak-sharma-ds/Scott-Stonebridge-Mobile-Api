@@ -166,13 +166,13 @@
                 <table class="table customer-entitlements-table">
                     <thead>
                         <tr>
-                            <th>ID</th>
-                            <th class="email-column">Email</th>
-                            <th class="customer-id-column">Shopify Customer ID</th>
-                            <th class="package-column">Package Tag</th>
+                            <th class="text-start">ID</th>
+                            <th class="email-column text-center">Email</th>
+                            <th class="customer-id-column text-center">Shopify Customer ID</th>
+                            <th class="package-column text-center">Package Tag</th>
                             {{-- <th>Download Allowed</th> --}}
-                            <th class="created-column">Created</th>
-                            <th class="action-column">Action</th>
+                            <th class="created-column text-center">Created</th>
+                            <th class="action-column text-center">Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -186,8 +186,8 @@
                                 $modalId = 'entitlementEmailsModal' . $entitlement->id;
                             @endphp
                             <tr>
-                                <td>{{ $entitlement->id }}</td>
-                                <td class="email-column">
+                                <td class="text-start">{{ $entitlement->id }}</td>
+                                <td class="email-column text-center">
                                     @if ($primaryEmail)
                                         <div class="email-summary">
                                             <span class="email-primary" title="{{ $primaryEmail }}">
@@ -205,8 +205,8 @@
                                         <span style="color: #94a3b8;">N/A</span>
                                     @endif
                                 </td>
-                                <td class="customer-id-column">{{ $entitlement->shopify_customer_id }}</td>
-                                <td class="package-column">
+                                <td class="customer-id-column text-center">{{ $entitlement->shopify_customer_id }}</td>
+                                <td class="package-column text-center">
                                     <span
                                         style="background: rgba(102, 126, 234, 0.1); color: var(--color-primary); padding: 0.25rem 0.75rem; border-radius: 12px; font-weight: 600; font-size: 0.875rem;">
                                         {{ $entitlement->package_tag }}
@@ -225,7 +225,7 @@
                                         </span>
                                     @endif
                                 </td> --}}
-                                <td class="created-column">
+                                <td class="created-column text-center">
                                     @if ($entitlement->created_at)
                                         <div style="font-weight: 600; color: #1e293b;">
                                             {{ $entitlement->created_at->format('d M Y') }}
@@ -237,7 +237,7 @@
                                         <span style="color: #94a3b8;">N/A</span>
                                     @endif
                                 </td>
-                                <td class="action-column">
+                                <td class="action-column text-center">
                                     <a href="{{ route('admin.customer.entitlements.edit', $entitlement) }}"
                                         class="btn btn-sm btn-outline-primary">
                                         Edit

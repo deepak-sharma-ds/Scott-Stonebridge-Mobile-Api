@@ -21,7 +21,7 @@
         {{-- Search Form --}}
         <form method="GET" action="{{ route('admin.scheduled-meetings') }}" class="card p-4 mb-4">
             <div class="row g-3 align-items-end">
-                <div class="col-md-5">
+                <div class="col-md-8 col-lg-9">
                     <label
                         style="font-size: 0.875rem; font-weight: 600; color: #475569; margin-bottom: 0.5rem; display: block;">
                         Search Customer
@@ -30,9 +30,9 @@
                         placeholder="Search by Name, Email">
                 </div>
 
-                <div class="col-md-auto ms-auto">
+                <div class="col-md-4 col-lg-3">
                     <div style="display: flex; gap: 0.5rem;">
-                        <button type="submit" class="btn btn-primary">
+                        <button type="submit" class="btn btn-primary" style="flex: 1;">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                                 stroke-width="2"
                                 style="display: inline-block; vertical-align: middle; margin-right: 0.25rem;">
@@ -42,7 +42,7 @@
                             Filter
                         </button>
                         <a href="{{ route('admin.scheduled-meetings') }}" class="btn btn-light"
-                            style="border: 2px solid #e2e8f0;">
+                            style="border: 2px solid #e2e8f0; flex-shrink: 0;">
                             Clear
                         </a>
                     </div>
@@ -56,18 +56,18 @@
                 <table class="table">
                     <thead>
                         <tr>
-                            <th style="width: 50px;">S.No</th>
-                            <th>Customer Details</th>
-                            <th>Contact</th>
-                            <th>Date & Time</th>
-                            <th style="text-align: center;">Status</th>
-                            <th style="text-align: right; width: 200px;">Actions</th>
+                            <th class="text-center" style="width: 60px;">S.No</th>
+                            <th class="text-start">Customer Details</th>
+                            <th class="text-center">Contact</th>
+                            <th class="text-center">Date & Time</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-end" style="width: 200px;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         @forelse ($booking_inquiries as $index => $inquiry)
                             <tr>
-                                <td style="color: #94a3b8; font-weight: 600;">
+                                <td class="text-center" style="color: #94a3b8; font-weight: 600;">
                                     {{ $index + 1 }}
                                 </td>
                                 <td>
@@ -78,7 +78,7 @@
                                         {{ $inquiry->email }}
                                     </div>
                                 </td>
-                                <td style="color: #64748b; font-weight: 500;">
+                                <td class="text-center" style="color: #64748b; font-weight: 500;">
                                     <div style="display: flex; align-items: center; gap: 0.5rem;">
                                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
                                             stroke="currentColor" stroke-width="2" style="color: #94a3b8;">
@@ -89,7 +89,7 @@
                                         {{ $inquiry->phone }}
                                     </div>
                                 </td>
-                                <td>
+                                <td class="text-center">
                                     @if ($inquiry->status != 'needs_reschedule')
                                         <div style="font-weight: 600; color: #1e293b;">
                                             {{ $inquiry->datetime->format('d M Y') }}
@@ -101,7 +101,7 @@
                                         <span style="color: #94a3b8;">N/A</span>
                                     @endif
                                 </td>
-                                <td style="text-align: center;">
+                                <td class="text-center">
                                     @php
                                         $statusColors = [
                                             'confirmed' => ['bg' => 'rgba(16, 185, 129, 0.1)', 'color' => '#10b981'],
@@ -122,7 +122,7 @@
                                         {{ ucfirst(str_replace('_', ' ', $inquiry->status)) }}
                                     </span>
                                 </td>
-                                <td style="text-align: right;">
+                                <td class="text-end">
                                     <div
                                         style="display: inline-flex; gap: 0.5rem; flex-wrap: wrap; justify-content: flex-end;">
                                         @if ($inquiry->status != 'needs_reschedule')

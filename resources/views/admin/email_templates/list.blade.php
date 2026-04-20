@@ -19,20 +19,20 @@
                 <table class="table table-bordered table-hover table-striped align-middle mb-0">
                     <thead>
                         <tr>
-                            <th>Sr. No.</th>
+                            <th class="text-center">Sr. No.</th>
                             <th>Key</th>
                             <th>Subject</th>
-                            <th>Action</th>
+                            <th class="text-center">Action</th>
                         </tr>
                     </thead>
                     <tbody>
                         @php $i=1; @endphp
                         @foreach ($template as $key => $value)
                             <tr>
-                                <td>{{ $i }}</td>
+                                <td class="text-center">{{ $i }}</td>
                                 <td>{{ $value['identifier'] }}</td>
                                 <td>{{ $value['subject'] }}</td>
-                                <td>
+                                <td class="text-center">
                                     <div class="d-flex gap-2 justify-content-center">
                                         {{-- <a href=""><i class="fa fa-eye"></i></a> --}}
                                         <a href="{{ route('admin.email-templates.edit', ['key' => $value['identifier']]) }}"
