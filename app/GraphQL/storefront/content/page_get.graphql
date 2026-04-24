@@ -42,11 +42,24 @@ query getPage($handle: String!) {
         { namespace: "custom", key: "event_end_time_img" }
         { namespace: "custom", key: "event_full_address_img" }
         { namespace: "custom", key: "event_admission_fees_img" }
+        { namespace: "custom", key: "donation_info" }
       ]
     ) {
       key
       value
       namespace
+      references(first: 10) {
+        nodes {
+          ... on Metaobject {
+            id
+            type
+            fields {
+              key
+              value
+            }
+          }
+        }
+      }
     }
   }
 }
