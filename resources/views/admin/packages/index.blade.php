@@ -39,19 +39,19 @@
             <table class="table">
                 <thead>
                     <tr>
-                        <th style="width:72px;">Cover</th>
+                        <th class="text-center" style="width:72px;">Cover</th>
                         <th>Package</th>
-                        <th>Pricing</th>
-                        <th style="text-align:center;">Audios</th>
+                        <th class="text-end">Pricing</th>
+                        <th class="text-center">Audios</th>
                         <th>Created</th>
-                        <th style="text-align:right;width:160px;">Actions</th>
+                        <th class="text-end" style="width:160px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse($packages as $pkg)
                         <tr>
                             {{-- Cover Image --}}
-                            <td>
+                            <td class="text-center">
                                 @if($pkg->cover_image)
                                     <div style="width:56px;height:56px;border-radius:10px;
                                                 overflow:hidden;box-shadow:var(--shadow-sm);">
@@ -78,7 +78,7 @@
                             </td>
 
                             {{-- Pricing --}}
-                            <td>
+                            <td class="text-end">
                                 <div style="font-weight:700;color:var(--color-success);font-size:1.0625rem;">
                                     {{ $pkg->price }}
                                 </div>
@@ -89,7 +89,7 @@
                             </td>
 
                             {{-- Audio Count --}}
-                            <td style="text-align:center;">
+                            <td class="text-center">
                                 <x-admin.badge type="secondary">
                                     {{ $pkg->audios()->count() }}
                                 </x-admin.badge>
@@ -101,7 +101,7 @@
                             </td>
 
                             {{-- Actions --}}
-                            <td style="text-align:right;">
+                            <td class="text-end">
                                 <div style="display:inline-flex;gap:0.5rem;">
                                     <a href="{{ route('packages.edit', $pkg) }}"
                                        class="btn btn-sm btn-warning">

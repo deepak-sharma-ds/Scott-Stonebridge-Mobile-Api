@@ -35,12 +35,12 @@
                 <table class="table">
                     <thead>
                         <tr>
-                            <th>Audio Details</th>
+                            <th class="text-start">Audio Details</th>
                             <th style="min-width: 300px;">Player</th>
-                            <th style="text-align: center;">Duration</th>
-                            <th style="text-align: center;">Order</th>
-                            <th>Created</th>
-                            <th style="text-align: right; width: 180px;">Actions</th>
+                            <th class="text-center">Duration</th>
+                            <th class="text-center">Order</th>
+                            <th class="text-center">Created</th>
+                            <th class="text-end" style="width: 180px;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -85,7 +85,7 @@
                                         </div>
                                     @endif
                                 </td>
-                                <td style="text-align: center;">
+                                <td class="text-center">
                                     @if ($audio->duration_seconds)
                                         <span
                                             style="background: rgba(16, 185, 129, 0.1); color: #10b981; padding: 0.375rem 0.75rem; border-radius: 12px; font-weight: 700; font-size: 0.875rem;">
@@ -95,16 +95,16 @@
                                         <span style="color: #94a3b8;">—</span>
                                     @endif
                                 </td>
-                                <td style="text-align: center;">
+                                <td class="text-center">
                                     <span
                                         style="background: rgba(102, 126, 234, 0.1); color: var(--color-primary); padding: 0.375rem 0.75rem; border-radius: 12px; font-weight: 700;">
                                         {{ $audio->order_index }}
                                     </span>
                                 </td>
-                                <td style="color: #64748b; font-weight: 500;">
+                                <td class="text-center" style="color: #64748b; font-weight: 500;">
                                     {{ $audio->created_at->format('d M Y') }}
                                 </td>
-                                <td style="text-align: right;">
+                                <td class="text-end">
                                     <div style="display: inline-flex; gap: 0.5rem;">
                                         <a href="{{ route('audios.edit', $audio) }}" class="btn btn-sm"
                                             style="background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); color: white; border: none; padding: 0.5rem 1rem; border-radius: 8px; font-weight: 600;">

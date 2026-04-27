@@ -107,6 +107,52 @@ class PageDTO extends BaseDTO
                 'namespace' => $metafield['namespace'] ?? null,
                 'key' => $metafield['key'],
                 'value' => $metafield['value'] ?? null,
+                'references' => self::normalizeReferences($metafield['references'] ?? null),
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
+     * Normalize Shopify metaobject references into a flat list.
+     *
+     * @param mixed $references
+     * @return array<int, array{id: string, type: string|null, fields: array<string, mixed>}>
+     */
+    private static function normalizeReferences(mixed $references): array
+    {
+        if (!is_array($references)) {
+            return [];
+        }
+
+        $nodes = $references['nodes'] ?? [];
+
+        if (!is_array($nodes)) {
+            return [];
+        }
+
+        $normalized = [];
+
+        foreach ($nodes as $node) {
+            if (!is_array($node) || empty($node['id'])) {
+                continue;
+            }
+
+            $fields = [];
+
+            foreach ($node['fields'] ?? [] as $field) {
+                if (!is_array($field) || empty($field['key'])) {
+                    continue;
+                }
+
+                $fields[$field['key']] = $field['value'] ?? null;
+            }
+
+            $normalized[] = [
+                'id' => $node['id'],
+                'type' => $node['type'] ?? null,
+                'fields' => $fields,
             ];
         }
 

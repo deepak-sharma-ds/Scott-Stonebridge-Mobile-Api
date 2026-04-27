@@ -11,6 +11,33 @@
         'subtitle' => 'Welcome back! Here\'s your real-time overview.',
     ])
 
+    {{-- Date Filter --}}
+    <div class="card p-3" style="margin-bottom:1.25rem;">
+        <form id="dashboard-date-filter"
+              style="display:flex;align-items:end;gap:0.875rem;flex-wrap:wrap;">
+            <div>
+                <label for="dashboard-from" style="display:block;font-size:0.8125rem;font-weight:700;color:var(--text-muted);margin-bottom:0.35rem;">
+                    From
+                </label>
+                <input id="dashboard-from" name="from" type="date" class="form-control" style="min-width:160px;">
+            </div>
+
+            <div>
+                <label for="dashboard-to" style="display:block;font-size:0.8125rem;font-weight:700;color:var(--text-muted);margin-bottom:0.35rem;">
+                    To
+                </label>
+                <input id="dashboard-to" name="to" type="date" class="form-control" style="min-width:160px;">
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+                Apply
+            </button>
+            <button type="button" id="dashboard-clear-filter" class="btn btn-outline-secondary">
+                Clear
+            </button>
+        </form>
+    </div>
+
     {{-- KPI Cards --}}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));
                 gap:1rem;margin-bottom:1.5rem;">
@@ -120,9 +147,14 @@
     document.head.appendChild(skeletonStyle);
 
     function animateCounter(el, end, duration, prefix, suffix) {
-        if (!el || !end) return;
+        if (!el) return;
+        end = Number(end) || 0;
         prefix = prefix || '';
         suffix = suffix || '';
+        if (end === 0) {
+            el.textContent = prefix + '0' + suffix;
+            return;
+        }
         var start = performance.now();
         function step(now) {
             var p = Math.min((now - start) / duration, 1);
@@ -171,9 +203,20 @@
         }).join('');
     }
 
+    function dashboardUrl() {
+        var url = new URL('{{ route('admin.analytics.dashboard') }}', window.location.origin);
+        var from = document.getElementById('dashboard-from');
+        var to = document.getElementById('dashboard-to');
+
+        if (from && from.value) url.searchParams.set('from', from.value);
+        if (to && to.value) url.searchParams.set('to', to.value);
+
+        return url.toString();
+    }
+
     async function loadDashboard() {
         try {
-            var kpiRes = await fetch('{{ route('admin.analytics.dashboard') }}');
+            var kpiRes = await fetch(dashboardUrl());
             var topRes = await fetch('{{ route('admin.analytics.top.products') }}');
             var kpiJson = await kpiRes.json();
             var topJson = await topRes.json();
@@ -202,7 +245,27 @@
         }
     }
 
-    document.addEventListener('DOMContentLoaded', loadDashboard);
+    document.addEventListener('DOMContentLoaded', function () {
+        var filterForm = document.getElementById('dashboard-date-filter');
+        var clearBtn = document.getElementById('dashboard-clear-filter');
+
+        if (filterForm) {
+            filterForm.addEventListener('submit', function (event) {
+                event.preventDefault();
+                loadDashboard();
+            });
+        }
+
+        if (clearBtn) {
+            clearBtn.addEventListener('click', function () {
+                document.getElementById('dashboard-from').value = '';
+                document.getElementById('dashboard-to').value = '';
+                loadDashboard();
+            });
+        }
+
+        loadDashboard();
+    });
 }());
 </script>
 @endsection

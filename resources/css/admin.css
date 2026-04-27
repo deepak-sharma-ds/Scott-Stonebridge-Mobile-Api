@@ -390,6 +390,8 @@
     padding: 1.5rem;
     transition: margin-left var(--t-slow);
     background: var(--content-bg);
+    display: flex;
+    flex-direction: column;
 }
 .admin-content.sidebar-collapsed { margin-left: var(--sidebar-collapsed-width); }
 
@@ -727,6 +729,7 @@
     border-bottom: 2px solid var(--card-border);
     background: #f8fafc;
     white-space: nowrap;
+    vertical-align: middle;
 }
 .table tbody tr {
     border-bottom: 1px solid #f1f5f9;
@@ -738,7 +741,7 @@
     box-shadow: inset 3px 0 0 var(--color-primary);
 }
 .table tbody td {
-    padding: 0.875rem 1rem;
+    padding: 0.55rem 1rem;
     color: var(--text-primary);
     vertical-align: middle;
     line-height: 1.5;
@@ -814,7 +817,7 @@
    Pagination
 ═══════════════════════════════════════════════════════════════ */
 .pagination {
-    display: flex; align-items: center; gap: 0.25rem;
+    display: flex !important; align-items: center; gap: 0.25rem;
     list-style: none; padding: 0; margin: 0; flex-wrap: wrap;
 }
 .page-item .page-link, .page-link {

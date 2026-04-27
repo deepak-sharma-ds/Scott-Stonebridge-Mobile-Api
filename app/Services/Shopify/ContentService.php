@@ -134,14 +134,37 @@ class ContentService extends BaseService implements ContentServiceInterface
         $resolvedUrls = [];
 
         foreach ($pageData['metafields'] as &$metafield) {
-            if (!is_array($metafield) || !array_key_exists('value', $metafield)) {
+            if (!is_array($metafield)) {
                 continue;
             }
 
-            $metafield['value'] = $this->resolveMediaImageReferences(
-                $metafield['value'],
-                $resolvedUrls
-            );
+            if (array_key_exists('value', $metafield)) {
+                $metafield['value'] = $this->resolveMediaImageReferences(
+                    $metafield['value'],
+                    $resolvedUrls
+                );
+            }
+
+            if (!empty($metafield['references']['nodes']) && is_array($metafield['references']['nodes'])) {
+                foreach ($metafield['references']['nodes'] as &$node) {
+                    if (!is_array($node) || empty($node['fields']) || !is_array($node['fields'])) {
+                        continue;
+                    }
+
+                    foreach ($node['fields'] as &$field) {
+                        if (!is_array($field) || !array_key_exists('value', $field)) {
+                            continue;
+                        }
+
+                        $field['value'] = $this->resolveMediaImageReferences(
+                            $field['value'],
+                            $resolvedUrls
+                        );
+                    }
+                    unset($field);
+                }
+                unset($node);
+            }
         }
 
         unset($metafield);

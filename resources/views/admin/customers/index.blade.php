@@ -60,18 +60,18 @@
             <table class="table">
                 <thead>
                     <tr>
-                        <th>Customer</th>
-                        <th>Email</th>
-                        <th>Total Spent</th>
-                        <th>Orders</th>
-                        <th style="text-align:right;">Actions</th>
+                        <th class="text-start">Customer</th>
+                        <th class="text-center">Email</th>
+                        <th class="text-end">Total Spent</th>
+                        <th class="text-center">Orders</th>
+                        <th class="text-end">Actions</th>
                     </tr>
                 </thead>
                 <tbody>
                     @forelse($customers as $c)
                         <tr>
                             {{-- Name + Avatar --}}
-                            <td>
+                            <td class="text-start">
                                 <div style="display:flex;align-items:center;gap:0.75rem;">
                                     <div class="avatar avatar-md">
                                         {{ strtoupper(substr($c['firstName'], 0, 1)) }}{{ strtoupper(substr($c['lastName'], 0, 1)) }}
@@ -85,12 +85,12 @@
                             </td>
 
                             {{-- Email --}}
-                            <td style="color:var(--text-secondary);">
+                            <td class="text-center" style="color:var(--text-secondary);">
                                 {{ $c['email'] }}
                             </td>
 
                             {{-- Total Spent --}}
-                            <td>
+                            <td class="text-end">
                                 <span style="font-weight:700;color:var(--color-success);">
                                     ${{ number_format($c['amountSpent']['amount'], 2) }}
                                 </span>
@@ -100,7 +100,7 @@
                             </td>
 
                             {{-- Orders --}}
-                            <td>
+                            <td class="text-center">
                                 <x-admin.badge type="primary">
                                     {{ $c['numberOfOrders'] }}
                                     {{ $c['numberOfOrders'] == 1 ? 'Order' : 'Orders' }}
@@ -108,7 +108,7 @@
                             </td>
 
                             {{-- Actions --}}
-                            <td style="text-align:right;">
+                            <td class="text-end">
                                 <a href="{{ route('admin.customers.show', last(explode('/', $c['id']))) }}"
                                    class="btn btn-sm btn-info">
                                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
