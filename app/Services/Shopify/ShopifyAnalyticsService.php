@@ -334,18 +334,20 @@ class ShopifyAnalyticsService
      */
     public function getDashboardKPIs($from, $to, $days = 30)
     {
-        // $from = Carbon::now()->subDays($days)->toIso8601String();
-        // $to   = Carbon::now()->toIso8601String();
-        $from = $from ?: Carbon::now()->subDays($days)->toIso8601String();
-        $to   = $to ?: Carbon::now()->toIso8601String();
+        $fromDate = $from ? Carbon::parse($from)->startOfDay() : null;
+        $toDate = $to ? Carbon::parse($to)->endOfDay() : null;
+
+        if ($fromDate && $toDate && $fromDate->gt($toDate)) {
+            [$fromDate, $toDate] = [$toDate->copy()->startOfDay(), $fromDate->copy()->endOfDay()];
+        }
 
         return [
             // 'shopify_orders'     => $this->getOrdersCount($from, $to),
             // 'shopify_sales'      => $this->getSalesTotal($from, $to),
-            'downloads'          => $this->localRepo->countDownloads(Carbon::parse($from)),
-            // 'active_users'       => $this->localRepo->activeUsersCount(Carbon::parse($from)),
-            'bookings'           => $this->localRepo->bookingsCount(Carbon::parse($from)),
-            'audio_purchases'    => $this->localRepo->audioSubscriptionPurchasesCount(Carbon::parse($from)),
+            'downloads'          => $this->localRepo->countDownloads($fromDate, $toDate),
+            // 'active_users'       => $this->localRepo->activeUsersCount($fromDate, $toDate),
+            'bookings'           => $this->localRepo->bookingsCount($fromDate, $toDate),
+            'audio_purchases'    => $this->localRepo->audioSubscriptionPurchasesCount($fromDate, $toDate),
         ];
     }
 
