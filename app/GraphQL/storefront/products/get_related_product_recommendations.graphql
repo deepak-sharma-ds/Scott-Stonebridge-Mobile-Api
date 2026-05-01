@@ -1,0 +1,66 @@
+query getRelatedProductRecommendations(
+  $productId: ID!
+  $country: CountryCode
+) @inContext(country: $country) {
+  productRecommendations(productId: $productId, intent: RELATED) {
+    id
+    title
+    handle
+    description
+    descriptionHtml
+    vendor
+    productType
+    tags
+    availableForSale
+    publishedAt
+    updatedAt
+
+    options {
+      id
+      name
+      values
+    }
+
+    images(first: 10) {
+      edges {
+        node {
+          id
+          url
+          altText
+          width
+          height
+        }
+      }
+    }
+
+    variants(first: 20) {
+      edges {
+        node {
+          id
+          title
+          sku
+          availableForSale
+          quantityAvailable
+          weight
+          weightUnit
+          selectedOptions {
+            name
+            value
+          }
+          price {
+            amount
+            currencyCode
+          }
+          compareAtPrice {
+            amount
+            currencyCode
+          }
+          image {
+            url
+            altText
+          }
+        }
+      }
+    }
+  }
+}

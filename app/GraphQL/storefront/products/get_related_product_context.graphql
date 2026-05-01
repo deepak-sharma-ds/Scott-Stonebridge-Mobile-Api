@@ -1,0 +1,23 @@
+query getRelatedProductContext(
+  $productId: ID!
+  $country: CountryCode
+) @inContext(country: $country) {
+  node(id: $productId) {
+    ... on Product {
+      id
+      title
+      handle
+      productType
+      tags
+      collections(first: 10) {
+        edges {
+          node {
+            id
+            handle
+            title
+          }
+        }
+      }
+    }
+  }
+}

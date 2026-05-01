@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Contracts\Services\ProductServiceInterface;
 use App\Http\Controllers\Base\BaseApiController;
+use App\Http\Requests\Product\RelatedProductsRequest;
 use App\Http\Resources\Product\ProductResource;
+use App\Http\Resources\Product\RelatedProductResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -230,5 +232,32 @@ class ProductController extends BaseApiController
             );
         }
     }
-}
 
+    /**
+     * Get related products by Shopify product ID from request body.
+     *
+     * @param RelatedProductsRequest $request
+     * @return JsonResponse
+     */
+    public function related(RelatedProductsRequest $request): JsonResponse
+    {
+        try {
+            $products = $this->productService->getRelatedProducts(
+                $request->validated('product_id'),
+                (int) $request->validated('limit', 8)
+            );
+
+            return $this->success(
+                'Related products fetched successfully',
+                RelatedProductResource::collection($products)->resolve($request)
+            );
+        } catch (\Exception $e) {
+            return $this->error(
+                'Failed to fetch related products',
+                ['error' => $e->getMessage()],
+                [],
+                500
+            );
+        }
+    }
+}

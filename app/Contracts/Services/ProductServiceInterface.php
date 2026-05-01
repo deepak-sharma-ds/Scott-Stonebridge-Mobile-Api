@@ -45,6 +45,15 @@ interface ProductServiceInterface
     public function getFeaturedProducts(string $tag, int $limit): Collection;
 
     /**
+     * Get related products for a Shopify product ID.
+     *
+     * @param string $productId Shopify product ID, numeric or gid format
+     * @param int $limit Number of products to fetch
+     * @return Collection Collection of ProductDTO instances
+     */
+    public function getRelatedProducts(string $productId, int $limit = 8): Collection;
+
+    /**
      * Get all collections with caching
      *
      * @param int $limit Number of collections to fetch
