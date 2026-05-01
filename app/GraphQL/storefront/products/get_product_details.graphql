@@ -5,6 +5,7 @@ query getProductDetails($handle: String!, $country: CountryCode)
     title
     handle
     descriptionHtml
+    description
     vendor
     productType
     tags

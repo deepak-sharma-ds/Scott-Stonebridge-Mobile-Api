@@ -28,6 +28,7 @@ class ProductResource extends BaseApiResource
             'title' => $this->title,
             'handle' => $this->handle,
             'description' => $this->description,
+            'descriptionHtml' => $this->descriptionHtml,
             'vendor' => $this->vendor,
             'product_type' => $this->productType,
             'tags' => $this->tags,
