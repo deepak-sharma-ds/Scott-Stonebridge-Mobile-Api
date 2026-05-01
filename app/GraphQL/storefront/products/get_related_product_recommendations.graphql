@@ -1,14 +1,19 @@
-query getProductDetails($handle: String!, $country: CountryCode)
-@inContext(country: $country) {
-  productByHandle(handle: $handle) {
+query getRelatedProductRecommendations(
+  $productId: ID!
+  $country: CountryCode
+) @inContext(country: $country) {
+  productRecommendations(productId: $productId, intent: RELATED) {
     id
     title
     handle
-    descriptionHtml
     description
+    descriptionHtml
     vendor
     productType
     tags
+    availableForSale
+    publishedAt
+    updatedAt
 
     options {
       id
@@ -16,16 +21,19 @@ query getProductDetails($handle: String!, $country: CountryCode)
       values
     }
 
-    images(first: 250) {
+    images(first: 10) {
       edges {
         node {
+          id
           url
           altText
+          width
+          height
         }
       }
     }
 
-    variants(first: 250) {
+    variants(first: 20) {
       edges {
         node {
           id
@@ -35,41 +43,24 @@ query getProductDetails($handle: String!, $country: CountryCode)
           quantityAvailable
           weight
           weightUnit
-
-          price {
-            amount
-            currencyCode
-          }
-
-          compareAtPrice {
-            amount
-            currencyCode
-          }
-
-          compareAtPriceV2 {
-            amount
-            currencyCode
-          }
-
-          image {
-            url
-            altText
-          }
-
           selectedOptions {
             name
             value
           }
+          price {
+            amount
+            currencyCode
+          }
+          compareAtPrice {
+            amount
+            currencyCode
+          }
+          image {
+            url
+            altText
+          }
         }
       }
     }
-
-    options {
-      name
-      values
-    }
-
-    createdAt
-    updatedAt
   }
 }

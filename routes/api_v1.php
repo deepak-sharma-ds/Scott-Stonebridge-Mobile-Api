@@ -47,12 +47,14 @@ Route::prefix('v1')->middleware([
      * GET /api/v1/products/{handle} - Get product details by handle
      * GET /api/v1/products/featured - Get featured products
      * POST /api/v1/products/featured - Get featured products (backward compatibility)
+     * POST /api/v1/products/related - Get related products by Shopify product ID
      */
     Route::prefix('products')->group(function () {
         Route::get('/', [ProductController::class, 'index'])->name('api.v1.products.index');
         Route::get('/search', [ProductController::class, 'search'])->name('api.v1.products.search');
         Route::get('/featured', [ProductController::class, 'indexFeatured'])->name('api.v1.products.featured');
         Route::post('/featured', [ProductController::class, 'indexFeatured'])->name('api.v1.products.featured.post');
+        Route::post('/related', [ProductController::class, 'related'])->name('api.v1.products.related');
         Route::get('/{handle}', [ProductController::class, 'show'])->name('api.v1.products.show');
     });
 
