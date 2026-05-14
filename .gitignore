@@ -21,6 +21,11 @@ yarn-error.log
 /.nova
 /.vscode
 /.claude
+/.codex
+/.cursor
+/.github
+/.agents
+/.ai
 /.kiro
 /postman
 /docs
