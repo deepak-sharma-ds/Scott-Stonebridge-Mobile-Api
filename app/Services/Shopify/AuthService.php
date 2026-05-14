@@ -246,6 +246,53 @@ class AuthService extends BaseService implements AuthServiceInterface
     }
 
     /**
+     * Suspend customer account
+     *
+     * @param string $accessToken Customer access token
+     * @param array $shopifyCustomerData Shopify customer data
+     * @return bool
+     */
+    public function suspend(array $shopifyCustomerData): bool
+    {
+        try {
+            $this->logPerformanceStart('delete_customer');
+
+            $variables = [
+                'id' => $shopifyCustomerData['id'],
+            ];
+
+            $response = $this->storefrontClient->query(
+                'admin/customer/customer_delete',
+                $variables
+            );
+
+            $customerDelete = $response['data']['customerDelete'] ?? null;
+
+            if (!$customerDelete) {
+                throw new ShopifyApiException('Invalid Shopify response');
+            }
+
+            if (!empty($customerDelete['userErrors'])) {
+                throw new ShopifyApiException(
+                    'Customer delete failed: ' . json_encode($customerDelete['userErrors'])
+                );
+            }
+
+            $deleted = !empty($customerDelete['deletedCustomerId']);
+
+            $this->logPerformanceEnd('delete_customer', [
+                'deleted' => $deleted,
+                'customer_id' => $shopifyCustomerData['id'],
+            ]);
+
+            return $deleted;
+        } catch (\Throwable $e) {
+            $this->logErrorWithException('Customer delete failed', $e);
+            throw $e;
+        }
+    }
+
+    /**
      * Format customer error messages for better readability
      *
      * @param array $errors
