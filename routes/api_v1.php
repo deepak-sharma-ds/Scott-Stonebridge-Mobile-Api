@@ -91,6 +91,8 @@ Route::prefix('v1')->middleware([
         Route::middleware(['shopify.auth'])->group(function () {
             Route::get('/me', [AuthController::class, 'me'])->name('api.v1.auth.me');
             Route::post('/logout', [AuthController::class, 'logout'])->name('api.v1.auth.logout');
+
+            Route::post('/suspend', [AuthController::class, 'suspend'])->name('api.v1.auth.suspend');
         });
     });
 

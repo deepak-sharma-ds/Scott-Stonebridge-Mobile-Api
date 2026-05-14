@@ -47,4 +47,12 @@ interface AuthServiceInterface
      * @return bool
      */
     public function logout(string $accessToken): bool;
+
+    /**
+     * Suspend customer account
+     *
+     * @param array $shopifyCustomerData Shopify customer data
+     * @return bool
+     */
+    public function suspend(array $shopifyCustomerData): bool;
 }
