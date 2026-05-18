@@ -6,6 +6,9 @@
 /** @var string|null $locale */
 /** @var array<string, mixed> $resolved_context */
 /** @var array<int, \App\DTOs\Chat\ProductRecommendationDTO> $products */
+/** @var string $upsell_block */
+/** @var string $knowledge_block */
+/** @var string $locale_block */
 
 $contextJson = json_encode($resolved_context, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
 $productJson = json_encode(
@@ -53,4 +56,16 @@ PRODUCTS (the ONLY products you may mention)
 ```
 @else
 (none returned for this turn — do not recommend any product)
+@endif
+@if(!empty($upsell_block))
+
+{!! $upsell_block !!}
+@endif
+@if(!empty($knowledge_block))
+
+{!! $knowledge_block !!}
+@endif
+@if(!empty($locale_block))
+
+{!! $locale_block !!}
 @endif

@@ -46,7 +46,11 @@ class ChatController extends BaseApiController
     public function start(StartSessionRequest $request): JsonResponse
     {
         try {
-            $conversation = $this->chatbot->startSession($request->validated());
+            $payload = $request->validated();
+            // Phase F — surface Accept-Language so the orchestrator can
+            // pick a locale when neither shopify_locale nor locale was sent.
+            $payload['accept_language'] = $request->header('Accept-Language');
+            $conversation = $this->chatbot->startSession($payload);
         } catch (AIException $e) {
             return $this->error($e->getMessage(), $e->errorContext(), ['error_code' => $e->errorCode()], $e->httpStatus());
         } catch (Throwable $e) {

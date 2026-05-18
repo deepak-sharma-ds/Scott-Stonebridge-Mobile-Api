@@ -27,6 +27,10 @@ class IntentDTO extends BaseDTO
 
     public const INTENT_GREETING = 'greeting';
 
+    public const INTENT_UPSELL_OPPORTUNITY = 'upsell_opportunity';
+
+    public const INTENT_CROSS_SELL_OPPORTUNITY = 'cross_sell_opportunity';
+
     public const INTENT_UNKNOWN = 'unknown';
 
     /**

@@ -75,6 +75,8 @@ return [
             'shipping_question',
             'cart_help',
             'greeting',
+            'upsell_opportunity',
+            'cross_sell_opportunity',
             'unknown',
         ],
     ],

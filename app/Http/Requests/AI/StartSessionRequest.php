@@ -21,6 +21,8 @@ class StartSessionRequest extends BaseApiRequest
             'shop_domain' => ['required', 'string', 'max:255'],
             'page_type' => ['sometimes', 'nullable', 'string', 'in:home,product,collection,cart,search,account,blog,page,unknown'],
             'locale' => ['sometimes', 'nullable', 'string', 'max:10'],
+            // Phase F — explicit Shopify-side locale wins over generic `locale`.
+            'shopify_locale' => ['sometimes', 'nullable', 'string', 'max:10'],
             'shopify_customer_id' => ['sometimes', 'nullable', 'string', 'max:255'],
             'metadata' => ['sometimes', 'array'],
         ];

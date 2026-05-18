@@ -27,6 +27,10 @@ use App\Contracts\Services\NavigationServiceInterface;
 use App\Contracts\Services\OrderServiceInterface;
 use App\Contracts\Services\ProductServiceInterface;
 use App\Contracts\Services\ProfileServiceInterface;
+use App\Contracts\Services\Sales\LeadCaptureServiceInterface;
+use App\Contracts\Services\Sales\ProactiveTriggerServiceInterface;
+use App\Contracts\Services\Sales\StoreKnowledgeServiceInterface;
+use App\Contracts\Services\Sales\UpsellServiceInterface;
 use App\Contracts\Services\ShopServiceInterface;
 use App\Contracts\Services\ThemeServiceInterface;
 use App\Contracts\Services\WishlistServiceInterface;
@@ -45,6 +49,10 @@ use App\Services\AI\SafetyService;
 use App\Services\AI\ShopifyContextService;
 use App\Services\AI\StreamingService;
 use App\Services\Cache\ShopifyCacheStrategy;
+use App\Services\Sales\LeadCaptureService;
+use App\Services\Sales\ProactiveTriggerService;
+use App\Services\Sales\StoreKnowledgeService;
+use App\Services\Sales\UpsellService;
 use App\Services\Shopify\AuthService;
 use App\Services\Shopify\CartService;
 use App\Services\Shopify\ContactService;
@@ -217,6 +225,30 @@ class AppServiceProvider extends ServiceProvider
             ChatbotServiceInterface::class,
             ChatbotService::class
         );
+
+        // -------------------------------------------------------------
+        // Phase 2 (AI Sales Agent) service bindings.
+        // -------------------------------------------------------------
+
+        $this->app->bind(
+            ProactiveTriggerServiceInterface::class,
+            ProactiveTriggerService::class
+        );
+
+        $this->app->bind(
+            LeadCaptureServiceInterface::class,
+            LeadCaptureService::class
+        );
+
+        $this->app->bind(
+            UpsellServiceInterface::class,
+            UpsellService::class
+        );
+
+        $this->app->bind(
+            StoreKnowledgeServiceInterface::class,
+            StoreKnowledgeService::class
+        );
     }
 
     /**
@@ -264,6 +296,59 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute($perIp)->by('ip:'.$request->ip()),
             ];
         });
+
+        // ------------------------------------------------------------------
+        // Phase 2 (AI Sales Agent) limiters. Per-endpoint values are tuned
+        // for the expected client behaviour from the storefront chat widget.
+        // ------------------------------------------------------------------
+
+        // Proactive trigger GET — high-frequency polling from page visits.
+        RateLimiter::for('ai-triggers', fn (Request $request) => [
+            Limit::perMinute(30)->by('triggers-ip:'.$request->ip()),
+        ]);
+
+        // Trigger open/dismiss event — keyed by session so abusers can't drown
+        // out a noisy IP shared across legitimate sessions.
+        RateLimiter::for('ai-triggers-event', function (Request $request) {
+            $session = (string) ($request->input('session_id') ?? '');
+
+            return [
+                Limit::perMinute(60)->by($session !== '' ? 'trig-evt:'.$session : 'trig-evt-ip:'.$request->ip()),
+            ];
+        });
+
+        // Lead capture — intentionally strict to deter form abuse.
+        RateLimiter::for('ai-lead-capture', function (Request $request) {
+            $session = (string) ($request->input('session_id') ?? '');
+
+            return [
+                Limit::perMinute(5)->by($session !== '' ? 'lead:'.$session : 'lead-ip:'.$request->ip()),
+            ];
+        });
+
+        // Upsell suggestions — same order-of-magnitude as message limiter.
+        RateLimiter::for('ai-upsell', function (Request $request) {
+            $session = (string) ($request->input('session_id') ?? '');
+
+            return [
+                Limit::perMinute(20)->by($session !== '' ? 'upsell:'.$session : 'upsell-ip:'.$request->ip()),
+            ];
+        });
+
+        // Conversion event ingestion — high volume because every funnel step
+        // emits one (chat opened, message sent, click, etc.).
+        RateLimiter::for('ai-analytics-event', function (Request $request) {
+            $session = (string) ($request->input('session_id') ?? '');
+
+            return [
+                Limit::perMinute(120)->by($session !== '' ? 'conv:'.$session : 'conv-ip:'.$request->ip()),
+            ];
+        });
+
+        // Knowledge FAQ upsert — internal/admin endpoint, IP-bound.
+        RateLimiter::for('ai-knowledge', fn (Request $request) => [
+            Limit::perMinute(30)->by('know-ip:'.$request->ip()),
+        ]);
     }
 
     /*

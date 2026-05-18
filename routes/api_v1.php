@@ -11,6 +11,11 @@ use App\Http\Controllers\Api\V1\NavigationController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProfileController;
+use App\Http\Controllers\Api\V1\Sales\ConversionEventController as AIConversionEventController;
+use App\Http\Controllers\Api\V1\Sales\KnowledgeController as AIKnowledgeController;
+use App\Http\Controllers\Api\V1\Sales\LeadController as AILeadController;
+use App\Http\Controllers\Api\V1\Sales\TriggerController as AITriggerController;
+use App\Http\Controllers\Api\V1\Sales\UpsellController as AIUpsellController;
 use App\Http\Controllers\Api\V1\ShopController;
 use App\Http\Controllers\Api\V1\ThemeController;
 use App\Http\Controllers\Api\V1\WishlistController;
@@ -251,6 +256,70 @@ Route::prefix('v1')->middleware([
         Route::post('/escalate', [AIChatController::class, 'escalate'])
             ->middleware('throttle:ai-chat-message')
             ->name('escalate');
+    });
+
+    /**
+     * AI Sales Agent — Proactive Trigger Routes (Phase 2 / Phase A)
+     *
+     * GET  /api/v1/ai/triggers/{shop_domain} - Fetch top active rule for page
+     * POST /api/v1/ai/triggers/event         - Record open/dismiss (Step 2)
+     */
+    Route::prefix('ai/triggers')->name('api.v1.ai.triggers.')->group(function () {
+        Route::get('/{shop_domain}', [AITriggerController::class, 'show'])
+            ->middleware('throttle:ai-triggers')
+            ->where('shop_domain', '[A-Za-z0-9\.\-]+')
+            ->name('show');
+
+        Route::post('/event', [AITriggerController::class, 'recordEvent'])
+            ->middleware('throttle:ai-triggers-event')
+            ->name('event');
+    });
+
+    /**
+     * AI Sales Agent — Lead Capture Routes (Phase 2 / Phase B)
+     *
+     * POST /api/v1/ai/leads/capture - Persist email + cart snapshot, returns
+     *                                 idempotent {captured:true} or
+     *                                 {captured:false, duplicate:true}.
+     */
+    Route::prefix('ai/leads')->name('api.v1.ai.leads.')->group(function () {
+        Route::post('/capture', [AILeadController::class, 'capture'])
+            ->middleware('throttle:ai-lead-capture')
+            ->name('capture');
+    });
+
+    /**
+     * AI Sales Agent — Upsell / Cross-Sell Routes (Phase 2 / Phase C)
+     *
+     * POST /api/v1/ai/upsell/suggestions - Returns top-N upsells + free-ship gap
+     */
+    Route::prefix('ai/upsell')->name('api.v1.ai.upsell.')->group(function () {
+        Route::post('/suggestions', [AIUpsellController::class, 'suggestions'])
+            ->middleware('throttle:ai-upsell')
+            ->name('suggestions');
+    });
+
+    /**
+     * AI Sales Agent — Knowledge management (Phase 2 / Phase D)
+     *
+     * POST /api/v1/ai/knowledge/faq - Merchant/internal FAQ upsert.
+     *                                 Guarded by shopify.auth.
+     */
+    Route::prefix('ai/knowledge')->name('api.v1.ai.knowledge.')->middleware(['shopify.auth'])->group(function () {
+        Route::post('/faq', [AIKnowledgeController::class, 'upsertFaq'])
+            ->middleware('throttle:ai-knowledge')
+            ->name('faq');
+    });
+
+    /**
+     * AI Sales Agent — Conversion analytics (Phase 2 / Phase E)
+     *
+     * POST /api/v1/ai/analytics/event - Funnel event ingestion. Always 200.
+     */
+    Route::prefix('ai/analytics')->name('api.v1.ai.analytics.')->group(function () {
+        Route::post('/event', [AIConversionEventController::class, 'store'])
+            ->middleware('throttle:ai-analytics-event')
+            ->name('event');
     });
 
     // ============================================

@@ -38,6 +38,12 @@ class AiConversation extends Model
 
     public const STATUS_ESCALATED = 'escalated';
 
+    public const CONVERSION_DIRECT = 'direct';
+
+    public const CONVERSION_ASSISTED = 'assisted';
+
+    public const CONVERSION_ABANDONED = 'abandoned';
+
     protected $fillable = [
         'session_id',
         'shopify_customer_id',
@@ -48,6 +54,9 @@ class AiConversation extends Model
         'metadata',
         'started_at',
         'ended_at',
+        'revenue_attributed',
+        'conversion_type',
+        'lead_captured',
     ];
 
     protected function casts(): array
@@ -56,6 +65,8 @@ class AiConversation extends Model
             'metadata' => 'array',
             'started_at' => 'datetime',
             'ended_at' => 'datetime',
+            'revenue_attributed' => 'decimal:2',
+            'lead_captured' => 'boolean',
         ];
     }
 

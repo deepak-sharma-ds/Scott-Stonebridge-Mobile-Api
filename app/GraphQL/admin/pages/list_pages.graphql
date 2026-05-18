@@ -1,0 +1,18 @@
+query listPages($first: Int!, $after: String) {
+  pages(first: $first, after: $after) {
+    edges {
+      node {
+        id
+        title
+        handle
+        body
+        updatedAt
+      }
+      cursor
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

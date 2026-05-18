@@ -53,7 +53,15 @@ class IntentDetectionService extends BaseService implements IntentDetectionServi
     public function detect(string $message, ChatContextDTO $context): IntentDTO
     {
         $normalized = mb_strtolower(trim($message));
-        $cacheKey = 'ai:intent:'.md5($normalized.'|'.$context->pageType);
+        // Cache key must include cart/product fingerprint — context priors
+        // change the result for the same message text.
+        $cacheKey = 'ai:intent:'.md5(implode('|', [
+            $normalized,
+            $context->pageType,
+            $context->product?->id ?? '',
+            $context->cart?->totalPrice ?? '',
+            (string) ($context->cart?->itemCount ?? 0),
+        ]));
         $ttl = (int) config('chatbot.intent.cache_ttl', 300);
 
         $cached = Cache::get($cacheKey);
@@ -66,9 +74,73 @@ class IntentDetectionService extends BaseService implements IntentDetectionServi
 
         $result = $fastPath->confidence >= $threshold ? $fastPath : $this->classifierFallback($message, $context, $fastPath);
 
+        // Context priors (Phase C) — applied AFTER fast-path/classifier so a
+        // strong keyword signal still wins. Only escalates known intents to
+        // the sales-oriented variants when the cart context supports it.
+        $result = $this->applySalesContextPriors($result, $context);
+
         Cache::put($cacheKey, $result, $ttl);
 
         return $result;
+    }
+
+    /**
+     * Promote cart_help -> upsell_opportunity when the cart total is below
+     * the free-shipping threshold. Promote product_support ->
+     * cross_sell_opportunity when a cart exists and does not contain the
+     * viewed product (proxy for "shopping for something else").
+     *
+     * Returns the input unchanged when no prior fires.
+     */
+    private function applySalesContextPriors(IntentDTO $detected, ChatContextDTO $context): IntentDTO
+    {
+        if ($detected->name === IntentDTO::INTENT_CART_HELP) {
+            $threshold = (float) config('sales.upsell.default_free_shipping_threshold', 0);
+            $cartTotal = (float) ($context->cart?->totalPrice ?? 0);
+            if ($threshold > 0 && $cartTotal > 0 && $cartTotal < $threshold) {
+                return new IntentDTO(
+                    name: IntentDTO::INTENT_UPSELL_OPPORTUNITY,
+                    confidence: 0.8,
+                    keywords: $detected->keywords,
+                    detectedBy: $detected->detectedBy,
+                );
+            }
+        }
+
+        if ($detected->name === IntentDTO::INTENT_PRODUCT_SUPPORT
+            && $context->cart !== null
+            && ! $context->cart->isEmpty()
+            && $context->product !== null
+            && $context->product->id !== null
+            && ! $this->cartContainsProduct($context->cart->items, $context->product->id)
+        ) {
+            return new IntentDTO(
+                name: IntentDTO::INTENT_CROSS_SELL_OPPORTUNITY,
+                confidence: 0.7,
+                keywords: $detected->keywords,
+                detectedBy: $detected->detectedBy,
+            );
+        }
+
+        return $detected;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $cartItems
+     */
+    private function cartContainsProduct(array $cartItems, string $productId): bool
+    {
+        foreach ($cartItems as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+            $id = (string) ($item['product_id'] ?? $item['id'] ?? '');
+            if ($id === $productId) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function fastPath(string $normalized, ChatContextDTO $context): IntentDTO
