@@ -40,8 +40,23 @@ class ProductRecommendationDTO extends BaseDTO
     public static function fromShopifyNode(array $node, ?string $shopDomain = null): self
     {
         $variant = $node['variants']['edges'][0]['node'] ?? null;
-        $price = $variant['price'] ?? $node['priceRange']['minVariantPrice']['amount'] ?? null;
-        $currency = $variant['priceV2']['currencyCode'] ?? $node['priceRange']['minVariantPrice']['currencyCode'] ?? null;
+
+        // Shopify Storefront 2024+ returns `variant.price` as a MoneyV2 object
+        // `{amount, currencyCode}`. Older deprecated path returned a scalar
+        // string. Support both so a schema update or fallback query path
+        // doesn't blow up with "Array to string conversion".
+        $variantPrice = $variant['price'] ?? null;
+        if (is_array($variantPrice)) {
+            $price = $variantPrice['amount'] ?? null;
+            $currency = $variantPrice['currencyCode'] ?? null;
+        } else {
+            $price = $variantPrice;
+            $currency = $variant['priceV2']['currencyCode'] ?? null;
+        }
+
+        $price ??= $node['priceRange']['minVariantPrice']['amount'] ?? null;
+        $currency ??= $node['priceRange']['minVariantPrice']['currencyCode'] ?? null;
+
         $image = $node['featuredImage']['url'] ?? $node['images']['edges'][0]['node']['url'] ?? null;
         $handle = (string) ($node['handle'] ?? '');
 

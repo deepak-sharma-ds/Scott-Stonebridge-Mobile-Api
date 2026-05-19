@@ -46,21 +46,31 @@ class TriggerController extends BaseApiController
             return $this->success('No trigger available.', ['has_trigger' => false]);
         }
 
-        if ($rule === null || ! $this->triggers->shouldFire($sessionId, $rule)) {
+        if ($rule === null) {
+            return $this->success('No trigger available.', ['has_trigger' => false]);
+        }
+
+        // Atomic claim FIRST — markFired() uses Cache::add (SET NX EX) so only
+        // the first concurrent pageload for this (session, rule) pair gets
+        // true back. Subsequent parallel requests get false and return the
+        // no-trigger response, which closes the previous race where two
+        // pageloads could both pass shouldFire() and emit duplicate triggers.
+        if (! $this->triggers->markFired($sessionId, (int) $rule->id)) {
             return $this->success('No trigger available.', ['has_trigger' => false]);
         }
 
         // Storefront context optionally piggybacks on query string for template
         // interpolation (product_title, cart_total, etc.). Strip the validated
-        // keys so only context-ish values remain.
+        // keys so only context-ish values remain. shop_domain comes from the
+        // route path so we inject it manually — otherwise `{shop_domain}` in
+        // a template stays literal instead of resolving.
         $context = $request->except(['page_type', 'session_id']);
+        $context['shop_domain'] ??= $shopDomain;
         $message = $this->triggers->buildProactiveMessage($rule, $context);
 
         // Stash the resolved message on the model in-memory so the Resource
         // can read it without re-running interpolation.
         $rule->setAttribute('resolved_message', $message);
-
-        $this->triggers->markFired($sessionId, (int) $rule->id);
 
         return $this->success('Trigger matched.', new TriggerResource($rule));
     }

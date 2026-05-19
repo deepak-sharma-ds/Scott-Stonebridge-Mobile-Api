@@ -74,7 +74,10 @@ class PromptBuilderService extends BaseService implements PromptBuilderServiceIn
             'locale_block' => $this->injectLocaleRule($context->locale),
         ])->render();
 
-        $this->assertSystemPromptWithinBudget($systemBody);
+        // Hard-enforce the prompt budget — soft-warning let oversized prompts
+        // through to OpenAI (saw 1071/800 in live smoke), inflating cost and
+        // confusing the model when truncation happened upstream.
+        $systemBody = $this->enforceSystemPromptBudget($systemBody);
 
         $messages = [
             ['role' => 'system', 'content' => $systemBody],
@@ -242,16 +245,35 @@ class PromptBuilderService extends BaseService implements PromptBuilderServiceIn
         return $this->upsell->getUpsells($cartItems, $shopDomain, $currency);
     }
 
-    private function assertSystemPromptWithinBudget(string $systemBody): void
+    /**
+     * Return the system prompt body trimmed to fit the configured token
+     * budget. When the rendered prompt overflows, truncate from the tail
+     * (knowledge / upsell blocks sit at the bottom of the system template)
+     * and append a marker so the model knows context was cut. Reserve a
+     * small headroom for the marker itself.
+     */
+    private function enforceSystemPromptBudget(string $systemBody): string
     {
         $maxTokens = (int) config('sales.prompt_guard.system_prompt_max_tokens', 800);
-        $estimated = (int) ceil(mb_strlen($systemBody) / self::CHARS_PER_TOKEN);
-
-        if ($maxTokens > 0 && $estimated > $maxTokens) {
-            $this->logWarning('System prompt exceeds token budget', [
-                'estimated_tokens' => $estimated,
-                'max_tokens' => $maxTokens,
-            ], 'ai');
+        if ($maxTokens <= 0) {
+            return $systemBody;
         }
+
+        $estimated = (int) ceil(mb_strlen($systemBody) / self::CHARS_PER_TOKEN);
+        if ($estimated <= $maxTokens) {
+            return $systemBody;
+        }
+
+        $marker = "\n\n[CONTEXT TRUNCATED TO FIT TOKEN BUDGET]";
+        $maxChars = $maxTokens * self::CHARS_PER_TOKEN - mb_strlen($marker);
+        $trimmed = mb_substr($systemBody, 0, max(0, $maxChars)).$marker;
+
+        $this->logWarning('System prompt truncated to token budget', [
+            'estimated_tokens' => $estimated,
+            'max_tokens' => $maxTokens,
+            'truncated_chars' => mb_strlen($systemBody) - mb_strlen($trimmed),
+        ], 'ai');
+
+        return $trimmed;
     }
 }

@@ -9,6 +9,7 @@ use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\Sales\UpsellSuggestionDTO;
 use App\Models\ShopSetting;
 use App\Services\Base\BaseService;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Throwable;
 
@@ -174,16 +175,53 @@ class UpsellService extends BaseService implements UpsellServiceInterface
         $ttl = (int) config('sales.upsell.cache_ttl', 600);
         $key = sprintf('ai:upsell:%s:%s:%s', $shopDomain, $country, md5($productId));
 
-        return Cache::remember($key, $ttl, function () use ($productId, $country): array {
-            $response = $this->storefront->query('storefront/products/get_product_recommendations', [
-                'productId' => $productId,
-                'country' => $country,
-            ]);
+        // Fast path — happy cache hit, no lock needed.
+        $cached = Cache::get($key);
+        if (is_array($cached)) {
+            return $cached;
+        }
 
-            $nodes = $response['data']['productRecommendations'] ?? [];
+        // Lock the miss so concurrent PHP-FPM workers serialise through a
+        // single Storefront call rather than thundering-herd it. Lock TTL
+        // (5s) is shorter than the Shopify request timeout but long enough
+        // for the winner to populate the cache; losers wait up to 2s before
+        // either reading the freshly-warmed cache or falling through to a
+        // direct fetch (better than blocking the user response indefinitely).
+        $lock = Cache::lock($key.':lock', 5);
 
-            return is_array($nodes) ? array_values($nodes) : [];
-        });
+        try {
+            $lock->block(2);
+
+            // Re-check after acquiring the lock — the previous winner may
+            // have already populated the cache while we were waiting.
+            return Cache::remember($key, $ttl, fn () => $this->fetchRecommendations($productId, $country));
+        } catch (LockTimeoutException) {
+            $cached = Cache::get($key);
+            if (is_array($cached)) {
+                return $cached;
+            }
+
+            // Lock contention beat the 2s wait and the cache is still cold.
+            // Fall through to a direct fetch — degraded but never blocking.
+            return $this->fetchRecommendations($productId, $country);
+        } finally {
+            optional($lock)->release();
+        }
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private function fetchRecommendations(string $productId, string $country): array
+    {
+        $response = $this->storefront->query('storefront/products/get_product_recommendations', [
+            'productId' => $productId,
+            'country' => $country,
+        ]);
+
+        $nodes = $response['data']['productRecommendations'] ?? [];
+
+        return is_array($nodes) ? array_values($nodes) : [];
     }
 
     /**

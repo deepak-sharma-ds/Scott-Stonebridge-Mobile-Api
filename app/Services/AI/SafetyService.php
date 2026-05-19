@@ -95,20 +95,21 @@ class SafetyService extends BaseService implements SafetyServiceInterface
 
     private function bump(string $key, int $limit, int $ttlSeconds, string $bucket): void
     {
-        $current = (int) Cache::get($key, 0);
-        if ($current >= $limit) {
+        // Atomic claim of the TTL window. Cache::add() is SET NX EX under the
+        // hood on Redis — only the first caller in the window writes the 0,
+        // every subsequent caller sees false and skips straight to INCR. This
+        // closes the read-then-write race where two parallel requests could
+        // both see counter=N-1 and both pass the limit check.
+        Cache::add($key, 0, $ttlSeconds);
+
+        $newVal = (int) Cache::increment($key);
+
+        if ($newVal > $limit) {
             throw new AIRateLimitException('Chat rate limit exceeded.', [
                 'bucket' => $bucket,
                 'limit' => $limit,
                 'ttl' => $ttlSeconds,
             ]);
-        }
-
-        // Cache::increment doesn't set TTL on first write — handle both branches.
-        if ($current === 0) {
-            Cache::put($key, 1, $ttlSeconds);
-        } else {
-            Cache::increment($key);
         }
     }
 }

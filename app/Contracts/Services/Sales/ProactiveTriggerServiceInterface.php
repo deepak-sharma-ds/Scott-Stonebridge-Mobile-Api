@@ -34,8 +34,15 @@ interface ProactiveTriggerServiceInterface
     public function shouldFire(string $sessionId, TriggerRule $rule): bool;
 
     /**
-     * Set a per-session Redis flag (TTL from config('sales.triggers.session_fired_ttl'))
-     * so the same rule is not surfaced again on subsequent page views.
+     * Atomically claim the per-session fire slot. Returns true exactly once
+     * per (session, rule) pair within the TTL window; subsequent concurrent
+     * calls return false because the Redis SET NX EX (via Cache::add)
+     * detects the key already exists.
+     *
+     * Callers should treat the boolean as the source of truth — emit the
+     * trigger only when this returns true. Reading shouldFire() then writing
+     * markFired() afterwards leaves a race window where two parallel
+     * pageloads can both pass the check.
      */
-    public function markFired(string $sessionId, int $ruleId): void;
+    public function markFired(string $sessionId, int $ruleId): bool;
 }

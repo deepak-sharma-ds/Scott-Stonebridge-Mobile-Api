@@ -74,14 +74,19 @@ class ProactiveTriggerService extends BaseService implements ProactiveTriggerSer
         return ! Cache::has($this->firedKey($sessionId, (int) $rule->id));
     }
 
-    public function markFired(string $sessionId, int $ruleId): void
+    public function markFired(string $sessionId, int $ruleId): bool
     {
         if ($sessionId === '' || $ruleId <= 0) {
-            return;
+            return false;
         }
 
         $ttl = (int) config('sales.triggers.session_fired_ttl', 86400);
-        Cache::put($this->firedKey($sessionId, $ruleId), 1, $ttl);
+
+        // Cache::add() is SET NX EX on Redis. Returns true only for the
+        // first writer in the TTL window — every other concurrent caller
+        // gets false. Replaces the previous Cache::put which silently
+        // overwrote, leaving a window for duplicate fires.
+        return Cache::add($this->firedKey($sessionId, $ruleId), 1, $ttl);
     }
 
     private function firedKey(string $sessionId, int $ruleId): string

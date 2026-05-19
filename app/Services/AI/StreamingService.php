@@ -85,6 +85,12 @@ class StreamingService extends BaseService implements StreamingServiceInterface
         $sessionId = $request->sessionId;
 
         $response = new StreamedResponse(function () use ($messages, $intent, $products, $conversation, $sessionId) {
+            // Keep the streaming loop running even if the client disconnects.
+            // Without this, a closed browser tab / curl --max-time mid-stream
+            // would SIGPIPE the PHP worker the moment we try to flush(), and
+            // the post-loop persistence (recordAssistantMessage) would never
+            // run — chat history would be missing that assistant turn.
+            ignore_user_abort(true);
             $this->pipeOpenAi($messages, $intent, $products, $conversation, $sessionId);
         });
 
@@ -112,6 +118,8 @@ class StreamingService extends BaseService implements StreamingServiceInterface
 
         $this->emitInit($intent, $products);
         $lastHeartbeat = microtime(true);
+
+        $streamAborted = false;
 
         try {
             $stream = OpenAI::chat()->createStreamed([
@@ -148,8 +156,10 @@ class StreamingService extends BaseService implements StreamingServiceInterface
                 }
             }
         } catch (Throwable $e) {
+            $streamAborted = true;
             $this->logErrorWithException('SSE stream aborted', $e, [
                 'session_id' => $sessionId,
+                'buffer_chars' => mb_strlen($buffer),
             ]);
             $this->emit('error', [
                 'message' => 'AI provider error',
@@ -158,7 +168,14 @@ class StreamingService extends BaseService implements StreamingServiceInterface
             $this->analytics->record(AnalyticsServiceInterface::EVENT_AI_ERROR, $sessionId, [
                 'error' => $e->getMessage(),
             ]);
+        }
 
+        // Persist whatever we managed to receive — even on abort. Without
+        // this, a partial OpenAI failure leaves the user's question in
+        // ai_messages with no assistant follow-up, breaking history and
+        // making the next turn confusing for the model. Tag aborted writes
+        // in metadata so the frontend / analytics can distinguish them.
+        if ($streamAborted && $buffer === '') {
             return;
         }
 
@@ -176,7 +193,7 @@ class StreamingService extends BaseService implements StreamingServiceInterface
             usage: $usage,
             latencyMs: $latency,
             model: $model,
-            finishReason: $finishReason,
+            finishReason: $streamAborted ? 'aborted' : $finishReason,
         );
 
         $this->conversations->recordAssistantMessage($conversation, $assistant);
@@ -186,13 +203,16 @@ class StreamingService extends BaseService implements StreamingServiceInterface
             'usage' => $usage,
             'latency_ms' => $latency,
             'product_count' => count($products),
+            'aborted' => $streamAborted,
         ]);
 
-        $this->emit('done', [
-            'usage' => $usage,
-            'latency_ms' => $latency,
-            'products' => array_map(fn ($p) => $p->toArray(), $products),
-        ]);
+        if (! $streamAborted) {
+            $this->emit('done', [
+                'usage' => $usage,
+                'latency_ms' => $latency,
+                'products' => array_map(fn ($p) => $p->toArray(), $products),
+            ]);
+        }
     }
 
     /**

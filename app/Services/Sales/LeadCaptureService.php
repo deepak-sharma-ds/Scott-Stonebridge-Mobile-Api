@@ -7,7 +7,6 @@ namespace App\Services\Sales;
 use App\Contracts\Services\Sales\LeadCaptureServiceInterface;
 use App\Models\AiLead;
 use App\Services\Base\BaseService;
-use Throwable;
 
 /**
  * Persistence layer for mid-chat email captures. All work goes through
@@ -36,37 +35,27 @@ class LeadCaptureService extends BaseService implements LeadCaptureServiceInterf
             return false;
         }
 
-        // Short-circuit before hitting the unique index — keeps the happy
-        // duplicate path cheap and avoids an exception in the log.
-        $existing = AiLead::query()
-            ->where('session_id', $sessionId)
-            ->where('email', $email)
-            ->first();
-
-        if ($existing !== null) {
-            return false;
-        }
-
-        try {
-            $lead = AiLead::create([
+        // firstOrCreate is race-safe under the unique (session_id, email)
+        // index — the DB serialises the INSERT and a parallel writer that
+        // loses the race silently reads the existing row instead. Replaces
+        // the previous SELECT-then-INSERT pattern which logged a warning
+        // every time the happy duplicate path hit the catch block.
+        $lead = AiLead::firstOrCreate(
+            [
                 'session_id' => $sessionId,
-                'shop_domain' => $shopDomain,
                 'email' => $email,
+            ],
+            [
+                'shop_domain' => $shopDomain,
                 'name' => $name !== null && $name !== '' ? $name : null,
                 'issue_summary' => $issueSummary !== null && $issueSummary !== '' ? $issueSummary : null,
                 'cart_snapshot_json' => $cartSnapshot === [] ? null : $cartSnapshot,
                 'source' => $source,
                 'status' => AiLead::STATUS_NEW,
-            ]);
-        } catch (Throwable $e) {
-            // Race: another request inserted the same (session, email) pair
-            // between our SELECT and our INSERT. Treat as duplicate.
-            $this->logWarning('Lead capture race or constraint violation', [
-                'session_id' => $sessionId,
-                'email' => $email,
-                'error' => $e->getMessage(),
-            ], 'ai');
+            ],
+        );
 
+        if (! $lead->wasRecentlyCreated) {
             return false;
         }
 

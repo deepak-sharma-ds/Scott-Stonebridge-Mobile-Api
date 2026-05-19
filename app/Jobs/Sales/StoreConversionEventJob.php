@@ -11,6 +11,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -89,43 +90,57 @@ class StoreConversionEventJob implements ShouldQueue
 
     private function applyConversationSideEffects(ConversionEvent $row): void
     {
-        $conversation = AiConversation::query()
-            ->where('session_id', $row->session_id)
-            ->first();
+        // SELECT … FOR UPDATE serializes concurrent side-effects for the
+        // same session. Two parallel order_placed events used to race on
+        // revenue_attributed (Eloquent read-then-save lost increments);
+        // the explicit lock + atomic UPDATE statement below adds the new
+        // revenue in a single DB op, so duplicate dispatches accumulate
+        // correctly instead of clobbering each other.
+        DB::transaction(function () use ($row): void {
+            $conversation = AiConversation::query()
+                ->where('session_id', $row->session_id)
+                ->lockForUpdate()
+                ->first();
 
-        if ($conversation === null) {
-            return;
-        }
-
-        $dirty = false;
-
-        if ($row->event_type === ConversionEvent::EVENT_ORDER_PLACED) {
-            $revenue = (float) ($row->revenue ?? 0.0);
-            if ($revenue > 0.0) {
-                $conversation->revenue_attributed = round((float) $conversation->revenue_attributed + $revenue, 2);
-                $dirty = true;
+            if ($conversation === null) {
+                return;
             }
 
-            // Assisted if recovery email landed earlier on the same session.
-            $hadRecovery = ConversionEvent::query()
-                ->forSession($row->session_id)
-                ->ofType(ConversionEvent::EVENT_ABANDON_RECOVERY_SENT)
-                ->where('id', '<', $row->id)
-                ->exists();
+            $updates = [];
 
-            $conversation->conversion_type = $hadRecovery
-                ? AiConversation::CONVERSION_ASSISTED
-                : AiConversation::CONVERSION_DIRECT;
-            $dirty = true;
-        }
+            if ($row->event_type === ConversionEvent::EVENT_ORDER_PLACED) {
+                $revenue = (float) ($row->revenue ?? 0.0);
+                if ($revenue > 0.0) {
+                    // DB::raw value built from a hard-cast float — no SQL
+                    // injection vector. Atomic add at the engine level.
+                    $updates['revenue_attributed'] = DB::raw(
+                        'ROUND(COALESCE(revenue_attributed, 0) + '.$revenue.', 2)'
+                    );
+                }
 
-        if ($row->event_type === ConversionEvent::EVENT_LEAD_CAPTURED && ! $conversation->lead_captured) {
-            $conversation->lead_captured = true;
-            $dirty = true;
-        }
+                // Assisted iff a recovery email landed earlier on the same
+                // session. Inside the lock so a recovery event arriving
+                // between the read and the write cannot flip the verdict.
+                $hadRecovery = ConversionEvent::query()
+                    ->forSession($row->session_id)
+                    ->ofType(ConversionEvent::EVENT_ABANDON_RECOVERY_SENT)
+                    ->where('id', '<', $row->id)
+                    ->exists();
 
-        if ($dirty) {
-            $conversation->save();
-        }
+                $updates['conversion_type'] = $hadRecovery
+                    ? AiConversation::CONVERSION_ASSISTED
+                    : AiConversation::CONVERSION_DIRECT;
+            }
+
+            if ($row->event_type === ConversionEvent::EVENT_LEAD_CAPTURED && ! $conversation->lead_captured) {
+                $updates['lead_captured'] = true;
+            }
+
+            if ($updates !== []) {
+                AiConversation::query()
+                    ->whereKey($conversation->id)
+                    ->update($updates);
+            }
+        });
     }
 }

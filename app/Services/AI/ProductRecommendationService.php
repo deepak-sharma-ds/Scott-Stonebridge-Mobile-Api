@@ -32,19 +32,33 @@ class ProductRecommendationService extends BaseService implements ProductRecomme
         $limit ??= (int) config('chatbot.recommendation.limit', 6);
         $shop = $context->shopDomain ?? (string) config('shopify.store_domain');
 
-        $trimmedQuery = $this->buildShopifyQuery($query, $context);
-        if ($trimmedQuery === '') {
-            return [];
+        // Detect sort intent BEFORE stop-word filtering. Phrases like
+        // "top selling" / "newest" / "cheapest" are a SORT request, not a
+        // search filter — Shopify Storefront exposes ProductSortKeys for
+        // exactly this. The previous code force-used RELEVANCE and pushed
+        // the sort-words into the query string, which matched ~nothing in
+        // most stores.
+        [$sortKey, $reverse, $stripped] = $this->detectSortIntent($query);
+
+        $trimmedQuery = $this->buildShopifyQuery($stripped, $context);
+
+        // When a sort key is requested, an empty filter is OK — Shopify
+        // returns the top-N by that sort. When RELEVANCE is the only signal
+        // and the filter is empty, fall back to BEST_SELLING so the user
+        // always gets *something* back rather than an empty product list.
+        if ($trimmedQuery === '' && $sortKey === 'RELEVANCE') {
+            $sortKey = 'BEST_SELLING';
+            $reverse = false;
         }
 
-        $cacheKey = sprintf('ai:rec:%s:%s:%d', $shop, md5(mb_strtolower($trimmedQuery)), $limit);
+        $cacheKey = sprintf('ai:rec:%s:%s:%s:%d', $shop, $sortKey, md5(mb_strtolower($trimmedQuery)), $limit);
 
         try {
-            return Cache::remember($cacheKey, 300, function () use ($trimmedQuery, $limit, $shop, $context): array {
+            return Cache::remember($cacheKey, 300, function () use ($trimmedQuery, $limit, $shop, $context, $sortKey, $reverse): array {
                 $response = $this->storefront->query('storefront/products/get_all_products', [
                     'limit' => $limit,
-                    'sortKey' => 'RELEVANCE',
-                    'reverse' => false,
+                    'sortKey' => $sortKey,
+                    'reverse' => $reverse,
                     'query' => $trimmedQuery,
                     'country' => $this->countryFromCurrency($context->currency),
                 ]);
@@ -65,11 +79,53 @@ class ProductRecommendationService extends BaseService implements ProductRecomme
         } catch (Throwable $e) {
             $this->logWarning('Product recommendation lookup failed', [
                 'query' => $trimmedQuery,
+                'sort' => $sortKey,
                 'error' => $e->getMessage(),
             ], 'ai');
 
             return [];
         }
+    }
+
+    /**
+     * Map natural-language sort phrases to Shopify ProductSortKeys.
+     * Returns [sortKey, reverse, messageWithSortKeywordsStripped].
+     *
+     * @return array{0: string, 1: bool, 2: string}
+     */
+    private function detectSortIntent(string $message): array
+    {
+        $lower = mb_strtolower($message);
+
+        // Best sellers: "top selling", "best selling", "popular", "bestseller", "trending", "hot".
+        if (preg_match('/\b(top\s*sell\w*|best\s*sell\w*|bestseller\w*|popular|trending|hot\s+items?)\b/u', $lower)) {
+            $stripped = (string) preg_replace('/\b(top|best|sell\w*|bestseller\w*|popular|trending|hot|items?)\b/u', '', $lower);
+
+            return ['BEST_SELLING', false, $stripped];
+        }
+
+        // Newest: "newest", "latest", "new arrivals", "recent".
+        if (preg_match('/\b(newest|latest|new\s+arrivals?|recently?\s+added|recent)\b/u', $lower)) {
+            $stripped = (string) preg_replace('/\b(newest|latest|new|arrivals?|recently?|added|recent)\b/u', '', $lower);
+
+            return ['CREATED_AT', true, $stripped];
+        }
+
+        // Cheapest: "cheap", "cheapest", "affordable", "lowest price", "under £N".
+        if (preg_match('/\b(cheap\w*|affordable|lowest\s+price|under\s+[£$€]?\d+)\b/u', $lower)) {
+            $stripped = (string) preg_replace('/\b(cheap\w*|affordable|lowest|price|under|[£$€]?\d+)\b/u', '', $lower);
+
+            return ['PRICE', false, $stripped];
+        }
+
+        // Most expensive / premium / luxury.
+        if (preg_match('/\b(premium|luxury|expensive|highest\s+price|high-?end)\b/u', $lower)) {
+            $stripped = (string) preg_replace('/\b(premium|luxury|expensive|highest|price|high-?end)\b/u', '', $lower);
+
+            return ['PRICE', true, $stripped];
+        }
+
+        return ['RELEVANCE', false, $message];
     }
 
     /**
@@ -85,7 +141,11 @@ class ProductRecommendationService extends BaseService implements ProductRecomme
             'recommend', 'recommendation', 'suggest', 'suggestion', 'please',
             'best', 'top', 'good', 'better', 'looking', 'for', 'show', 'me',
             'find', 'i', 'want', 'need', 'a', 'an', 'the', 'some', 'any',
-            'can', 'you', 'something', 'similar', 'to', 'this', 'that',
+            'can', 'you', 'your', 'something', 'similar', 'to', 'this', 'that',
+            // Generic e-commerce filler — every Shopify item is a "product",
+            // so the literal word matches almost nothing as a search filter.
+            'product', 'products', 'item', 'items', 'thing', 'things',
+            'are', 'is', 'what', 'which',
         ];
 
         $words = preg_split('/\s+/u', mb_strtolower(trim($userMessage))) ?: [];

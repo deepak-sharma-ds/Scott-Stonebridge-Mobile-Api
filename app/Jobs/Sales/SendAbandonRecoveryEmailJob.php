@@ -61,16 +61,6 @@ class SendAbandonRecoveryEmailJob implements ShouldQueue
             return;
         }
 
-        // Idempotency gate — only `new` leads with cart items qualify.
-        if ($lead->status !== AiLead::STATUS_NEW) {
-            Log::channel('ai')->info('AbandonRecovery: lead no longer new, skipping', [
-                'lead_id' => $lead->id,
-                'status' => $lead->status,
-            ]);
-
-            return;
-        }
-
         if (! $lead->hasCartItems()) {
             Log::channel('ai')->info('AbandonRecovery: lead has no cart items, skipping', [
                 'lead_id' => $lead->id,
@@ -78,6 +68,30 @@ class SendAbandonRecoveryEmailJob implements ShouldQueue
 
             return;
         }
+
+        // Atomic claim: only the first concurrent worker to flip status from
+        // NEW → RECOVERY_SENT wins. The previous code had a wide gap between
+        // the status check and Mail::send, so two parallel dispatches for
+        // the same lead could both pass the gate and both send the email.
+        // Switching to a conditional UPDATE means duplicates silently no-op.
+        $claimed = AiLead::query()
+            ->whereKey($lead->id)
+            ->where('status', AiLead::STATUS_NEW)
+            ->update([
+                'status' => AiLead::STATUS_RECOVERY_SENT,
+                'recovery_sent_at' => now(),
+            ]);
+
+        if ($claimed === 0) {
+            Log::channel('ai')->info('AbandonRecovery: claim lost or lead not new, skipping', [
+                'lead_id' => $lead->id,
+                'status' => $lead->status,
+            ]);
+
+            return;
+        }
+
+        $lead->refresh();
 
         $conversation = AiConversation::query()
             ->where('session_id', $lead->session_id)
@@ -95,8 +109,16 @@ class SendAbandonRecoveryEmailJob implements ShouldQueue
                 shopName: $shopName,
             ));
         } catch (Throwable $e) {
-            // Don't swallow — let the queue retry per $backoff.
-            Log::channel('error')->error('AbandonRecovery: mail send failed', [
+            // Roll back the claim so the queue retry can resend. Without
+            // this, a transient SMTP failure would burn the only attempt
+            // and leave the lead permanently in RECOVERY_SENT with no
+            // email actually delivered.
+            AiLead::query()->whereKey($lead->id)->update([
+                'status' => AiLead::STATUS_NEW,
+                'recovery_sent_at' => null,
+            ]);
+
+            Log::channel('error')->error('AbandonRecovery: mail send failed, status rolled back', [
                 'lead_id' => $lead->id,
                 'attempt' => $this->attempts(),
                 'error' => $e->getMessage(),
@@ -105,9 +127,7 @@ class SendAbandonRecoveryEmailJob implements ShouldQueue
             throw $e;
         }
 
-        $leads->updateStatus((int) $lead->id, AiLead::STATUS_RECOVERY_SENT);
-
-        // Funnel hook — Step 9 will swap this for StoreConversionEventJob.
+        // Funnel hook — analytics dispatch is best-effort, never blocks UX.
         try {
             $analytics->record('abandon_recovery_sent', $lead->session_id, [
                 'event_type' => 'abandon_recovery_sent',
