@@ -30,6 +30,6 @@ yarn-error.log
 /postman
 /docs
 /scripts
-/tests
+# /tests
 /.zed
 .htaccess

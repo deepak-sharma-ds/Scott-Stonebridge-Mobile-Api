@@ -8,6 +8,7 @@ use App\Jobs\AI\GenerateConversationSummaryJob;
 use App\Jobs\AI\NotifyEscalationJob;
 use App\Models\AiConversation;
 use App\Models\AiMessage;
+use App\Models\ShopSetting;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Mail;
@@ -41,9 +42,18 @@ class ChatSessionLifecycleTest extends TestCase
         $response->assertJsonStructure([
             'success',
             'message',
-            'data' => ['session_id', 'shop_domain', 'page_type', 'status', 'started_at'],
+            'data' => [
+                'session_id', 'shop_domain', 'page_type', 'status', 'started_at',
+                'widget' => ['persona_name', 'avatar_url', 'brand_color', 'position'],
+            ],
             'meta' => ['correlation_id', 'timestamp', 'version'],
         ]);
+
+        // Defaults when no ShopSetting row exists.
+        $response->assertJsonPath('data.widget.persona_name', 'AI Assistant');
+        $response->assertJsonPath('data.widget.avatar_url', null);
+        $response->assertJsonPath('data.widget.brand_color', '#7C3AED');
+        $response->assertJsonPath('data.widget.position', 'right');
 
         $sessionId = $response->json('data.session_id');
         $this->assertIsString($sessionId);
@@ -54,6 +64,45 @@ class ChatSessionLifecycleTest extends TestCase
             'page_type' => 'product',
             'status' => AiConversation::STATUS_ACTIVE,
         ]);
+    }
+
+    public function test_start_session_includes_persona_when_shop_setting_present(): void
+    {
+        ShopSetting::factory()
+            ->forShop('demo.myshopify.com')
+            ->withPersona('Aurora', 'https://cdn.example.com/aurora.png')
+            ->withBrandColor('#FF6F61')
+            ->withWidgetPosition('left')
+            ->create();
+
+        $response = $this->postJson('/api/v1/ai/chat/start', [
+            'shop_domain' => 'demo.myshopify.com',
+            'page_type' => 'home',
+            'locale' => 'en',
+        ]);
+
+        $response->assertStatus(201);
+        $response->assertJsonPath('data.widget.persona_name', 'Aurora');
+        $response->assertJsonPath('data.widget.avatar_url', 'https://cdn.example.com/aurora.png');
+        $response->assertJsonPath('data.widget.brand_color', '#FF6F61');
+        $response->assertJsonPath('data.widget.position', 'left');
+    }
+
+    public function test_end_session_does_not_emit_widget_block(): void
+    {
+        Queue::fake();
+        ShopSetting::factory()
+            ->forShop('demo.myshopify.com')
+            ->withPersona('Aurora', 'https://cdn.example.com/aurora.png')
+            ->create();
+        $conversation = AiConversation::factory()->create(['shop_domain' => 'demo.myshopify.com']);
+
+        $response = $this->postJson('/api/v1/ai/chat/end', [
+            'session_id' => $conversation->session_id,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonMissingPath('data.widget');
     }
 
     public function test_history_endpoint_returns_paginated_messages(): void
