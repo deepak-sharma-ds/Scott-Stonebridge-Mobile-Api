@@ -18,6 +18,7 @@ use App\Http\Resources\AI\ConversationResource;
 use App\Http\Resources\AI\MessageResource;
 use App\Http\Resources\AI\ProductRecommendationResource;
 use App\Models\AiConversation;
+use App\Models\ShopSetting;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Throwable;
@@ -59,11 +60,43 @@ class ChatController extends BaseApiController
             return $this->error('Failed to start AI chat session.', [], ['error_code' => 'chat_start_failed'], 500);
         }
 
+        // Merge the per-shop widget block into the start response only. /chat/end
+        // and /chat/escalate continue to return the bare ConversationResource so
+        // the contract there stays unchanged. Front-end caches the widget config
+        // from this initial response for the lifetime of the chat session.
+        $payload = (new ConversationResource($conversation))
+            ->response()
+            ->getData(true);
+
+        // `response()->getData(true)` wraps in a top-level `data` key; strip it
+        // so we can re-pass the inner array into BaseApiController::success().
+        $resourceData = $payload['data'] ?? $payload;
+        $resourceData['widget'] = $this->widgetConfig(
+            ShopSetting::query()->where('shop_domain', $conversation->shop_domain)->first()
+        );
+
         return $this->success(
             'Chat session started.',
-            new ConversationResource($conversation),
+            $resourceData,
             statusCode: 201,
         );
+    }
+
+    /**
+     * Build the widget config block surfaced to the storefront chat bubble.
+     * Falls back to brand-agnostic defaults so a shop that hasn't configured
+     * its ShopSetting row still renders a usable widget.
+     *
+     * @return array{persona_name: string, avatar_url: ?string, brand_color: string, position: string}
+     */
+    private function widgetConfig(?ShopSetting $shop): array
+    {
+        return [
+            'persona_name' => $shop?->persona_name ?? 'AI Assistant',
+            'avatar_url' => $shop?->avatar_url,
+            'brand_color' => $shop?->brand_color ?? '#7C3AED',
+            'position' => $shop?->widget_position ?? 'right',
+        ];
     }
 
     public function message(SendMessageRequest $request): JsonResponse

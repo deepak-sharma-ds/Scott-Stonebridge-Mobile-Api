@@ -25,6 +25,10 @@ class ShopSettingFactory extends Factory
             'allowed_locales_json' => null,
             'welcome_messages_json' => null,
             'free_shipping_threshold' => null,
+            'persona_name' => null,
+            'avatar_url' => null,
+            'brand_color' => null,
+            'widget_position' => 'right',
         ];
     }
 
@@ -57,5 +61,23 @@ class ShopSettingFactory extends Factory
     public function withFreeShippingThreshold(float $threshold): self
     {
         return $this->state(fn () => ['free_shipping_threshold' => $threshold]);
+    }
+
+    public function withPersona(string $name, ?string $avatarUrl = null): self
+    {
+        return $this->state(fn () => [
+            'persona_name' => $name,
+            'avatar_url' => $avatarUrl,
+        ]);
+    }
+
+    public function withBrandColor(string $hex): self
+    {
+        return $this->state(fn () => ['brand_color' => $hex]);
+    }
+
+    public function withWidgetPosition(string $position): self
+    {
+        return $this->state(fn () => ['widget_position' => $position]);
     }
 }

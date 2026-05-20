@@ -1,0 +1,27 @@
+query getOrderByName($query: String!) {
+  orders(first: 1, query: $query) {
+    edges {
+      node {
+        id
+        name
+        email
+        createdAt
+        displayFulfillmentStatus
+        displayFinancialStatus
+        shippingAddress {
+          city
+          country
+        }
+        fulfillments(first: 5) {
+          status
+          estimatedDeliveryAt
+          trackingInfo {
+            number
+            url
+            company
+          }
+        }
+      }
+    }
+  }
+}

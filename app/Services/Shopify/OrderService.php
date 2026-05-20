@@ -176,13 +176,15 @@ class OrderService extends BaseService implements OrderServiceInterface
     {
         $orderQuery = trim($orderId);
 
+        // Already formatted query
         if (str_starts_with($orderQuery, 'id:')) {
             return $orderQuery;
         }
 
-        // if (str_starts_with($orderQuery, 'gid://')) {
-        //     return "id:{$orderQuery}";
-        // }
+        // Extract numeric order ID from gid://shopify/Order/123
+        if (preg_match('/gid:\/\/shopify\/Order\/(\d+)/', $orderQuery, $matches)) {
+            return "id:{$matches[1]}";
+        }
 
         return $orderQuery;
     }

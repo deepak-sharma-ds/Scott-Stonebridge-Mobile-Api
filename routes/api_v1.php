@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AI\ChatController as AIChatController;
+use App\Http\Controllers\Api\V1\AI\OrderTrackingController as AIOrderTrackingController;
 use App\Http\Controllers\Api\V1\AI\StreamController as AIStreamController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CartController;
@@ -320,6 +321,18 @@ Route::prefix('v1')->middleware([
         Route::post('/event', [AIConversionEventController::class, 'store'])
             ->middleware('throttle:ai-analytics-event')
             ->name('event');
+    });
+
+    /**
+     * AI Sales Agent — Order tracking (in-chat "Where is my order?" flow)
+     *
+     * GET /api/v1/ai/orders/track - Returns order status by (order_number, email).
+     *                               Rate-limited 10/min/session via ai-order-track.
+     */
+    Route::prefix('ai/orders')->name('api.v1.ai.orders.')->group(function () {
+        Route::get('/track', [AIOrderTrackingController::class, 'show'])
+            ->middleware('throttle:ai-order-track')
+            ->name('track');
     });
 
     // ============================================

@@ -18,6 +18,10 @@ use Illuminate\Support\Carbon;
  * @property array<int, string>|null $allowed_locales_json
  * @property array<string, string>|null $welcome_messages_json
  * @property float|null $free_shipping_threshold
+ * @property string|null $persona_name
+ * @property string|null $avatar_url
+ * @property string|null $brand_color
+ * @property string $widget_position
  * @property Carbon $created_at
  * @property Carbon $updated_at
  */
@@ -32,6 +36,11 @@ class ShopSetting extends Model
         'allowed_locales_json',
         'welcome_messages_json',
         'free_shipping_threshold',
+        // Widget branding (consumed by /chat/start response).
+        'persona_name',
+        'avatar_url',
+        'brand_color',
+        'widget_position',
     ];
 
     protected function casts(): array
