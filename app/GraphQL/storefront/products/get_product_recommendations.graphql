@@ -1,0 +1,33 @@
+query getProductRecommendations(
+  $productId: ID!
+  $country: CountryCode
+) @inContext(country: $country) {
+  productRecommendations(productId: $productId, intent: COMPLEMENTARY) {
+    id
+    title
+    handle
+    availableForSale
+    featuredImage {
+      url
+      altText
+    }
+    priceRange {
+      minVariantPrice {
+        amount
+        currencyCode
+      }
+    }
+    variants(first: 1) {
+      edges {
+        node {
+          id
+          availableForSale
+          price {
+            amount
+            currencyCode
+          }
+        }
+      }
+    }
+  }
+}

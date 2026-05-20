@@ -1,0 +1,26 @@
+query listArticles($first: Int!, $after: String) {
+  articles(first: $first, after: $after, sortKey: PUBLISHED_AT, reverse: true) {
+    edges {
+      node {
+        id
+        title
+        handle
+        body
+        summary
+        tags
+        publishedAt
+        updatedAt
+        blog {
+          id
+          title
+          handle
+        }
+      }
+      cursor
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

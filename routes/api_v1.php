@@ -1,5 +1,8 @@
-﻿<?php
+<?php
 
+use App\Http\Controllers\Api\V1\AI\ChatController as AIChatController;
+use App\Http\Controllers\Api\V1\AI\OrderTrackingController as AIOrderTrackingController;
+use App\Http\Controllers\Api\V1\AI\StreamController as AIStreamController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CartController;
 use App\Http\Controllers\Api\V1\ContactController;
@@ -9,6 +12,11 @@ use App\Http\Controllers\Api\V1\NavigationController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProfileController;
+use App\Http\Controllers\Api\V1\Sales\ConversionEventController as AIConversionEventController;
+use App\Http\Controllers\Api\V1\Sales\KnowledgeController as AIKnowledgeController;
+use App\Http\Controllers\Api\V1\Sales\LeadController as AILeadController;
+use App\Http\Controllers\Api\V1\Sales\TriggerController as AITriggerController;
+use App\Http\Controllers\Api\V1\Sales\UpsellController as AIUpsellController;
 use App\Http\Controllers\Api\V1\ShopController;
 use App\Http\Controllers\Api\V1\ThemeController;
 use App\Http\Controllers\Api\V1\WishlistController;
@@ -16,10 +24,10 @@ use Illuminate\Support\Facades\Route;
 
 /**
  * API Version 1 Routes
- * 
+ *
  * This file contains all v1 API routes for the mobile application.
  * All routes are prefixed with /api/v1/
- * 
+ *
  * Middleware Stack:
  * - correlation.id: Adds correlation ID for request tracking
  * - currency: Handles currency context from request
@@ -27,21 +35,20 @@ use Illuminate\Support\Facades\Route;
  * - rate.limit: Rate limiting per IP/user
  * - shopify.auth: Authentication for protected routes (applied per route group)
  */
-
 Route::prefix('v1')->middleware([
     'correlation.id',
     'currency',
     'api.logging',
     'rate.limit',
 ])->group(function () {
-    
+
     // ============================================
     // Public Routes (No Authentication Required)
     // ============================================
 
     /**
      * Product Routes
-     * 
+     *
      * GET /api/v1/products - List all products with pagination
      * GET /api/v1/products/search - Search products
      * GET /api/v1/products/{handle} - Get product details by handle
@@ -60,7 +67,7 @@ Route::prefix('v1')->middleware([
 
     /**
      * Collection Routes
-     * 
+     *
      * GET /api/v1/collections - List all collections
      * POST /api/v1/collections - List all collections (backward compatibility)
      * GET /api/v1/collections/{handle}/products - Get products by collection
@@ -75,7 +82,7 @@ Route::prefix('v1')->middleware([
 
     /**
      * Authentication Routes
-     * 
+     *
      * POST /api/v1/auth/login - Customer login
      * POST /api/v1/auth/register - Customer registration
      * POST /api/v1/auth/forgot-password - Request password reset
@@ -98,7 +105,7 @@ Route::prefix('v1')->middleware([
 
     /**
      * Cart Routes (Guest and Authenticated)
-     * 
+     *
      * POST /api/v1/cart - Create a new cart
      * GET /api/v1/cart/{cartId} - Get cart details
      * POST /api/v1/cart/items/add - Add item to cart (cartId in body)
@@ -124,7 +131,7 @@ Route::prefix('v1')->middleware([
 
     /**
      * Content/CMS Routes (Public)
-     * 
+     *
      * GET /api/v1/pages/{handle} - Get page by handle
      * POST /api/v1/pages/details - Get page details (backward compatibility)
      * GET /api/v1/policies/{type} - Get policy page by type
@@ -162,14 +169,14 @@ Route::prefix('v1')->middleware([
 
     /**
      * Contact Route (Public with stricter rate limiting)
-     * 
+     *
      * POST /api/v1/contact - Submit contact form
      */
     Route::post('/contact', [ContactController::class, 'store'])->name('api.v1.contact.store');
 
     /**
      * Shop & Currency Routes (Public - Guest Friendly)
-     * 
+     *
      * GET /api/v1/shop/currencies - Get supported currencies
      * GET /api/v1/shop/markets - Get shop markets and regional settings
      */
@@ -180,7 +187,7 @@ Route::prefix('v1')->middleware([
 
     /**
      * Theme Routes (Public - Guest Friendly)
-     * 
+     *
      * GET /api/v1/theme/active - Get active theme information
      * GET /api/v1/theme/templates/{handle} - Get specific template by handle
      * GET /api/v1/theme/templates/by-type - Get template by type and optional suffix
@@ -197,7 +204,7 @@ Route::prefix('v1')->middleware([
 
     /**
      * Home Routes (Public - Guest Friendly)
-     * 
+     *
      * GET /api/v1/home - Get home page data (no auth required)
      * POST /api/v1/home/subscribe - Subscribe to newsletter (optional auth)
      */
@@ -208,11 +215,126 @@ Route::prefix('v1')->middleware([
 
     /**
      * Navigation Routes (Public - Guest Friendly)
-     * 
+     *
      * GET /api/v1/navigation/{handle} - Get menu by handle (e.g., 'main-menu', 'footer')
      */
     Route::prefix('navigation')->group(function () {
         Route::get('/{handle}', [NavigationController::class, 'show'])->name('api.v1.navigation.show');
+    });
+
+    /**
+     * AI Chatbot Routes (Public — guests allowed; customer Bearer token is
+     * optional and consumed by the orchestrator when present.)
+     *
+     * POST /api/v1/ai/chat/start             - Start a chat session
+     * POST /api/v1/ai/chat/message           - Non-streamed message turn
+     * GET  /api/v1/ai/chat/stream/{session}  - SSE streaming reply
+     * GET  /api/v1/ai/chat/history/{session} - Conversation history
+     * POST /api/v1/ai/chat/end               - End session + dispatch summary job
+     * POST /api/v1/ai/chat/escalate          - Trigger human handoff
+     */
+    Route::prefix('ai/chat')->name('api.v1.ai.chat.')->group(function () {
+        Route::post('/start', [AIChatController::class, 'start'])
+            ->middleware('throttle:ai-chat-message')
+            ->name('start');
+
+        Route::post('/message', [AIChatController::class, 'message'])
+            ->middleware('throttle:ai-chat-message')
+            ->name('message');
+
+        // SSE stream. POST (not GET) because the request body carries the full
+        // context payload — frontend should consume via fetch + ReadableStream,
+        // not the legacy EventSource API which is GET-only.
+        Route::post('/stream/{session}', [AIStreamController::class, 'stream'])
+            ->middleware('throttle:ai-chat-stream')
+            ->name('stream');
+
+        Route::get('/history/{session}', [AIChatController::class, 'history'])
+            ->name('history');
+
+        Route::post('/end', [AIChatController::class, 'end'])
+            ->middleware('throttle:ai-chat-message')
+            ->name('end');
+
+        Route::post('/escalate', [AIChatController::class, 'escalate'])
+            ->middleware('throttle:ai-chat-message')
+            ->name('escalate');
+    });
+
+    /**
+     * AI Sales Agent — Proactive Trigger Routes (Phase 2 / Phase A)
+     *
+     * GET  /api/v1/ai/triggers/{shop_domain} - Fetch top active rule for page
+     * POST /api/v1/ai/triggers/event         - Record open/dismiss (Step 2)
+     */
+    Route::prefix('ai/triggers')->name('api.v1.ai.triggers.')->group(function () {
+        Route::get('/{shop_domain}', [AITriggerController::class, 'show'])
+            ->middleware('throttle:ai-triggers')
+            ->where('shop_domain', '[A-Za-z0-9\.\-]+')
+            ->name('show');
+
+        Route::post('/event', [AITriggerController::class, 'recordEvent'])
+            ->middleware('throttle:ai-triggers-event')
+            ->name('event');
+    });
+
+    /**
+     * AI Sales Agent — Lead Capture Routes (Phase 2 / Phase B)
+     *
+     * POST /api/v1/ai/leads/capture - Persist email + cart snapshot, returns
+     *                                 idempotent {captured:true} or
+     *                                 {captured:false, duplicate:true}.
+     */
+    Route::prefix('ai/leads')->name('api.v1.ai.leads.')->group(function () {
+        Route::post('/capture', [AILeadController::class, 'capture'])
+            ->middleware('throttle:ai-lead-capture')
+            ->name('capture');
+    });
+
+    /**
+     * AI Sales Agent — Upsell / Cross-Sell Routes (Phase 2 / Phase C)
+     *
+     * POST /api/v1/ai/upsell/suggestions - Returns top-N upsells + free-ship gap
+     */
+    Route::prefix('ai/upsell')->name('api.v1.ai.upsell.')->group(function () {
+        Route::post('/suggestions', [AIUpsellController::class, 'suggestions'])
+            ->middleware('throttle:ai-upsell')
+            ->name('suggestions');
+    });
+
+    /**
+     * AI Sales Agent — Knowledge management (Phase 2 / Phase D)
+     *
+     * POST /api/v1/ai/knowledge/faq - Merchant/internal FAQ upsert.
+     *                                 Guarded by shopify.auth.
+     */
+    Route::prefix('ai/knowledge')->name('api.v1.ai.knowledge.')->middleware(['shopify.auth'])->group(function () {
+        Route::post('/faq', [AIKnowledgeController::class, 'upsertFaq'])
+            ->middleware('throttle:ai-knowledge')
+            ->name('faq');
+    });
+
+    /**
+     * AI Sales Agent — Conversion analytics (Phase 2 / Phase E)
+     *
+     * POST /api/v1/ai/analytics/event - Funnel event ingestion. Always 200.
+     */
+    Route::prefix('ai/analytics')->name('api.v1.ai.analytics.')->group(function () {
+        Route::post('/event', [AIConversionEventController::class, 'store'])
+            ->middleware('throttle:ai-analytics-event')
+            ->name('event');
+    });
+
+    /**
+     * AI Sales Agent — Order tracking (in-chat "Where is my order?" flow)
+     *
+     * GET /api/v1/ai/orders/track - Returns order status by (order_number, email).
+     *                               Rate-limited 10/min/session via ai-order-track.
+     */
+    Route::prefix('ai/orders')->name('api.v1.ai.orders.')->group(function () {
+        Route::get('/track', [AIOrderTrackingController::class, 'show'])
+            ->middleware('throttle:ai-order-track')
+            ->name('track');
     });
 
     // ============================================
@@ -223,7 +345,7 @@ Route::prefix('v1')->middleware([
 
         /**
          * Profile Routes
-         * 
+         *
          * GET /api/v1/profile - Get customer profile and addresses
          * PUT /api/v1/profile - Update customer profile
          * POST /api/v1/profile/addresses - Add new address
@@ -240,11 +362,11 @@ Route::prefix('v1')->middleware([
 
         /**
          * Wishlist Routes
-         * 
+         *
          * GET /api/v1/wishlist - Get customer wishlist
          * POST /api/v1/wishlist/items - Add product to wishlist
          * DELETE /api/v1/wishlist/items/{productId} - Remove product from wishlist
-         * 
+         *
          * Note: Product IDs are Shopify IDs and may contain special characters
          */
         Route::prefix('wishlist')->group(function () {
@@ -257,10 +379,10 @@ Route::prefix('v1')->middleware([
 
         /**
          * Order Routes
-         * 
+         *
          * GET /api/v1/orders - List customer orders
          * GET /api/v1/orders/{orderId} - Get order details
-         * 
+         *
          * Note: Shopify IDs contain special characters and are URL-encoded automatically
          */
         Route::prefix('orders')->group(function () {

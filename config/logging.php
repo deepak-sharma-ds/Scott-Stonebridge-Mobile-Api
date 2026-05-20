@@ -1,10 +1,10 @@
 <?php
 
+use App\Logging\CorrelationIdProcessor;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
 use Monolog\Processor\PsrLogMessageProcessor;
-use App\Logging\CorrelationIdProcessor;
 
 return [
 
@@ -90,7 +90,7 @@ return [
             'handler_with' => [
                 'host' => env('PAPERTRAIL_URL'),
                 'port' => env('PAPERTRAIL_PORT'),
-                'connectionString' => 'tls://' . env('PAPERTRAIL_URL') . ':' . env('PAPERTRAIL_PORT'),
+                'connectionString' => 'tls://'.env('PAPERTRAIL_URL').':'.env('PAPERTRAIL_PORT'),
             ],
             'processors' => [PsrLogMessageProcessor::class],
         ],
@@ -131,15 +131,15 @@ return [
         /* I'm using this log for coniq signup */
         'signup' => [
             'driver' => 'daily',
-            'path'      => storage_path('logs/signup.log'),
-            'level'  => 'info',
-            'days'      => 3650, // Keep logs for 10 years
+            'path' => storage_path('logs/signup.log'),
+            'level' => 'info',
+            'days' => 3650, // Keep logs for 10 years
         ],
         'loyalty' => [
             'driver' => 'daily',
-            'path'     => storage_path('logs/loyalty.log'),
-            'level'  => 'info',
-            'days'      => 3650, // Keep logs for 10 years
+            'path' => storage_path('logs/loyalty.log'),
+            'level' => 'info',
+            'days' => 3650, // Keep logs for 10 years
         ],
 
         /* I'm using this log for appointment slots command */
@@ -150,13 +150,13 @@ return [
         ],
         'shopify_customers_auth' => [
             'driver' => 'single',
-            'path'      => storage_path('logs/shopify_customers_auth.log'),
-            'level'  => 'debug',
+            'path' => storage_path('logs/shopify_customers_auth.log'),
+            'level' => 'debug',
         ],
         'shopify_webhooks' => [
             'driver' => 'single',
-            'path'      => storage_path('logs/shopify_webhooks.log'),
-            'level'  => 'debug',
+            'path' => storage_path('logs/shopify_webhooks.log'),
+            'level' => 'debug',
         ],
 
         // Shopify API request/response logging
@@ -195,6 +195,16 @@ return [
             'path' => storage_path('logs/error.log'),
             'level' => 'error',
             'days' => env('LOG_DAILY_DAYS', 30),
+            'replace_placeholders' => true,
+            'processors' => [CorrelationIdProcessor::class],
+        ],
+
+        // AI chatbot logging (prompts, intents, OpenAI calls, safety hits)
+        'ai' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/ai.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
             'processors' => [CorrelationIdProcessor::class],
         ],
