@@ -160,4 +160,42 @@ return [
         'system_template' => 'ai.prompts.system',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Shopify MCP (Storefront + Customer Account) endpoints
+    |--------------------------------------------------------------------------
+    |
+    | `{shop}` is substituted with the active shop domain at call time. The
+    | UCP endpoint (Unified Catalog Protocol) hosts catalog discovery tools
+    | (search_catalog, get_product, lookup_catalog); the storefront endpoint
+    | hosts cart, policy + checkout tools. The customer discovery URL is the
+    | well-known OpenID configuration document for the Customer Account API.
+    */
+    'mcp' => [
+        'storefront_endpoint' => env('SHOPIFY_MCP_STOREFRONT', 'https://{shop}/api/mcp'),
+        'ucp_endpoint' => env('SHOPIFY_MCP_UCP', 'https://{shop}/api/ucp/mcp'),
+        'customer_discovery' => '/.well-known/customer-account-api',
+        'timeout_ms' => (int) env('SHOPIFY_MCP_TIMEOUT_MS', 15000),
+        'retry_on_status' => [502, 503, 504],
+        'cache_ttl_seconds' => [
+            'search_catalog' => 120,
+            'get_product' => 300,
+            'lookup_catalog' => 300,
+            'search_shop_policies_and_faqs' => 900,
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Shopify Customer Account OAuth (PKCE) for the in-chat sign-in flow
+    |--------------------------------------------------------------------------
+    */
+    'oauth' => [
+        'client_id' => env('SHOPIFY_CUSTOMER_CLIENT_ID'),
+        'redirect_uri' => env('APP_URL').'/api/v1/ai/oauth/customer/callback',
+        'scopes' => ['customer-account-api:full'],
+        'pkce_session_ttl' => (int) env('SHOPIFY_OAUTH_PKCE_TTL', 600),
+        'token_ttl_seconds' => (int) env('SHOPIFY_OAUTH_TOKEN_TTL', 3600),
+    ],
+
 ];

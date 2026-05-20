@@ -44,6 +44,9 @@ use App\Services\AI\ChatbotService;
 use App\Services\AI\ConversationService;
 use App\Services\AI\EscalationService;
 use App\Services\AI\IntentDetectionService;
+use App\Services\AI\MCP\CustomerMcpClient;
+use App\Services\AI\MCP\McpClient;
+use App\Services\AI\MCP\StorefrontMcpClient;
 use App\Services\AI\OrderTrackingService;
 use App\Services\AI\ProductRecommendationService;
 use App\Services\AI\PromptBuilderService;
@@ -256,6 +259,13 @@ class AppServiceProvider extends ServiceProvider
             StoreKnowledgeServiceInterface::class,
             StoreKnowledgeService::class
         );
+
+        // -------------------------------------------------------------
+        // AI Sales Agent — Shopify MCP clients (Phase 3).
+        // -------------------------------------------------------------
+        $this->app->singleton(McpClient::class);
+        $this->app->singleton(StorefrontMcpClient::class);
+        $this->app->singleton(CustomerMcpClient::class);
     }
 
     /**
@@ -365,6 +375,25 @@ class AppServiceProvider extends ServiceProvider
 
             return [
                 Limit::perMinute(10)->by($session !== '' ? 'track:'.$session : 'track-ip:'.$request->ip()),
+            ];
+        });
+
+        // -----------------------------------------------------------------
+        // Phase 3 (Shopify MCP + Customer Account OAuth) limiters.
+        // -----------------------------------------------------------------
+
+        // OAuth start — strict IP cap to deter authorization-URL spamming.
+        RateLimiter::for('ai-oauth-start', fn (Request $request) => [
+            Limit::perMinute(10)->by('oauth-ip:'.$request->ip()),
+        ]);
+
+        // MCP tool calls (used by the streaming orchestrator for in-app
+        // bucketing — falls back to IP when session is absent).
+        RateLimiter::for('ai-mcp', function (Request $request) {
+            $session = (string) ($request->input('session_id') ?? '');
+
+            return [
+                Limit::perMinute(60)->by($session !== '' ? 'mcp:'.$session : 'mcp-ip:'.$request->ip()),
             ];
         });
     }

@@ -23,6 +23,8 @@ class ProductRecommendationDTO extends BaseDTO
         public readonly ?string $image,
         public readonly bool $available,
         public readonly ?string $url,
+        public readonly ?string $variantId = null,
+        public readonly ?int $priceMinorUnits = null,
     ) {
         $this->validate();
     }
@@ -88,6 +90,25 @@ class ProductRecommendationDTO extends BaseDTO
             'price' => $this->price,
             'currency' => $this->currency,
             'available' => $this->available,
+        ];
+    }
+
+    /**
+     * SSE-chunk shape used by the new MCP `products` chunk. Snake-cased and
+     * matches the schema agreed with the frontend renderer for product cards.
+     *
+     * @return array<string, mixed>
+     */
+    public function toMcpChunk(): array
+    {
+        return [
+            'id' => $this->id,
+            'variant_id' => $this->variantId,
+            'title' => $this->title,
+            'handle' => $this->handle,
+            'image' => $this->image,
+            'price_minor_units' => $this->priceMinorUnits,
+            'currency' => $this->currency,
         ];
     }
 }

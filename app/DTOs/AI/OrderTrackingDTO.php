@@ -95,6 +95,14 @@ class OrderTrackingDTO extends BaseDTO
     }
 
     /**
+     * Public helper used by MCP mappers and the legacy Admin GraphQL path.
+     */
+    public static function statusFromShopifyEnums(string $fulfilment, string $financial): string
+    {
+        return self::mapStatus($fulfilment, $financial);
+    }
+
+    /**
      * Map Shopify enums onto the widget UI's status vocabulary. Financial
      * status only sways the verdict toward "cancelled" — fulfillment status
      * otherwise wins.
