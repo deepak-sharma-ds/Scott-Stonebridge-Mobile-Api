@@ -28,6 +28,7 @@ class CollectionResource extends BaseApiResource
             'title' => $this->title,
             'handle' => $this->handle,
             'description' => $this->description,
+            'description_html' => $this->descriptionHtml ?? null,
             'image' => $this->image,
             'products_count' => $this->productsCount,
             'updated_at' => $this->updatedAt,
