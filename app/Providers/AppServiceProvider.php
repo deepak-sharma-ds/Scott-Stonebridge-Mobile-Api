@@ -11,7 +11,6 @@ use App\Contracts\Services\AI\ChatbotServiceInterface;
 use App\Contracts\Services\AI\ConversationServiceInterface;
 use App\Contracts\Services\AI\EscalationServiceInterface;
 use App\Contracts\Services\AI\IntentDetectionServiceInterface;
-use App\Contracts\Services\AI\OrderTrackingServiceInterface;
 use App\Contracts\Services\AI\ProductRecommendationServiceInterface;
 use App\Contracts\Services\AI\PromptBuilderServiceInterface;
 use App\Contracts\Services\AI\SafetyServiceInterface;
@@ -45,14 +44,17 @@ use App\Services\AI\ConversationService;
 use App\Services\AI\EscalationService;
 use App\Services\AI\IntentDetectionService;
 use App\Services\AI\MCP\CustomerMcpClient;
+// OrderTrackingService removed in Phase 5 — superseded by Customer Account MCP.
 use App\Services\AI\MCP\McpClient;
 use App\Services\AI\MCP\StorefrontMcpClient;
-use App\Services\AI\OrderTrackingService;
 use App\Services\AI\ProductRecommendationService;
 use App\Services\AI\PromptBuilderService;
 use App\Services\AI\SafetyService;
 use App\Services\AI\ShopifyContextService;
+use App\Services\AI\Streaming\ChunkEmitter;
 use App\Services\AI\StreamingService;
+use App\Services\AI\Tools\ToolDefinitions;
+use App\Services\AI\Tools\ToolExecutor;
 use App\Services\Cache\ShopifyCacheStrategy;
 use App\Services\Sales\LeadCaptureService;
 use App\Services\Sales\ProactiveTriggerService;
@@ -231,11 +233,6 @@ class AppServiceProvider extends ServiceProvider
             ChatbotService::class
         );
 
-        $this->app->bind(
-            OrderTrackingServiceInterface::class,
-            OrderTrackingService::class
-        );
-
         // -------------------------------------------------------------
         // Phase 2 (AI Sales Agent) service bindings.
         // -------------------------------------------------------------
@@ -266,6 +263,9 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(McpClient::class);
         $this->app->singleton(StorefrontMcpClient::class);
         $this->app->singleton(CustomerMcpClient::class);
+        $this->app->singleton(ChunkEmitter::class);
+        $this->app->singleton(ToolDefinitions::class);
+        $this->app->singleton(ToolExecutor::class);
     }
 
     /**
@@ -366,17 +366,6 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('ai-knowledge', fn (Request $request) => [
             Limit::perMinute(30)->by('know-ip:'.$request->ip()),
         ]);
-
-        // Order tracking — strict 10/min per session to limit (order_number,
-        // email) enumeration. Falls back to IP when session is absent so the
-        // 422 validation path doesn't slip the limiter.
-        RateLimiter::for('ai-order-track', function (Request $request) {
-            $session = (string) ($request->input('session_id') ?? '');
-
-            return [
-                Limit::perMinute(10)->by($session !== '' ? 'track:'.$session : 'track-ip:'.$request->ip()),
-            ];
-        });
 
         // -----------------------------------------------------------------
         // Phase 3 (Shopify MCP + Customer Account OAuth) limiters.
