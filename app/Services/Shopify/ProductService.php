@@ -732,6 +732,7 @@ class ProductService extends BaseService implements ProductServiceInterface
                 'title' => $collectionData['title'],
                 'handle' => $collectionData['handle'],
                 'description' => $collectionData['description'] ?? null,
+                'descriptionHtml' => $collectionData['descriptionHtml'] ?? null,
                 'image' => $collectionData['image'] ?? null,
                 'productsCount' => count($collectionData['products']['edges'] ?? []),
                 'updatedAt' => $collectionData['updatedAt'] ?? null,
