@@ -103,7 +103,7 @@ class ToolExecutorTest extends TestCase
             ],
         ]);
 
-        $output = $this->invoke('get_product', ['product_id' => 'p9']);
+        $output = $this->invoke('get_product_details', ['product_id' => 'p9']);
 
         $this->assertStringContainsString('"type":"product_detail"', $output);
         $this->assertStringContainsString('"price_minor_units":4900', $output);
@@ -192,19 +192,29 @@ class ToolExecutorTest extends TestCase
         $this->assertStringContainsString('"type":"auth_required"', $output);
     }
 
-    public function test_start_checkout_emits_checkout_link(): void
+    public function test_start_checkout_synthesises_checkout_link_from_cart(): void
     {
-        $this->storefront->method('callTool')->willReturn([
-            'checkout_url' => 'https://demo.myshopify.com/checkouts/xyz',
-            'total_minor_units' => 6450,
-            'currency' => 'GBP',
-            'item_count' => 2,
-        ]);
+        // start_checkout is internal — it calls get_cart upstream and surfaces
+        // the cart's hosted checkout URL.
+        $this->storefront
+            ->expects($this->once())
+            ->method('callTool')
+            ->with('get_cart', ['cart_id' => 'c1'], self::SHOP)
+            ->willReturn([
+                'cart' => [
+                    'id' => 'c1',
+                    'total_quantity' => 2,
+                    'cost' => ['subtotal_amount' => ['amount' => '64.50', 'currency' => 'GBP']],
+                    'checkout_url' => 'https://demo.myshopify.com/checkouts/xyz',
+                ],
+            ]);
 
         $output = $this->invoke('start_checkout', ['cart_id' => 'c1']);
 
         $this->assertStringContainsString('"type":"checkout_link"', $output);
         $this->assertStringContainsString('"checkout_url":"https://demo.myshopify.com/checkouts/xyz"', $output);
+        $this->assertStringContainsString('"total_amount":64.5', $output);
+        $this->assertStringContainsString('"currency":"GBP"', $output);
     }
 
     public function test_suggest_quick_replies_emits_quick_replies(): void

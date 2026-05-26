@@ -14,9 +14,7 @@ final class ToolDefinitions
 {
     public const TOOL_SEARCH_CATALOG = 'search_catalog';
 
-    public const TOOL_GET_PRODUCT = 'get_product';
-
-    public const TOOL_LOOKUP_CATALOG = 'lookup_catalog';
+    public const TOOL_GET_PRODUCT_DETAILS = 'get_product_details';
 
     public const TOOL_GET_CART = 'get_cart';
 
@@ -37,12 +35,10 @@ final class ToolDefinitions
     /** @var list<string> */
     public const STOREFRONT_MCP_TOOLS = [
         self::TOOL_SEARCH_CATALOG,
-        self::TOOL_GET_PRODUCT,
-        self::TOOL_LOOKUP_CATALOG,
+        self::TOOL_GET_PRODUCT_DETAILS,
         self::TOOL_GET_CART,
         self::TOOL_UPDATE_CART,
         self::TOOL_SEARCH_POLICIES,
-        self::TOOL_START_CHECKOUT,
     ];
 
     /** @var list<string> */
@@ -51,10 +47,17 @@ final class ToolDefinitions
         self::TOOL_GET_MOST_RECENT_ORDER_STATUS,
     ];
 
-    /** @var list<string> */
+    /**
+     * Internal tools are not proxied to any MCP server — handled directly by
+     * ToolExecutor. `start_checkout` is synthesised from a `get_cart` call so
+     * the AI can hand back the Shopify-hosted `cart.checkout_url`.
+     *
+     * @var list<string>
+     */
     public const INTERNAL_TOOLS = [
         self::TOOL_SUGGEST_QUICK_REPLIES,
         self::TOOL_SUGGEST_UPSELL,
+        self::TOOL_START_CHECKOUT,
     ];
 
     /**
@@ -77,35 +80,24 @@ final class ToolDefinitions
                     'additionalProperties' => false,
                 ],
             ),
-            $this->fn(self::TOOL_GET_PRODUCT,
+            $this->fn(self::TOOL_GET_PRODUCT_DETAILS,
                 'Use when the user taps a product card or asks for full details on one specific item (description, variants, stock). Always call this before quoting variant price or availability.',
                 [
                     'type' => 'object',
                     'properties' => [
                         'product_id' => ['type' => 'string', 'minLength' => 1],
+                        'options' => [
+                            'type' => 'object',
+                            'description' => 'Optional variant selectors keyed by option name, e.g. {"Size":"M","Color":"Black"}.',
+                            'additionalProperties' => ['type' => 'string'],
+                        ],
                     ],
                     'required' => ['product_id'],
                     'additionalProperties' => false,
                 ],
             ),
-            $this->fn(self::TOOL_LOOKUP_CATALOG,
-                'Use when you already know up to ten Shopify product IDs and need fresh details for all of them in one round-trip (typical use: rebuilding a recently-viewed strip).',
-                [
-                    'type' => 'object',
-                    'properties' => [
-                        'ids' => [
-                            'type' => 'array',
-                            'items' => ['type' => 'string', 'minLength' => 1],
-                            'minItems' => 1,
-                            'maxItems' => 10,
-                        ],
-                    ],
-                    'required' => ['ids'],
-                    'additionalProperties' => false,
-                ],
-            ),
             $this->fn(self::TOOL_GET_CART,
-                'Use when the user asks about their cart contents or you need the live cart state before suggesting a checkout.',
+                'Use ONLY when the user asks what is currently in their cart and you have no recent cart_state from this turn. Never call right before start_checkout — start_checkout already reads the live cart. Never pass placeholder IDs.',
                 [
                     'type' => 'object',
                     'properties' => [
@@ -116,26 +108,44 @@ final class ToolDefinitions
                 ],
             ),
             $this->fn(self::TOOL_UPDATE_CART,
-                'Use to add, increment, decrement, or remove items in the cart. Each `lines` row sets the absolute quantity for the merchandise — use quantity:0 to remove.',
+                'Use to add, change, or remove cart items. `cart_id` is OPTIONAL — when absent Shopify creates a new cart. Use `add_items` for new variants, `update_items` (with the cart line `id`) to change quantity, `remove_line_ids` to drop a line outright.',
                 [
                     'type' => 'object',
                     'properties' => [
-                        'cart_id' => ['type' => 'string', 'minLength' => 1],
-                        'lines' => [
+                        'cart_id' => ['type' => 'string'],
+                        'add_items' => [
                             'type' => 'array',
-                            'minItems' => 1,
                             'items' => [
                                 'type' => 'object',
                                 'properties' => [
-                                    'merchandise_id' => ['type' => 'string'],
-                                    'quantity' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 99],
+                                    'product_variant_id' => ['type' => 'string', 'minLength' => 1],
+                                    'quantity' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 99],
                                 ],
-                                'required' => ['merchandise_id', 'quantity'],
+                                'required' => ['product_variant_id', 'quantity'],
                                 'additionalProperties' => false,
                             ],
                         ],
+                        'update_items' => [
+                            'type' => 'array',
+                            'items' => [
+                                'type' => 'object',
+                                'properties' => [
+                                    'id' => ['type' => 'string', 'minLength' => 1],
+                                    'quantity' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 99],
+                                ],
+                                'required' => ['id', 'quantity'],
+                                'additionalProperties' => false,
+                            ],
+                        ],
+                        'remove_line_ids' => [
+                            'type' => 'array',
+                            'items' => ['type' => 'string', 'minLength' => 1],
+                        ],
+                        'discount_codes' => [
+                            'type' => 'array',
+                            'items' => ['type' => 'string', 'minLength' => 1],
+                        ],
                     ],
-                    'required' => ['cart_id', 'lines'],
                     'additionalProperties' => false,
                 ],
             ),
@@ -170,7 +180,7 @@ final class ToolDefinitions
                 ],
             ),
             $this->fn(self::TOOL_START_CHECKOUT,
-                'Use when the user is ready to buy ("checkout", "place order", "I want to pay now"). Returns a Shopify-hosted checkout URL; the UI opens it in a new tab — do NOT attempt payment yourself.',
+                'Call IMMEDIATELY (do NOT pre-call get_cart) when the user says they want to check out, buy, place order, pay, or are ready to purchase. Returns the Shopify-hosted checkout URL surfaced from the live cart. Pass the latest cart_id you have seen in any previous cart_state result — do not invent or use placeholder IDs from the schema description.',
                 [
                     'type' => 'object',
                     'properties' => [

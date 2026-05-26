@@ -1,0 +1,72 @@
+data: {"type":"policy_answer","answer":"**Do you allow customers to request and manage their own returns?**\nCustomers must contact the merchant to request a return.\n\n**What is the return policy?**\nThe store accepts returns.\nThe store accepts returns within 30 days days of delivery.\nThe store does not charge a restocking fee.\nThe store does not charge a return fee.\nThe store provides return labels for returns.\n\n**Do you accept store credit?**\nThe store does not accept store credit as a payment method.","citations":[{"title":"Do you allow customers to request and manage their own returns?","url":""},{"title":"What is the return policy?","url":""},{"title":"Do you accept store credit?","url":""}]}
+
+data: {"type":"text","content":"The"}
+
+data: {"type":"text","content":" store"}
+
+data: {"type":"text","content":" policy"}
+
+data: {"type":"text","content":" does"}
+
+data: {"type":"text","content":" not"}
+
+data: {"type":"text","content":" have"}
+
+data: {"type":"text","content":" a"}
+
+data: {"type":"text","content":" specific"}
+
+data: {"type":"text","content":" return"}
+
+data: {"type":"text","content":" policy"}
+
+data: {"type":"text","content":" listed"}
+
+data: {"type":"text","content":"."}
+
+data: {"type":"text","content":" If"}
+
+data: {"type":"text","content":" you"}
+
+data: {"type":"text","content":" want"}
+
+data: {"type":"text","content":","}
+
+data: {"type":"text","content":" I"}
+
+data: {"type":"text","content":" can"}
+
+data: {"type":"text","content":" connect"}
+
+data: {"type":"text","content":" you"}
+
+data: {"type":"text","content":" to"}
+
+data: {"type":"text","content":" a"}
+
+data: {"type":"text","content":" human"}
+
+data: {"type":"text","content":" for"}
+
+data: {"type":"text","content":" more"}
+
+data: {"type":"text","content":" detailed"}
+
+data: {"type":"text","content":" help"}
+
+data: {"type":"text","content":"."}
+
+data: {"type":"text","content":" Would"}
+
+data: {"type":"text","content":" you"}
+
+data: {"type":"text","content":" like"}
+
+data: {"type":"text","content":" that"}
+
+data: {"type":"text","content":"?"}
+
+data: {"type":"done","done":true}
+
+data: [DONE]
+

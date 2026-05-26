@@ -12,8 +12,9 @@ final class PolicyMapper
      */
     public static function fromAnswer(array $mcpResult): array
     {
-        $answer = self::extractAnswer($mcpResult);
-        $citations = self::extractCitations($mcpResult);
+        $unwrapped = McpEnvelope::unwrap($mcpResult);
+        $answer = self::extractAnswer($unwrapped);
+        $citations = self::extractCitations($unwrapped);
 
         return [
             'answer' => $answer,
@@ -26,19 +27,27 @@ final class PolicyMapper
      */
     private static function extractAnswer(array $mcpResult): string
     {
-        foreach (['answer', 'text', 'summary'] as $key) {
+        foreach (['answer', 'text', 'summary', '_text'] as $key) {
             if (isset($mcpResult[$key]) && is_string($mcpResult[$key]) && $mcpResult[$key] !== '') {
                 return $mcpResult[$key];
             }
         }
 
-        $content = $mcpResult['content'] ?? null;
-        if (is_array($content)) {
+        // Shopify `search_shop_policies_and_faqs` returns a list of
+        // `{question, answer}` entries — concatenate the answers.
+        $list = $mcpResult['_list'] ?? null;
+        if (is_array($list) && $list !== []) {
             $parts = [];
-            foreach ($content as $entry) {
-                if (is_array($entry) && isset($entry['text']) && is_string($entry['text']) && $entry['text'] !== '') {
-                    $parts[] = $entry['text'];
+            foreach ($list as $row) {
+                if (! is_array($row)) {
+                    continue;
                 }
+                $q = is_string($row['question'] ?? null) ? trim($row['question']) : '';
+                $a = is_string($row['answer'] ?? null) ? trim($row['answer']) : '';
+                if ($a === '') {
+                    continue;
+                }
+                $parts[] = $q !== '' ? "**{$q}**\n{$a}" : $a;
             }
             if ($parts !== []) {
                 return implode("\n\n", $parts);
@@ -70,6 +79,22 @@ final class PolicyMapper
                 continue;
             }
             $out[] = ['title' => $title, 'url' => $url];
+        }
+
+        // Synthesise lightweight citations from Q&A list entries so the
+        // frontend can still render chips even though Shopify's policy MCP
+        // does not return source URLs.
+        if ($out === [] && isset($mcpResult['_list']) && is_array($mcpResult['_list'])) {
+            foreach ($mcpResult['_list'] as $row) {
+                if (! is_array($row)) {
+                    continue;
+                }
+                $title = is_string($row['question'] ?? null) ? trim($row['question']) : '';
+                if ($title === '') {
+                    continue;
+                }
+                $out[] = ['title' => $title, 'url' => ''];
+            }
         }
 
         return $out;

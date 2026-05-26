@@ -13,7 +13,8 @@ final class CartMapper
      */
     public static function fromCart(array $mcpResult): ?CartStateDTO
     {
-        $cart = $mcpResult['cart'] ?? $mcpResult;
+        $unwrapped = McpEnvelope::unwrap($mcpResult);
+        $cart = $unwrapped['cart'] ?? $unwrapped;
         if (! is_array($cart)) {
             return null;
         }
@@ -32,7 +33,14 @@ final class CartMapper
         return new CartStateDTO(
             id: $id,
             itemCount: $itemCount,
-            subtotalMinorUnits: self::priceMinor($cart['subtotal'] ?? $cart['subtotal_amount'] ?? $cart['cost']['subtotal'] ?? null),
+            subtotalMinorUnits: self::priceMinor(
+                $cart['subtotal']
+                ?? $cart['subtotal_amount']
+                ?? $cart['cost']['subtotal_amount']
+                ?? $cart['cost']['total_amount']
+                ?? $cart['cost']['subtotal']
+                ?? null,
+            ),
             currency: self::currency($cart),
             items: $lines,
             checkoutUrl: self::stringOrNull($cart['checkout_url'] ?? $cart['checkoutUrl'] ?? null),
@@ -83,12 +91,16 @@ final class CartMapper
                     $line['image']['url']
                     ?? $line['image']
                     ?? $line['merchandise']['image']['url']
+                    ?? $line['merchandise']['image_url']
+                    ?? $line['merchandise']['product']['image_url']
                     ?? null,
                 ),
                 'quantity' => (int) ($line['quantity'] ?? 0),
                 'line_price_minor_units' => self::priceMinor(
                     $line['line_price']
                     ?? $line['line_total']
+                    ?? $line['cost']['total_amount']
+                    ?? $line['cost']['subtotal_amount']
                     ?? $line['cost']['total']
                     ?? null,
                 ),
@@ -108,6 +120,8 @@ final class CartMapper
             $cart['currency_code'] ?? null,
             $cart['subtotal']['currency'] ?? null,
             $cart['subtotal']['currency_code'] ?? null,
+            $cart['cost']['total_amount']['currency'] ?? null,
+            $cart['cost']['subtotal_amount']['currency'] ?? null,
             $cart['cost']['subtotal']['currency'] ?? null,
             $cart['cost']['subtotal']['currency_code'] ?? null,
         ];
@@ -134,6 +148,10 @@ final class CartMapper
             if ($value === null) {
                 return null;
             }
+        }
+
+        if (is_int($value)) {
+            return $value;
         }
 
         if (is_numeric($value)) {

@@ -1,0 +1,72 @@
+data: {"type":"text","content":"I"}
+
+data: {"type":"text","content":"’m"}
+
+data: {"type":"text","content":" having"}
+
+data: {"type":"text","content":" trouble"}
+
+data: {"type":"text","content":" accessing"}
+
+data: {"type":"text","content":" your"}
+
+data: {"type":"text","content":" cart"}
+
+data: {"type":"text","content":" right"}
+
+data: {"type":"text","content":" now"}
+
+data: {"type":"text","content":"."}
+
+data: {"type":"text","content":" Could"}
+
+data: {"type":"text","content":" you"}
+
+data: {"type":"text","content":" please"}
+
+data: {"type":"text","content":" try"}
+
+data: {"type":"text","content":" again"}
+
+data: {"type":"text","content":" in"}
+
+data: {"type":"text","content":" a"}
+
+data: {"type":"text","content":" moment"}
+
+data: {"type":"text","content":"?"}
+
+data: {"type":"text","content":" If"}
+
+data: {"type":"text","content":" you"}
+
+data: {"type":"text","content":" want"}
+
+data: {"type":"text","content":","}
+
+data: {"type":"text","content":" I"}
+
+data: {"type":"text","content":" can"}
+
+data: {"type":"text","content":" also"}
+
+data: {"type":"text","content":" connect"}
+
+data: {"type":"text","content":" you"}
+
+data: {"type":"text","content":" to"}
+
+data: {"type":"text","content":" a"}
+
+data: {"type":"text","content":" human"}
+
+data: {"type":"text","content":" for"}
+
+data: {"type":"text","content":" help"}
+
+data: {"type":"text","content":"."}
+
+data: {"type":"done","done":true}
+
+data: [DONE]
+

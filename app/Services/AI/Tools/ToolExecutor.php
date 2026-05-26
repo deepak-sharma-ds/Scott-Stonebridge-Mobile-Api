@@ -86,16 +86,16 @@ class ToolExecutor
      */
     private function executeStorefrontMcp(string $toolName, array $args, ChatSessionContext $ctx): ToolResult
     {
+        $args = $this->normaliseStorefrontArgs($toolName, $args);
         $result = $this->withCache($toolName, $args, $ctx->shopDomain, function () use ($toolName, $args, $ctx): array {
             return $this->storefront->callTool($toolName, $args, $ctx->shopDomain);
         });
 
         return match ($toolName) {
-            ToolDefinitions::TOOL_SEARCH_CATALOG, ToolDefinitions::TOOL_LOOKUP_CATALOG => $this->handleProductList($result, $ctx),
-            ToolDefinitions::TOOL_GET_PRODUCT => $this->handleProductDetail($result),
+            ToolDefinitions::TOOL_SEARCH_CATALOG => $this->handleProductList($result, $ctx),
+            ToolDefinitions::TOOL_GET_PRODUCT_DETAILS => $this->handleProductDetail($result),
             ToolDefinitions::TOOL_GET_CART, ToolDefinitions::TOOL_UPDATE_CART => $this->handleCart($result),
             ToolDefinitions::TOOL_SEARCH_POLICIES => $this->handlePolicy($result),
-            ToolDefinitions::TOOL_START_CHECKOUT => $this->handleCheckout($result),
             default => ToolResult::error("Unhandled storefront tool: {$toolName}"),
         };
     }
@@ -135,8 +135,55 @@ class ToolExecutor
         return match ($toolName) {
             ToolDefinitions::TOOL_SUGGEST_QUICK_REPLIES => $this->handleQuickReplies($args),
             ToolDefinitions::TOOL_SUGGEST_UPSELL => $this->handleUpsell($args, $ctx),
+            ToolDefinitions::TOOL_START_CHECKOUT => $this->handleStartCheckout($args, $ctx),
             default => ToolResult::error("Unknown internal tool: {$toolName}"),
         };
+    }
+
+    /**
+     * Synthesises a `checkout_link` chunk by reading the live cart and
+     * surfacing its `checkout_url`. Shopify has no `start_checkout` MCP tool
+     * — the cart already carries the hosted checkout URL.
+     *
+     * @param  array<string, mixed>  $args
+     */
+    private function handleStartCheckout(array $args, ChatSessionContext $ctx): ToolResult
+    {
+        $cartId = (string) ($args['cart_id'] ?? $ctx->cartId ?? '');
+        if ($cartId === '') {
+            return ToolResult::error('start_checkout requires cart_id.');
+        }
+
+        try {
+            $cartResult = $this->storefront->callTool(
+                ToolDefinitions::TOOL_GET_CART,
+                ['cart_id' => $cartId],
+                $ctx->shopDomain,
+            );
+        } catch (Throwable $e) {
+            $this->logToolError('start_checkout.get_cart', $ctx, $e);
+
+            return ToolResult::error('Could not read cart for checkout.');
+        }
+
+        $cart = CartMapper::fromCart($cartResult);
+        if ($cart === null || $cart->checkoutUrl === null || $cart->checkoutUrl === '') {
+            return ToolResult::error('Cart has no checkout URL.');
+        }
+
+        $payload = [
+            'checkout_url' => $cart->checkoutUrl,
+            'total_amount' => $cart->subtotalMinorUnits !== null ? $cart->subtotalMinorUnits / 100 : null,
+            'currency' => $cart->currency,
+            'item_count' => $cart->itemCount,
+        ];
+
+        $this->emitter->emit('checkout_link', $payload);
+
+        return ToolResult::success(
+            'Checkout link ready — UI will open it in a new tab.',
+            ['type' => 'checkout_link'] + $payload,
+        );
     }
 
     /**
@@ -267,8 +314,11 @@ class ToolExecutor
         $payload = ['cart' => $dto->toArray()];
         $this->emitter->emit('cart_state', $payload);
 
+        // Echo the actual cart_id back to the model so subsequent tool calls
+        // (start_checkout, suggest_upsell, update_cart) can target the right
+        // cart instead of inventing placeholders.
         return ToolResult::success(
-            "Cart has {$dto->itemCount} item(s).",
+            "Cart {$dto->id} now has {$dto->itemCount} item(s). Use this cart_id in any follow-up cart / checkout tool call.",
             ['type' => 'cart_state'] + $payload,
         );
     }
@@ -288,44 +338,6 @@ class ToolExecutor
         $this->emitter->emit('policy_answer', $mapped);
 
         return ToolResult::success('Answered from store policy.', ['type' => 'policy_answer'] + $mapped);
-    }
-
-    /**
-     * @param  array<string, mixed>  $mcpResult
-     */
-    private function handleCheckout(array $mcpResult): ToolResult
-    {
-        $checkoutUrl = $mcpResult['checkout_url']
-            ?? $mcpResult['checkoutUrl']
-            ?? $mcpResult['cart']['checkout_url']
-            ?? null;
-        if (! is_string($checkoutUrl) || $checkoutUrl === '') {
-            return ToolResult::error('start_checkout did not return a URL.');
-        }
-
-        $totalMinor = $mcpResult['total_minor_units']
-            ?? $mcpResult['cart']['subtotal_minor_units']
-            ?? null;
-        if (is_array($totalMinor)) {
-            $totalMinor = $totalMinor['minor_units'] ?? $totalMinor['amount'] ?? null;
-        }
-        if (is_numeric($totalMinor) && ! is_int($totalMinor)) {
-            $totalMinor = (int) round(((float) $totalMinor) * 100);
-        }
-
-        $payload = [
-            'checkout_url' => $checkoutUrl,
-            'total_amount' => is_int($totalMinor) ? $totalMinor / 100 : null,
-            'currency' => $mcpResult['currency'] ?? $mcpResult['cart']['currency'] ?? null,
-            'item_count' => $mcpResult['item_count'] ?? $mcpResult['cart']['item_count'] ?? null,
-        ];
-
-        $this->emitter->emit('checkout_link', $payload);
-
-        return ToolResult::success(
-            'Checkout link ready — UI will open it in a new tab.',
-            ['type' => 'checkout_link'] + $payload,
-        );
     }
 
     private function emitAuthRequired(ChatSessionContext $ctx): ToolResult
@@ -383,6 +395,57 @@ class ToolExecutor
         }
 
         return $count <= self::RATE_LIMIT_MAX;
+    }
+
+    /**
+     * The LLM frequently strips the `gid://shopify/{Type}/` prefix from
+     * Shopify global IDs even though we ask for the full GID. Re-attach the
+     * prefix when the arg looks like a bare numeric id so the upstream MCP
+     * doesn't reject the call with `Variable $id of type ID! was provided
+     * invalid value`.
+     *
+     * @param  array<string, mixed>  $args
+     * @return array<string, mixed>
+     */
+    private function normaliseStorefrontArgs(string $toolName, array $args): array
+    {
+        if ($toolName === ToolDefinitions::TOOL_GET_PRODUCT_DETAILS) {
+            $args['product_id'] = $this->toGid('Product', $args['product_id'] ?? '');
+        }
+
+        if ($toolName === ToolDefinitions::TOOL_UPDATE_CART) {
+            foreach (['add_items'] as $key) {
+                if (! isset($args[$key]) || ! is_array($args[$key])) {
+                    continue;
+                }
+                foreach ($args[$key] as $idx => $row) {
+                    if (! is_array($row)) {
+                        continue;
+                    }
+                    if (isset($row['product_variant_id'])) {
+                        $args[$key][$idx]['product_variant_id'] = $this->toGid('ProductVariant', $row['product_variant_id']);
+                    }
+                }
+            }
+        }
+
+        return $args;
+    }
+
+    private function toGid(string $type, mixed $value): string
+    {
+        $value = is_string($value) ? trim($value) : (string) $value;
+        if ($value === '') {
+            return $value;
+        }
+        if (str_starts_with($value, 'gid://')) {
+            return $value;
+        }
+        if (ctype_digit($value)) {
+            return "gid://shopify/{$type}/{$value}";
+        }
+
+        return $value;
     }
 
     private function logToolError(string $toolName, ChatSessionContext $ctx, Throwable $e): void

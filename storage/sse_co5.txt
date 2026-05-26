@@ -1,0 +1,56 @@
+data: {"type":"text","content":"I"}
+
+data: {"type":"text","content":" need"}
+
+data: {"type":"text","content":" your"}
+
+data: {"type":"text","content":" cart"}
+
+data: {"type":"text","content":" ID"}
+
+data: {"type":"text","content":" to"}
+
+data: {"type":"text","content":" start"}
+
+data: {"type":"text","content":" the"}
+
+data: {"type":"text","content":" checkout"}
+
+data: {"type":"text","content":"."}
+
+data: {"type":"text","content":" Could"}
+
+data: {"type":"text","content":" you"}
+
+data: {"type":"text","content":" please"}
+
+data: {"type":"text","content":" provide"}
+
+data: {"type":"text","content":" it"}
+
+data: {"type":"text","content":" or"}
+
+data: {"type":"text","content":" let"}
+
+data: {"type":"text","content":" me"}
+
+data: {"type":"text","content":" know"}
+
+data: {"type":"text","content":" if"}
+
+data: {"type":"text","content":" you"}
+
+data: {"type":"text","content":" need"}
+
+data: {"type":"text","content":" help"}
+
+data: {"type":"text","content":" finding"}
+
+data: {"type":"text","content":" it"}
+
+data: {"type":"text","content":"?"}
+
+data: {"type":"done","done":true}
+
+data: [DONE]
+

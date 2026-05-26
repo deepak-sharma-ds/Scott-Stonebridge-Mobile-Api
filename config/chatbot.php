@@ -173,7 +173,11 @@ return [
     */
     'mcp' => [
         'storefront_endpoint' => env('SHOPIFY_MCP_STOREFRONT', 'https://{shop}/api/mcp'),
-        'ucp_endpoint' => env('SHOPIFY_MCP_UCP', 'https://{shop}/api/ucp/mcp'),
+        // Catalog discovery tools (search_catalog, get_product, lookup_catalog)
+        // live on the SAME `/api/mcp` endpoint as the rest of the Storefront
+        // MCP tools. Kept as a separate config key so future Shopify topology
+        // changes (e.g. a dedicated UCP host) can be swapped via env only.
+        'ucp_endpoint' => env('SHOPIFY_MCP_UCP', 'https://{shop}/api/mcp'),
         'customer_discovery' => '/.well-known/customer-account-api',
         'timeout_ms' => (int) env('SHOPIFY_MCP_TIMEOUT_MS', 15000),
         'retry_on_status' => [502, 503, 504],

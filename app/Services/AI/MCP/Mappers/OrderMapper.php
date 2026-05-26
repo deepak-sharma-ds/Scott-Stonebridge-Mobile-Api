@@ -14,7 +14,8 @@ final class OrderMapper
      */
     public static function fromOrderStatus(array $mcpResult): ?OrderTrackingDTO
     {
-        $order = $mcpResult['order'] ?? $mcpResult;
+        $unwrapped = McpEnvelope::unwrap($mcpResult);
+        $order = $unwrapped['order'] ?? $unwrapped;
         if (! is_array($order)) {
             return null;
         }
@@ -61,7 +62,8 @@ final class OrderMapper
      */
     public static function fromOrderList(array $mcpResult): array
     {
-        $orders = $mcpResult['orders'] ?? [];
+        $unwrapped = McpEnvelope::unwrap($mcpResult);
+        $orders = $unwrapped['orders'] ?? [];
         if (! is_array($orders)) {
             return [];
         }
@@ -132,6 +134,10 @@ final class OrderMapper
             if ($value === null) {
                 return null;
             }
+        }
+
+        if (is_int($value)) {
+            return $value;
         }
 
         if (is_numeric($value)) {

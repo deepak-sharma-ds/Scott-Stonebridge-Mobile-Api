@@ -9,11 +9,11 @@ use Tests\TestCase;
 
 class ToolDefinitionsTest extends TestCase
 {
-    public function test_returns_eleven_function_tools(): void
+    public function test_returns_ten_function_tools(): void
     {
         $tools = (new ToolDefinitions)->all();
 
-        $this->assertCount(11, $tools);
+        $this->assertCount(10, $tools);
         foreach ($tools as $tool) {
             $this->assertSame('function', $tool['type']);
             $this->assertArrayHasKey('function', $tool);
@@ -30,8 +30,7 @@ class ToolDefinitionsTest extends TestCase
         $this->assertSame(count($names), count(array_unique($names)));
         $this->assertEqualsCanonicalizing([
             ToolDefinitions::TOOL_SEARCH_CATALOG,
-            ToolDefinitions::TOOL_GET_PRODUCT,
-            ToolDefinitions::TOOL_LOOKUP_CATALOG,
+            ToolDefinitions::TOOL_GET_PRODUCT_DETAILS,
             ToolDefinitions::TOOL_GET_CART,
             ToolDefinitions::TOOL_UPDATE_CART,
             ToolDefinitions::TOOL_SEARCH_POLICIES,

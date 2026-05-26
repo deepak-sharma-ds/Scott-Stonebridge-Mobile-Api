@@ -1,0 +1,58 @@
+data: {"type":"product_detail","product":{"id":"gid://shopify/Product/15598735065471","title":"Year Ahead Insight Bundle","handle":"year-ahead-insight-bundle","description_html":"Year Ahead Insight Bundle — Your Complete Spiritual Roadmap for 2026/2027 As 2026 unfolds and 2027 approaches, this bundle gives you a clear, layered spiritual picture of what's ahead — the opportunities, the turning points, and the guidance you need to move forward with confidence. Here's everything included: 3-Card \"What Lies Ahead\" Tarot Reading: A focused look at the key energies, opportunities, and challenges heading your way in the coming months. Crystal Ball Reading: Deeper symbolic insight into hidden influences and future possibilities that aren't always obvious on the surface. Message from Spirit Reading: A personal message from your spirit guides, angels, or loved ones in spirit. Often, the most moving part of the bundle. Future Predictions (6–12 Month Overview): The big picture. Major themes and turning points across your 2026/2027 year so you can plan and move forward with confidence. This bundle is for you if: You want clarity on what 2026/2027 is bringing your way You're at a crossroads and need spiritual guidance You're ready to stop reacting to life and start moving through it with intention Your year is already unfolding. Get the insight you need to navigate with Scott stonebridge","images":[{"url":"https://cdn.shopify.com/s/files/1/0585/4923/9982/files/f0523c34-d0b5-4857-b268-d2d7a851375b.webp?v=1773812620","alt":null},{"url":"https://cdn.shopify.com/s/files/1/0585/4923/9982/files/f0523c34-d0b5-4857-b268-d2d7a851375b.webp?v=1773812620","alt":"Year ahead"}],"variants":[{"id":"gid://shopify/ProductVariant/57146193674623","title":"Default Title","price_minor_units":3111,"available":true,"sku":null,"options":{"Title":"Default Title"}}],"price_minor_units":3111,"currency":"GBP","vendor":null,"tags":[]}}
+
+data: {"type":"text","content":"The"}
+
+data: {"type":"text","content":" product"}
+
+data: {"type":"text","content":" \""}
+
+data: {"type":"text","content":"Year"}
+
+data: {"type":"text","content":" Ahead"}
+
+data: {"type":"text","content":" Insight"}
+
+data: {"type":"text","content":" Bundle"}
+
+data: {"type":"text","content":"\""}
+
+data: {"type":"text","content":" is"}
+
+data: {"type":"text","content":" available"}
+
+data: {"type":"text","content":"."}
+
+data: {"type":"text","content":" Would"}
+
+data: {"type":"text","content":" you"}
+
+data: {"type":"text","content":" like"}
+
+data: {"type":"text","content":" to"}
+
+data: {"type":"text","content":" know"}
+
+data: {"type":"text","content":" about"}
+
+data: {"type":"text","content":" its"}
+
+data: {"type":"text","content":" variants"}
+
+data: {"type":"text","content":","}
+
+data: {"type":"text","content":" price"}
+
+data: {"type":"text","content":","}
+
+data: {"type":"text","content":" or"}
+
+data: {"type":"text","content":" stock"}
+
+data: {"type":"text","content":" availability"}
+
+data: {"type":"text","content":"?"}
+
+data: {"type":"done","done":true}
+
+data: [DONE]
+

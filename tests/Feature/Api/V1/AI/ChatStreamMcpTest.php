@@ -41,6 +41,15 @@ class ChatStreamMcpTest extends TestCase
         $this->withoutMiddleware(ThrottleRequests::class);
         Cache::flush();
 
+        // Pin MCP endpoints so the developer's .env (which may override with a
+        // concrete shop / wrong path) cannot bleed into the test matrix.
+        config([
+            'chatbot.mcp.storefront_endpoint' => 'https://{shop}/api/mcp',
+            'chatbot.mcp.ucp_endpoint' => 'https://{shop}/api/mcp',
+            'chatbot.mcp.timeout_ms' => 15000,
+            'chatbot.mcp.retry_on_status' => [502, 503, 504],
+        ]);
+
         // ShopifyContextService talks to Storefront GraphQL when the user
         // is on a product page. We pin a "home" context so context resolution
         // is a no-op for these tests.
@@ -58,7 +67,7 @@ class ChatStreamMcpTest extends TestCase
         ]);
 
         Http::fake([
-            'https://'.self::SHOP.'/api/ucp/mcp' => Http::response($this->jsonRpcResult([
+            'https://'.self::SHOP.'/api/mcp' => Http::response($this->jsonRpcResult([
                 'products' => [[
                     'id' => 'gid://shopify/Product/1',
                     'title' => 'The Fool Tarot',
@@ -83,19 +92,24 @@ class ChatStreamMcpTest extends TestCase
         $convo = $this->makeConversation();
 
         OpenAI::fake([
-            $this->streamedToolCall('call_b', 'get_product', '{"product_id":"gid://shopify/Product/9"}'),
+            $this->streamedToolCall('call_b', 'get_product_details', '{"product_id":"gid://shopify/Product/9"}'),
             $this->streamedText('Here are the details.'),
         ]);
 
         Http::fake([
-            'https://'.self::SHOP.'/api/ucp/mcp' => Http::response($this->jsonRpcResult([
+            'https://'.self::SHOP.'/api/mcp' => Http::response($this->jsonRpcResult([
                 'product' => [
-                    'id' => 'gid://shopify/Product/9',
+                    'product_id' => 'gid://shopify/Product/9',
                     'title' => 'Crystal Ball',
                     'handle' => 'crystal-ball',
                     'price' => '49.00',
                     'currency_code' => 'GBP',
-                    'variants' => [['id' => 'v1', 'price' => 49, 'available' => true]],
+                    'selectedOrFirstAvailableVariant' => [
+                        'variant_id' => 'v1',
+                        'price' => '49.00',
+                        'currency' => 'GBP',
+                        'available' => true,
+                    ],
                 ],
             ])),
         ]);
@@ -220,12 +234,16 @@ class ChatStreamMcpTest extends TestCase
             $this->streamedText('Tap to checkout.'),
         ]);
 
+        // start_checkout is internal — it fans out to get_cart upstream and
+        // surfaces the cart's hosted checkout_url.
         Http::fake([
             'https://'.self::SHOP.'/api/mcp' => Http::response($this->jsonRpcResult([
-                'checkout_url' => 'https://demo.myshopify.com/checkouts/xyz',
-                'total_minor_units' => 6450,
-                'currency' => 'GBP',
-                'item_count' => 2,
+                'cart' => [
+                    'id' => 'c1',
+                    'total_quantity' => 2,
+                    'cost' => ['subtotal_amount' => ['amount' => '64.50', 'currency' => 'GBP']],
+                    'checkout_url' => 'https://demo.myshopify.com/checkouts/xyz',
+                ],
             ])),
         ]);
 

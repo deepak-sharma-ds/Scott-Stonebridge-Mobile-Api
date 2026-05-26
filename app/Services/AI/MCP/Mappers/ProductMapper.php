@@ -22,7 +22,8 @@ final class ProductMapper
      */
     public static function fromSearchResult(array $mcpResult, ?string $shopDomain = null): array
     {
-        $items = self::extractProductList($mcpResult);
+        $unwrapped = McpEnvelope::unwrap($mcpResult);
+        $items = self::extractProductList($unwrapped);
         $out = [];
         foreach ($items as $node) {
             $dto = self::buildRecommendation((array) $node, $shopDomain);
@@ -35,30 +36,45 @@ final class ProductMapper
     }
 
     /**
-     * @param  array<string, mixed>  $mcpResult  `result` payload from `get_product`.
+     * @param  array<string, mixed>  $mcpResult  `result` payload from `get_product_details`.
      */
     public static function fromGetProduct(array $mcpResult): ?ProductDetailDTO
     {
-        $node = self::extractSingleProduct($mcpResult);
+        $unwrapped = McpEnvelope::unwrap($mcpResult);
+        $node = self::extractSingleProduct($unwrapped);
         if ($node === null) {
             return null;
         }
 
-        $id = (string) ($node['id'] ?? '');
+        // Shopify `get_product_details` returns `product_id` (not `id`) and
+        // exposes the variant under `selectedOrFirstAvailableVariant` rather
+        // than a `variants[]` array.
+        $id = (string) ($node['product_id'] ?? $node['id'] ?? '');
         $title = (string) ($node['title'] ?? '');
-        $handle = (string) ($node['handle'] ?? '');
+        $handle = (string) ($node['handle'] ?? self::handleFromUrl($node['url'] ?? null) ?? '');
         if ($id === '' || $title === '' || $handle === '') {
             return null;
         }
+
+        $variants = self::extractVariants($node);
+        if ($variants === [] && isset($node['selectedOrFirstAvailableVariant']) && is_array($node['selectedOrFirstAvailableVariant'])) {
+            $variants = self::extractVariants(['variants' => [$node['selectedOrFirstAvailableVariant']]]);
+        }
+
+        $priceMinor = self::priceMinor(
+            $node['price']
+            ?? $node['price_range']['min']
+            ?? ($node['selectedOrFirstAvailableVariant']['price'] ?? null),
+        );
 
         return new ProductDetailDTO(
             id: $id,
             title: $title,
             handle: $handle,
-            descriptionHtml: self::stringOrNull($node['description_html'] ?? $node['descriptionHtml'] ?? null),
+            descriptionHtml: self::extractDescription($node),
             images: self::extractImages($node),
-            variants: self::extractVariants($node),
-            priceMinorUnits: self::priceMinor($node['price'] ?? $node['price_range']['min'] ?? null),
+            variants: $variants,
+            priceMinorUnits: $priceMinor,
             currency: self::extractCurrency($node),
             vendor: self::stringOrNull($node['vendor'] ?? null),
             tags: array_values(array_filter(array_map(
@@ -114,13 +130,16 @@ final class ProductMapper
     {
         $id = (string) ($node['id'] ?? '');
         $title = (string) ($node['title'] ?? '');
-        $handle = (string) ($node['handle'] ?? '');
+        $handle = (string) ($node['handle'] ?? self::handleFromUrl($node['url'] ?? null) ?? '');
         if ($id === '' || $title === '' || $handle === '') {
             return null;
         }
 
         $firstVariant = $node['variants'][0] ?? null;
         $priceMinor = self::priceMinor($firstVariant['price'] ?? $node['price'] ?? $node['price_range']['min'] ?? null);
+
+        $url = self::stringOrNull($node['url'] ?? null)
+            ?? ($shopDomain !== null ? "https://{$shopDomain}/products/{$handle}" : null);
 
         return new ProductRecommendationDTO(
             id: $id,
@@ -130,11 +149,47 @@ final class ProductMapper
             price: $priceMinor !== null ? number_format($priceMinor / 100, 2, '.', '') : null,
             currency: self::extractCurrency($node),
             image: self::firstImageUrl($node),
-            available: (bool) ($node['available_for_sale'] ?? $node['availableForSale'] ?? true),
-            url: $shopDomain !== null ? "https://{$shopDomain}/products/{$handle}" : null,
+            available: (bool) (
+                $node['available_for_sale']
+                ?? $node['availableForSale']
+                ?? $node['available']
+                ?? $node['availability']['available']
+                ?? ($firstVariant['availability']['available'] ?? null)
+                ?? true
+            ),
+            url: $url,
             variantId: self::stringOrNull($firstVariant['id'] ?? null),
             priceMinorUnits: $priceMinor,
         );
+    }
+
+    private static function handleFromUrl(mixed $url): ?string
+    {
+        if (! is_string($url) || $url === '') {
+            return null;
+        }
+
+        if (preg_match('~/products/([^/?#]+)~', $url, $matches) === 1) {
+            return $matches[1];
+        }
+
+        return null;
+    }
+
+    /**
+     * Shopify MCP ships HTML as `description: {html: "..."}`. Older shapes
+     * use scalar `description_html`. Read both.
+     *
+     * @param  array<string, mixed>  $node
+     */
+    private static function extractDescription(array $node): ?string
+    {
+        $desc = $node['description'] ?? null;
+        if (is_array($desc) && isset($desc['html']) && is_string($desc['html'])) {
+            return $desc['html'];
+        }
+
+        return self::stringOrNull($node['description_html'] ?? $node['descriptionHtml'] ?? (is_string($desc) ? $desc : null));
     }
 
     /**
@@ -143,21 +198,76 @@ final class ProductMapper
      */
     private static function extractImages(array $node): array
     {
-        $images = (array) ($node['images'] ?? []);
         $out = [];
-        foreach ($images as $image) {
-            if (! is_array($image)) {
+
+        // Shopify Storefront MCP ships imagery under `media[]` where each item
+        // is `{type: "image"|"video"|..., url, alt_text}`. Filter for images.
+        $media = (array) ($node['media'] ?? []);
+        foreach ($media as $entry) {
+            if (! is_array($entry)) {
                 continue;
             }
-            $url = self::stringOrNull($image['url'] ?? $image['src'] ?? null);
+            $type = $entry['type'] ?? 'image';
+            if ($type !== 'image') {
+                continue;
+            }
+            $url = self::stringOrNull($entry['url'] ?? $entry['src'] ?? null);
             if ($url === null) {
                 continue;
             }
-            $out[] = ['url' => $url, 'alt' => self::stringOrNull($image['alt'] ?? $image['altText'] ?? null)];
+            $out[] = [
+                'url' => $url,
+                'alt' => self::stringOrNull($entry['alt_text'] ?? $entry['altText'] ?? $entry['alt'] ?? null),
+            ];
+        }
+
+        // `get_product_details` ships images as either a string array
+        // `["https://..."]` or `[{url, alt_text}]`. Plus a top-level `image_url`.
+        if ($out === []) {
+            $imageUrl = self::stringOrNull($node['image_url'] ?? null);
+            if ($imageUrl !== null) {
+                $out[] = ['url' => $imageUrl, 'alt' => null];
+            }
+
+            foreach ((array) ($node['images'] ?? []) as $image) {
+                if (is_string($image) && $image !== '') {
+                    $out[] = ['url' => $image, 'alt' => null];
+                } elseif (is_array($image)) {
+                    $url = self::stringOrNull($image['url'] ?? $image['src'] ?? null);
+                    if ($url === null) {
+                        continue;
+                    }
+                    $out[] = [
+                        'url' => $url,
+                        'alt' => self::stringOrNull($image['alt_text'] ?? $image['altText'] ?? $image['alt'] ?? null),
+                    ];
+                }
+            }
+        }
+
+        // Fallback to legacy `images[]` shape.
+        if ($out === []) {
+            $images = (array) ($node['images'] ?? []);
+            foreach ($images as $image) {
+                if (! is_array($image)) {
+                    continue;
+                }
+                $url = self::stringOrNull($image['url'] ?? $image['src'] ?? null);
+                if ($url === null) {
+                    continue;
+                }
+                $out[] = ['url' => $url, 'alt' => self::stringOrNull($image['alt'] ?? $image['altText'] ?? null)];
+            }
         }
 
         if ($out === []) {
-            $featured = self::stringOrNull($node['featured_image']['url'] ?? $node['featuredImage']['url'] ?? null);
+            $featured = self::stringOrNull(
+                $node['featured_image']['url']
+                ?? $node['featuredImage']['url']
+                ?? $node['image']['url']
+                ?? (is_string($node['image'] ?? null) ? $node['image'] : null)
+                ?? null,
+            );
             if ($featured !== null) {
                 $out[] = ['url' => $featured, 'alt' => null];
             }
@@ -178,7 +288,8 @@ final class ProductMapper
             if (! is_array($v)) {
                 continue;
             }
-            $id = self::stringOrNull($v['id'] ?? null);
+            // Shopify `get_product_details` ships variant id as `variant_id`.
+            $id = self::stringOrNull($v['variant_id'] ?? $v['id'] ?? null);
             if ($id === null) {
                 continue;
             }
@@ -186,16 +297,29 @@ final class ProductMapper
             $rawOptions = (array) ($v['selected_options'] ?? $v['options'] ?? []);
             $options = [];
             foreach ($rawOptions as $opt) {
-                if (is_array($opt) && isset($opt['name'], $opt['value'])) {
-                    $options[(string) $opt['name']] = (string) $opt['value'];
+                if (! is_array($opt)) {
+                    continue;
+                }
+                $name = $opt['name'] ?? null;
+                // Shopify MCP variant options carry `label` (the chosen value),
+                // not `value`. Read both for backward compat.
+                $value = $opt['value'] ?? $opt['label'] ?? null;
+                if (is_string($name) && $name !== '' && is_string($value) && $value !== '') {
+                    $options[$name] = $value;
                 }
             }
+
+            $available = $v['availability']['available']
+                ?? $v['available']
+                ?? $v['available_for_sale']
+                ?? $v['availableForSale']
+                ?? true;
 
             $out[] = [
                 'id' => $id,
                 'title' => self::stringOrNull($v['title'] ?? null),
                 'price_minor_units' => self::priceMinor($v['price'] ?? null),
-                'available' => (bool) ($v['available'] ?? $v['available_for_sale'] ?? $v['availableForSale'] ?? true),
+                'available' => (bool) $available,
                 'sku' => self::stringOrNull($v['sku'] ?? null),
                 'options' => $options,
             ];
@@ -224,8 +348,10 @@ final class ProductMapper
             $node['currency_code'] ?? null,
             $node['price']['currency'] ?? null,
             $node['price']['currency_code'] ?? null,
+            $node['price_range']['currency'] ?? null,
             $node['price_range']['min']['currency'] ?? null,
             $node['price_range']['min']['currency_code'] ?? null,
+            $node['selectedOrFirstAvailableVariant']['currency'] ?? null,
         ];
         foreach ($candidates as $candidate) {
             if (is_string($candidate) && $candidate !== '') {
@@ -237,10 +363,14 @@ final class ProductMapper
     }
 
     /**
-     * Convert a price into minor units (e.g. pence). Shopify MCP returns money
-     * as either a `{amount, currency_code}` object or a decimal/numeric string
-     * in major units — never raw cents — so all numerics are × 100.
-     * Explicit minor amounts can still come through via a `minor_units` key.
+     * Convert a price into minor units.
+     *
+     * Shopify Storefront MCP returns money as `{amount: int, currency: "GBP"}`
+     * where `amount` is ALREADY in minor units (pence). Older fixtures /
+     * legacy paths ship decimal strings like `"24.99"` which are major.
+     *
+     * Rule: integer amount → minor (Shopify MCP). Decimal string / float
+     * anywhere → major (× 100). Explicit `minor_units` key wins.
      */
     private static function priceMinor(mixed $value): ?int
     {
@@ -256,6 +386,10 @@ final class ProductMapper
             if ($value === null) {
                 return null;
             }
+        }
+
+        if (is_int($value)) {
+            return $value;
         }
 
         if (is_numeric($value)) {

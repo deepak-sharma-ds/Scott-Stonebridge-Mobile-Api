@@ -1,0 +1,72 @@
+data: {"type":"auth_required","reason":"customer_account","oauth_start_url":"http://scott-stonebridge-mobile-api.test/api/v1/ai/oauth/customer/start?session_id=b6a848d1-2075-400d-be17-a41c21134406&shop_domain=scott-stonebridge.myshopify.com"}
+
+data: {"type":"text","content":"I"}
+
+data: {"type":"text","content":" just"}
+
+data: {"type":"text","content":" need"}
+
+data: {"type":"text","content":" you"}
+
+data: {"type":"text","content":" to"}
+
+data: {"type":"text","content":" sign"}
+
+data: {"type":"text","content":" in"}
+
+data: {"type":"text","content":" to"}
+
+data: {"type":"text","content":" your"}
+
+data: {"type":"text","content":" account"}
+
+data: {"type":"text","content":" —"}
+
+data: {"type":"text","content":" tap"}
+
+data: {"type":"text","content":" the"}
+
+data: {"type":"text","content":" sign"}
+
+data: {"type":"text","content":"-in"}
+
+data: {"type":"text","content":" window"}
+
+data: {"type":"text","content":" that"}
+
+data: {"type":"text","content":" just"}
+
+data: {"type":"text","content":" opened"}
+
+data: {"type":"text","content":"."}
+
+data: {"type":"text","content":" Then"}
+
+data: {"type":"text","content":" I"}
+
+data: {"type":"text","content":" can"}
+
+data: {"type":"text","content":" check"}
+
+data: {"type":"text","content":" the"}
+
+data: {"type":"text","content":" status"}
+
+data: {"type":"text","content":" of"}
+
+data: {"type":"text","content":" your"}
+
+data: {"type":"text","content":" order"}
+
+data: {"type":"text","content":" #"}
+
+data: {"type":"text","content":"123"}
+
+data: {"type":"text","content":"4"}
+
+data: {"type":"text","content":"."}
+
+data: {"type":"done","done":true}
+
+data: [DONE]
+

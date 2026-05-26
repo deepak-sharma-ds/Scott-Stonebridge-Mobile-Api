@@ -1,0 +1,86 @@
+data: {"type":"cart_state","cart":{"id":"gid://shopify/Cart/hWNCb6PwMvrtkYPDF0Kunzba?key=2dda33832b4c31d46c26201ebb6963ae","item_count":1,"subtotal_minor_units":3111,"currency":"GBP","items":[{"variant_id":"gid://shopify/ProductVariant/57146193674623","product_id":"gid://shopify/Product/15598735065471","title":"Default Title","image":null,"quantity":1,"line_price_minor_units":3111}],"checkout_url":"https://scottstonebridge.com/cart/c/hWNCb6PwMvrtkYPDF0Kunzba?key=2dda33832b4c31d46c26201ebb6963ae"}}
+
+data: {"type":"text","content":"I've"}
+
+data: {"type":"text","content":" added"}
+
+data: {"type":"text","content":" the"}
+
+data: {"type":"text","content":" Year"}
+
+data: {"type":"text","content":" Ahead"}
+
+data: {"type":"text","content":" Insight"}
+
+data: {"type":"text","content":" Bundle"}
+
+data: {"type":"text","content":" to"}
+
+data: {"type":"text","content":" your"}
+
+data: {"type":"text","content":" cart"}
+
+data: {"type":"text","content":"."}
+
+data: {"type":"text","content":" To"}
+
+data: {"type":"text","content":" proceed"}
+
+data: {"type":"text","content":" with"}
+
+data: {"type":"text","content":" checkout"}
+
+data: {"type":"text","content":","}
+
+data: {"type":"text","content":" please"}
+
+data: {"type":"text","content":" use"}
+
+data: {"type":"text","content":" the"}
+
+data: {"type":"text","content":" checkout"}
+
+data: {"type":"text","content":" button"}
+
+data: {"type":"text","content":" on"}
+
+data: {"type":"text","content":" the"}
+
+data: {"type":"text","content":" site"}
+
+data: {"type":"text","content":" or"}
+
+data: {"type":"text","content":" let"}
+
+data: {"type":"text","content":" me"}
+
+data: {"type":"text","content":" know"}
+
+data: {"type":"text","content":" if"}
+
+data: {"type":"text","content":" you"}
+
+data: {"type":"text","content":" want"}
+
+data: {"type":"text","content":" me"}
+
+data: {"type":"text","content":" to"}
+
+data: {"type":"text","content":" generate"}
+
+data: {"type":"text","content":" a"}
+
+data: {"type":"text","content":" checkout"}
+
+data: {"type":"text","content":" link"}
+
+data: {"type":"text","content":" for"}
+
+data: {"type":"text","content":" you"}
+
+data: {"type":"text","content":"."}
+
+data: {"type":"done","done":true}
+
+data: [DONE]
+

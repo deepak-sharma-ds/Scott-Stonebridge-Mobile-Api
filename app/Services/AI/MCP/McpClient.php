@@ -143,6 +143,22 @@ class McpClient
             );
         }
 
+        // Shopify Storefront MCP signals tool-level failures with
+        // `isError: true` inside the result body (e.g. GraphQL validation
+        // errors). Surface them as McpToolException so the AI explains it.
+        if (($result['isError'] ?? false) === true) {
+            $inner = '';
+            if (isset($result['content'][0]['text']) && is_string($result['content'][0]['text'])) {
+                $inner = $result['content'][0]['text'];
+            }
+            $this->logCall($toolName, $requestId, $startedAt, 'error', ['reason' => 'tool_is_error']);
+            throw new McpToolException(
+                $inner !== '' ? "MCP tool error: {$inner}" : 'MCP tool returned isError.',
+                null,
+                ['tool' => $toolName],
+            );
+        }
+
         $this->logCall($toolName, $requestId, $startedAt, 'ok');
 
         return $result;

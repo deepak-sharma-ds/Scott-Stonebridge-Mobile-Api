@@ -1,0 +1,76 @@
+data: {"type":"products","products":[{"id":"gid://shopify/Product/15598735065471","variant_id":"gid://shopify/ProductVariant/57146193674623","title":"Year Ahead Insight Bundle","handle":"year-ahead-insight-bundle","image":"https://cdn.shopify.com/s/files/1/0585/4923/9982/files/f0523c34-d0b5-4857-b268-d2d7a851375b.webp?v=1773812620","price_minor_units":3111,"currency":"GBP"},{"id":"gid://shopify/Product/15536935338367","variant_id":"gid://shopify/ProductVariant/56898663547263","title":"Sleep Meditation","handle":"sleep-meditation","image":"https://cdn.shopify.com/s/files/1/0585/4923/9982/files/Sleep_Meditation.png?v=1770275521","price_minor_units":1899,"currency":"GBP"},{"id":"gid://shopify/Product/15442647646591","variant_id":"gid://shopify/ProductVariant/56547060777343","title":"Communicate with Spirit Meditation","handle":"communicate-with-spirit-meditation","image":"https://cdn.shopify.com/s/files/1/0585/4923/9982/files/communication_with_spirit02-1.png?v=1770275521","price_minor_units":1899,"currency":"GBP"},{"id":"gid://shopify/Product/15361724940671","variant_id":"gid://shopify/ProductVariant/56293100650879","title":"ITSMOS Natural Labradorite Moonstone Pendant Necklace Simple Round Rose Quartz Amethyst Stone Elegant Jewelry for Women Romatic","handle":"itsmos-natural-labradorite-moonstone-pendant-necklace-simple-round-rose-quartz-amethyst-stone-elegant-jewelry-for-women-romatic","image":"https://cdn.shopify.com/s/files/1/0585/4923/9982/files/Sbd847bdae0cc43b0977a7da4abd5e2d6E_6bc90b1e-b833-4e08-956d-851e4d1816e2.webp?v=1761560724","price_minor_units":1216,"currency":"GBP"},{"id":"gid://shopify/Product/15361702363519","variant_id":"gid://shopify/ProductVariant/56292905025919","title":"Healing Crystal Pendulum Divination Dowsing 7 Chakra Quartz Pendulums Natural Gemstone Reiki Wicca Spiritual Pendant Pendulos","handle":"healing-crystal-pendulum-divination-dowsing-7-chakra-quartz-pendulums-natural-gemstone-reiki-wicca-spiritual-pendant-pendulos","image":"https://cdn.shopify.com/s/files/1/0585/4923/9982/files/Sce2f9464827c4601a446222722eac45fS.webp?v=1761559954","price_minor_units":7402,"currency":"GBP"},{"id":"gid://shopify/Product/15361453392255","variant_id":"gid://shopify/ProductVariant/56292001907071","title":"Kawaii Angel Candles Soy Wax Home Decoration Wedding Gifts Romantic Dinner Candles for Party","handle":"kawaii-angel-candles-soy-wax-home-decoration-wedding-gifts-romantic-dinner-candles-for-party","image":"https://cdn.shopify.com/s/files/1/0585/4923/9982/files/S0262a64f2dbd4b4aa70219ce13844828p.webp?v=1761546865","price_minor_units":1294,"currency":"GBP"},{"id":"gid://shopify/Product/15351439393151","variant_id":"gid://shopify/ProductVariant/56269669630335","title":"Russia Tradition Chime Exquisite Angel Wings Caller Necklace Essential Oil Diffuser Pregnant Woman Aromatherapy Pendant Jewelry","handle":"russia-tradition-chime-exquisite-angel-wings-caller-necklace-essential-oil-diffuser-pregnant-woman-aromatherapy-pendant-jewelry","image":"https://cdn.shopify.com/s/files/1/0585/4923/9982/files/S67a10236095643ed8ff25d8f8a595061x_44630ee9-87a4-411c-9270-65ec123ca3c8.webp?v=1761204568","price_minor_units":404,"currency":"GBP"},{"id":"gid://shopify/Product/15351430578559","variant_id":"gid://shopify/ProductVariant/56269534069119","title":"Natural Stone Cone Perfume Bottle Necklace","handle":"natural-stone-cone-perfume-bottle-necklace","image":"https://cdn.shopify.com/s/files/1/0585/4923/9982/files/S5024f7d06de547cdaa0628be04ac9c23O.webp?v=1761203956","price_minor_units":1012,"currency":"GBP"},{"id":"gid://shopify/Product/15349613232511","variant_id":"gid://shopify/ProductVariant/56264176664959","title":"New Simple Moon Star Pendant Choker Necklace Simple Gold Color Alloy Charm Chain Collares Necklace For Women Party Jewelry","handle":"new-simple-moon-star-pendant-choker-necklace-simple-gold-color-alloy-charm-chain-collares-necklace-for-women-party-jewelry-1","image":"https://cdn.shopify.com/s/files/1/0585/4923/9982/files/S56dfb837bc80426992161a6d8426c5ecT_c31ab651-c0d1-4ff1-a0f9-1daab093a2c0.webp?v=1761125416","price_minor_units":999,"currency":"GBP"},{"id":"gid://shopify/Product/15349606580607","variant_id":"gid://shopify/ProductVariant/56264160149887","title":"Natural Blue Stone Choker Necklace Irregular Healing Gravel Aquamarines Crystal Quartz Chip Beads Necklace For Women Jewelry","handle":"natural-blue-stone-choker-necklace-irregular-healing-gravel-aquamarines-crystal-quartz-chip-beads-necklace-for-women-jewelry","image":"https://cdn.shopify.com/s/files/1/0585/4923/9982/files/S913523d292d448119be58f051372efba3.webp?v=1761125020","price_minor_units":474,"currency":"GBP"}]}
+
+data: {"type":"text","content":"I"}
+
+data: {"type":"text","content":" found"}
+
+data: {"type":"text","content":" "}
+
+data: {"type":"text","content":"10"}
+
+data: {"type":"text","content":" sleep"}
+
+data: {"type":"text","content":" meditation"}
+
+data: {"type":"text","content":" products"}
+
+data: {"type":"text","content":" for"}
+
+data: {"type":"text","content":" you"}
+
+data: {"type":"text","content":"."}
+
+data: {"type":"text","content":" Would"}
+
+data: {"type":"text","content":" you"}
+
+data: {"type":"text","content":" like"}
+
+data: {"type":"text","content":" me"}
+
+data: {"type":"text","content":" to"}
+
+data: {"type":"text","content":" show"}
+
+data: {"type":"text","content":" them"}
+
+data: {"type":"text","content":" all"}
+
+data: {"type":"text","content":" or"}
+
+data: {"type":"text","content":" focus"}
+
+data: {"type":"text","content":" on"}
+
+data: {"type":"text","content":" a"}
+
+data: {"type":"text","content":" specific"}
+
+data: {"type":"text","content":" type"}
+
+data: {"type":"text","content":","}
+
+data: {"type":"text","content":" like"}
+
+data: {"type":"text","content":" audio"}
+
+data: {"type":"text","content":" guides"}
+
+data: {"type":"text","content":","}
+
+data: {"type":"text","content":" candles"}
+
+data: {"type":"text","content":","}
+
+data: {"type":"text","content":" or"}
+
+data: {"type":"text","content":" sleep"}
+
+data: {"type":"text","content":" aids"}
+
+data: {"type":"text","content":"?"}
+
+data: {"type":"done","done":true}
+
+data: [DONE]
+

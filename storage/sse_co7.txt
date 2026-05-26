@@ -1,0 +1,66 @@
+data: {"type":"checkout_link","checkout_url":"https://scottstonebridge.com/cart/c/hWNCb6Z4ffVcJR8gf9MCCsz8?key=bc366e9b3ac1330249219000adeef2c3","total_amount":31.11,"currency":"GBP","item_count":1}
+
+data: {"type":"text","content":"I've"}
+
+data: {"type":"text","content":" prepared"}
+
+data: {"type":"text","content":" your"}
+
+data: {"type":"text","content":" checkout"}
+
+data: {"type":"text","content":" link"}
+
+data: {"type":"text","content":" and"}
+
+data: {"type":"text","content":" it"}
+
+data: {"type":"text","content":" will"}
+
+data: {"type":"text","content":" open"}
+
+data: {"type":"text","content":" in"}
+
+data: {"type":"text","content":" a"}
+
+data: {"type":"text","content":" new"}
+
+data: {"type":"text","content":" tab"}
+
+data: {"type":"text","content":" for"}
+
+data: {"type":"text","content":" you"}
+
+data: {"type":"text","content":" to"}
+
+data: {"type":"text","content":" complete"}
+
+data: {"type":"text","content":" your"}
+
+data: {"type":"text","content":" purchase"}
+
+data: {"type":"text","content":"."}
+
+data: {"type":"text","content":" Let"}
+
+data: {"type":"text","content":" me"}
+
+data: {"type":"text","content":" know"}
+
+data: {"type":"text","content":" if"}
+
+data: {"type":"text","content":" you"}
+
+data: {"type":"text","content":" need"}
+
+data: {"type":"text","content":" any"}
+
+data: {"type":"text","content":" more"}
+
+data: {"type":"text","content":" help"}
+
+data: {"type":"text","content":"!"}
+
+data: {"type":"done","done":true}
+
+data: [DONE]
+
