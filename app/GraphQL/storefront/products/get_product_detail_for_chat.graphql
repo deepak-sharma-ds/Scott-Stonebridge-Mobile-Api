@@ -1,0 +1,59 @@
+query getProductDetailForChat($handle: String, $id: ID, $country: CountryCode)
+@inContext(country: $country) {
+  product(handle: $handle, id: $id) {
+    id
+    title
+    handle
+    descriptionHtml
+    vendor
+    productType
+    tags
+
+    options {
+      name
+      values
+    }
+
+    priceRange {
+      minVariantPrice {
+        amount
+        currencyCode
+      }
+    }
+
+    images(first: 50) {
+      edges {
+        node {
+          url
+          altText
+        }
+      }
+    }
+
+    variants(first: 100) {
+      edges {
+        node {
+          id
+          title
+          sku
+          availableForSale
+
+          price {
+            amount
+            currencyCode
+          }
+
+          image {
+            url
+            altText
+          }
+
+          selectedOptions {
+            name
+            value
+          }
+        }
+      }
+    }
+  }
+}

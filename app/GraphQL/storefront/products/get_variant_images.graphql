@@ -1,0 +1,15 @@
+query getVariantImages($ids: [ID!]!) {
+  nodes(ids: $ids) {
+    ... on ProductVariant {
+      id
+      image {
+        url
+      }
+      product {
+        featuredImage {
+          url
+        }
+      }
+    }
+  }
+}

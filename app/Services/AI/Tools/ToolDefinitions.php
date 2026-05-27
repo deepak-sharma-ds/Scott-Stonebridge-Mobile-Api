@@ -81,11 +81,12 @@ final class ToolDefinitions
                 ],
             ),
             $this->fn(self::TOOL_GET_PRODUCT_DETAILS,
-                'Use when the user taps a product card or asks for full details on one specific item (description, variants, stock). Always call this before quoting variant price or availability.',
+                'Use when the user taps a product card or asks for full details on one specific item (description, variants, stock). Always call this before quoting variant price or availability. Prefer passing the `handle` from the product card when you have it — it returns the full variant + image set.',
                 [
                     'type' => 'object',
                     'properties' => [
                         'product_id' => ['type' => 'string', 'minLength' => 1],
+                        'handle' => ['type' => 'string', 'description' => 'The product handle/slug from the card (e.g. "crystal-ball"). Preferred over product_id.'],
                         'options' => [
                             'type' => 'object',
                             'description' => 'Optional variant selectors keyed by option name, e.g. {"Size":"M","Color":"Black"}.',
@@ -108,7 +109,7 @@ final class ToolDefinitions
                 ],
             ),
             $this->fn(self::TOOL_UPDATE_CART,
-                'Use to add, change, or remove cart items. `cart_id` is OPTIONAL — when absent Shopify creates a new cart. Use `add_items` for new variants, `update_items` (with the cart line `id`) to change quantity, `remove_line_ids` to drop a line outright.',
+                'Use to add, change, or remove cart items. `cart_id` is OPTIONAL — when absent Shopify creates a new cart. Use `add_items` for new variants. To change quantity or remove a line, use the cart line `id` from the latest cart_state `items[].id` (NOT the variant id): `update_items` with that line id to change quantity, `remove_line_ids` with that line id to drop it.',
                 [
                     'type' => 'object',
                     'properties' => [

@@ -17,6 +17,13 @@ use App\DTOs\Chat\ProductRecommendationDTO;
 final class ProductMapper
 {
     /**
+     * Shopify auto-creates this single variant + option pair for products that
+     * have no real options. It must never surface in the UI as a selectable
+     * variant.
+     */
+    private const DEFAULT_VARIANT_TITLE = 'Default Title';
+
+    /**
      * @param  array<string, mixed>  $mcpResult  `result` payload from `search_catalog` / `lookup_catalog`.
      * @return list<ProductRecommendationDTO>
      */
@@ -77,10 +84,266 @@ final class ProductMapper
             priceMinorUnits: $priceMinor,
             currency: self::extractCurrency($node),
             vendor: self::stringOrNull($node['vendor'] ?? null),
-            tags: array_values(array_filter(array_map(
-                static fn ($tag): string => (string) $tag,
-                (array) ($node['tags'] ?? []),
-            ), static fn (string $tag): bool => $tag !== '')),
+            tags: self::extractTags($node),
+            options: self::extractOptions($node, $variants),
+            hasVariants: self::hasRealVariants($variants),
+        );
+    }
+
+    /**
+     * Map a Storefront GraphQL `productByHandle` node (from
+     * `storefront/products/get_product_details`) — the richer source that
+     * carries ALL variants, per-variant images, and product option groups.
+     * Shopify MCP `get_product_details` only returns one variant, so this is
+     * the preferred detail source.
+     *
+     * @param  array<string, mixed>  $node
+     */
+    public static function fromStorefrontDetailNode(array $node): ?ProductDetailDTO
+    {
+        $id = (string) ($node['id'] ?? '');
+        $title = (string) ($node['title'] ?? '');
+        $handle = (string) ($node['handle'] ?? '');
+        if ($id === '' || $title === '' || $handle === '') {
+            return null;
+        }
+
+        $variants = self::variantsFromEdges($node['variants']['edges'] ?? []);
+        $images = self::imagesFromEdges($node['images']['edges'] ?? []);
+
+        // Fall back to the first variant image when the product has no gallery.
+        if ($images === []) {
+            foreach ($variants as $variant) {
+                if (! empty($variant['image'])) {
+                    $images[] = ['url' => (string) $variant['image'], 'alt' => null];
+                    break;
+                }
+            }
+        }
+
+        $priceMinor = $variants[0]['price_minor_units']
+            ?? self::priceMinor($node['priceRange']['minVariantPrice'] ?? null);
+
+        return new ProductDetailDTO(
+            id: $id,
+            title: $title,
+            handle: $handle,
+            descriptionHtml: self::stringOrNull($node['descriptionHtml'] ?? $node['description'] ?? null),
+            images: $images,
+            variants: $variants,
+            priceMinorUnits: $priceMinor,
+            currency: self::currencyFromEdges($node),
+            vendor: self::stringOrNull($node['vendor'] ?? null),
+            tags: self::extractTags($node),
+            options: self::optionGroups($node['options'] ?? [], $variants),
+            hasVariants: self::hasRealVariants($variants),
+        );
+    }
+
+    /**
+     * @param  array<string, mixed>  $node
+     * @return list<string>
+     */
+    private static function extractTags(array $node): array
+    {
+        return array_values(array_filter(array_map(
+            static fn ($tag): string => (string) $tag,
+            (array) ($node['tags'] ?? []),
+        ), static fn (string $tag): bool => $tag !== ''));
+    }
+
+    /**
+     * Variant list from a Storefront GraphQL `variants.edges[].node` shape,
+     * including the per-variant image url.
+     *
+     * @return list<array{id:string,title:?string,price_minor_units:?int,available:bool,sku:?string,options:array<string,string>,image:?string}>
+     */
+    private static function variantsFromEdges(mixed $edges): array
+    {
+        if (! is_array($edges)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($edges as $edge) {
+            $v = is_array($edge) ? ($edge['node'] ?? $edge) : null;
+            if (! is_array($v)) {
+                continue;
+            }
+            $id = self::stringOrNull($v['id'] ?? $v['variant_id'] ?? null);
+            if ($id === null) {
+                continue;
+            }
+
+            $title = self::stringOrNull($v['title'] ?? null);
+
+            $out[] = [
+                'id' => $id,
+                'title' => $title === self::DEFAULT_VARIANT_TITLE ? null : $title,
+                'price_minor_units' => self::priceMinor($v['price'] ?? null),
+                'available' => (bool) ($v['availableForSale'] ?? $v['available'] ?? true),
+                'sku' => self::stringOrNull($v['sku'] ?? null),
+                'options' => self::cleanSelectedOptions($v['selectedOptions'] ?? $v['selected_options'] ?? []),
+                'image' => self::stringOrNull($v['image']['url'] ?? $v['image'] ?? null),
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * @return list<array{url:string,alt:?string}>
+     */
+    private static function imagesFromEdges(mixed $edges): array
+    {
+        if (! is_array($edges)) {
+            return [];
+        }
+
+        $out = [];
+        foreach ($edges as $edge) {
+            $img = is_array($edge) ? ($edge['node'] ?? $edge) : null;
+            if (! is_array($img)) {
+                continue;
+            }
+            $url = self::stringOrNull($img['url'] ?? $img['src'] ?? null);
+            if ($url === null) {
+                continue;
+            }
+            $out[] = ['url' => $url, 'alt' => self::stringOrNull($img['altText'] ?? $img['alt_text'] ?? $img['alt'] ?? null)];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Drop Shopify's synthetic "Title: Default Title" pair so it never renders
+     * as a selectable option.
+     *
+     * @return array<string,string>
+     */
+    private static function cleanSelectedOptions(mixed $rawOptions): array
+    {
+        if (! is_array($rawOptions)) {
+            return [];
+        }
+
+        $options = [];
+        foreach ($rawOptions as $opt) {
+            if (! is_array($opt)) {
+                continue;
+            }
+            $name = $opt['name'] ?? null;
+            $value = $opt['value'] ?? $opt['label'] ?? null;
+            if (! is_string($name) || $name === '' || ! is_string($value) || $value === '') {
+                continue;
+            }
+            // Drop Shopify's synthetic default option. The value is always
+            // "Default Title"; the name is usually "Title" but some legacy
+            // products carry the name "Default Title" too — match on value.
+            if ($value === self::DEFAULT_VARIANT_TITLE) {
+                continue;
+            }
+            $options[$name] = $value;
+        }
+
+        return $options;
+    }
+
+    /**
+     * Product-level option groups for the variant picker, derived from the
+     * GraphQL `options { name, values }` block. Drops the synthetic "Title"
+     * group.
+     *
+     * @param  list<array<string, mixed>>  $variants
+     * @return list<array{name:string,values:list<string>}>
+     */
+    private static function optionGroups(mixed $rawOptions, array $variants): array
+    {
+        $out = [];
+        if (is_array($rawOptions)) {
+            foreach ($rawOptions as $opt) {
+                if (! is_array($opt)) {
+                    continue;
+                }
+                $name = self::stringOrNull($opt['name'] ?? null);
+                $values = array_values(array_filter(array_map(
+                    static fn ($v): string => is_string($v) ? $v : (string) $v,
+                    (array) ($opt['values'] ?? []),
+                ), static fn (string $v): bool => $v !== '' && $v !== self::DEFAULT_VARIANT_TITLE));
+                if ($name === null || $name === 'Title' || $name === self::DEFAULT_VARIANT_TITLE || $values === []) {
+                    continue;
+                }
+                $out[] = ['name' => $name, 'values' => $values];
+            }
+        }
+
+        if ($out !== []) {
+            return $out;
+        }
+
+        // Derive from variant selected_options when the explicit group is absent.
+        return self::extractOptions([], $variants);
+    }
+
+    /**
+     * Build option groups by collecting distinct values across variant
+     * `options` maps. Used for the MCP shape where product-level option groups
+     * aren't returned.
+     *
+     * @param  array<string, mixed>  $node
+     * @param  list<array<string, mixed>>  $variants
+     * @return list<array{name:string,values:list<string>}>
+     */
+    private static function extractOptions(array $node, array $variants): array
+    {
+        $grouped = [];
+        foreach ($variants as $variant) {
+            foreach ((array) ($variant['options'] ?? []) as $name => $value) {
+                if (! is_string($name) || ! is_string($value) || $value === '') {
+                    continue;
+                }
+                $grouped[$name][$value] = true;
+            }
+        }
+
+        $out = [];
+        foreach ($grouped as $name => $values) {
+            $out[] = ['name' => $name, 'values' => array_keys($values)];
+        }
+
+        return $out;
+    }
+
+    /**
+     * A product has real, selectable variants when there is more than one
+     * variant OR the single variant carries a non-default option.
+     *
+     * @param  list<array<string, mixed>>  $variants
+     */
+    private static function hasRealVariants(array $variants): bool
+    {
+        if (count($variants) > 1) {
+            return true;
+        }
+        if ($variants === []) {
+            return false;
+        }
+
+        return ($variants[0]['options'] ?? []) !== [];
+    }
+
+    /**
+     * @param  array<string, mixed>  $node
+     */
+    private static function currencyFromEdges(array $node): ?string
+    {
+        $firstVariant = $node['variants']['edges'][0]['node'] ?? null;
+
+        return self::stringOrNull(
+            ($firstVariant['price']['currencyCode'] ?? null)
+            ?? ($node['priceRange']['minVariantPrice']['currencyCode'] ?? null)
+            ?? self::extractCurrency($node),
         );
     }
 
@@ -294,20 +557,10 @@ final class ProductMapper
                 continue;
             }
 
-            $rawOptions = (array) ($v['selected_options'] ?? $v['options'] ?? []);
-            $options = [];
-            foreach ($rawOptions as $opt) {
-                if (! is_array($opt)) {
-                    continue;
-                }
-                $name = $opt['name'] ?? null;
-                // Shopify MCP variant options carry `label` (the chosen value),
-                // not `value`. Read both for backward compat.
-                $value = $opt['value'] ?? $opt['label'] ?? null;
-                if (is_string($name) && $name !== '' && is_string($value) && $value !== '') {
-                    $options[$name] = $value;
-                }
-            }
+            // Shopify MCP variant options carry `label` (the chosen value),
+            // not `value` — cleanSelectedOptions reads both and strips the
+            // synthetic "Default Title" pair.
+            $options = self::cleanSelectedOptions($v['selected_options'] ?? $v['options'] ?? []);
 
             $available = $v['availability']['available']
                 ?? $v['available']
@@ -315,13 +568,16 @@ final class ProductMapper
                 ?? $v['availableForSale']
                 ?? true;
 
+            $title = self::stringOrNull($v['title'] ?? null);
+
             $out[] = [
                 'id' => $id,
-                'title' => self::stringOrNull($v['title'] ?? null),
+                'title' => $title === self::DEFAULT_VARIANT_TITLE ? null : $title,
                 'price_minor_units' => self::priceMinor($v['price'] ?? null),
                 'available' => (bool) $available,
                 'sku' => self::stringOrNull($v['sku'] ?? null),
                 'options' => $options,
+                'image' => self::stringOrNull($v['image']['url'] ?? $v['image'] ?? $v['image_url'] ?? null),
             ];
         }
 

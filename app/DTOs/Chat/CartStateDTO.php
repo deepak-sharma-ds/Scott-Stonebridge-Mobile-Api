@@ -10,7 +10,7 @@ use InvalidArgumentException;
 /**
  * Cart state echoed back to the chat widget after `get_cart` or `update_cart`.
  *
- * @phpstan-type LineShape array{variant_id:string,product_id:?string,title:string,image:?string,quantity:int,line_price_minor_units:?int}
+ * @phpstan-type LineShape array{id:?string,variant_id:string,product_id:?string,title:string,image:?string,quantity:int,line_price_minor_units:?int}
  */
 class CartStateDTO extends BaseDTO
 {

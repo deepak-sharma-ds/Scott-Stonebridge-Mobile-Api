@@ -104,11 +104,18 @@ class ToolExecutor
     {
         $args = $this->normaliseStorefrontArgs($toolName, $args);
 
-        // When the model hands us a handle / slug instead of a GID for
-        // `get_product_details`, resolve it via search_catalog first so the
-        // downstream MCP call doesn't bomb with `Variable $id of type ID! was
-        // provided invalid value`.
+        // Product detail: Shopify MCP `get_product_details` only returns ONE
+        // variant (`selectedOrFirstAvailableVariant`). Pull the full product —
+        // every variant, per-variant image, and option groups — from the
+        // Storefront GraphQL API instead. Fall back to the MCP path on any
+        // failure so a GraphQL/credential hiccup still yields a card.
         if ($toolName === ToolDefinitions::TOOL_GET_PRODUCT_DETAILS) {
+            $detail = $this->handleProductDetailViaStorefront($args, $ctx);
+            if ($detail !== null) {
+                return $detail;
+            }
+
+            // Fallback prep: the MCP call needs a GID, not a handle/slug.
             $pid = (string) ($args['product_id'] ?? '');
             if ($pid !== '' && ! str_starts_with($pid, 'gid://')) {
                 $resolved = $this->resolveProductIdFromQuery($pid, $ctx);
@@ -126,11 +133,19 @@ class ToolExecutor
             return $this->handleCatalogSearch($args, $ctx);
         }
 
+        // Quantity changes (`update_items`) and removals (`remove_line_ids`)
+        // key off the Shopify CartLine GID, not the variant id. The model (and
+        // the widget) frequently sends a ProductVariant id — translate it to
+        // the matching cart-line id by reading the live cart first.
+        if ($toolName === ToolDefinitions::TOOL_UPDATE_CART) {
+            $args = $this->resolveCartLineRefs($args, $ctx);
+        }
+
         $result = $this->withCache($toolName, $args, $ctx->shopDomain, fn (): array => $this->storefront->callTool($toolName, $args, $ctx->shopDomain));
 
         return match ($toolName) {
             ToolDefinitions::TOOL_GET_PRODUCT_DETAILS => $this->handleProductDetail($result),
-            ToolDefinitions::TOOL_GET_CART, ToolDefinitions::TOOL_UPDATE_CART => $this->handleCart($result),
+            ToolDefinitions::TOOL_GET_CART, ToolDefinitions::TOOL_UPDATE_CART => $this->handleCart($result, $ctx),
             ToolDefinitions::TOOL_SEARCH_POLICIES => $this->handlePolicy($result, (string) ($args['query'] ?? ''), $ctx),
             default => ToolResult::error("Unhandled storefront tool: {$toolName}"),
         };
@@ -435,25 +450,282 @@ class ToolExecutor
     }
 
     /**
+     * Load the FULL product (all variants, per-variant images, option groups)
+     * from the Storefront GraphQL API. Returns null — so the caller falls back
+     * to the single-variant MCP path — when the product can't be resolved or
+     * the API errors.
+     *
+     * @param  array<string, mixed>  $args
+     */
+    private function handleProductDetailViaStorefront(array $args, ChatSessionContext $ctx): ?ToolResult
+    {
+        $vars = $this->resolveProductDetailVars($args, $ctx);
+        if ($vars === null) {
+            return null;
+        }
+
+        try {
+            $resp = $this->storefrontApi()->query('storefront/products/get_product_detail_for_chat', $vars);
+        } catch (Throwable $e) {
+            $this->logToolError('get_product_details.storefront', $ctx, $e);
+
+            return null;
+        }
+
+        $node = $resp['data']['product'] ?? null;
+        if (! is_array($node)) {
+            return null;
+        }
+
+        $dto = ProductMapper::fromStorefrontDetailNode($node);
+        if ($dto === null) {
+            return null;
+        }
+
+        $payload = ['product' => $dto->toArray()];
+        $this->emitter->emit('product_detail', $payload);
+
+        return ToolResult::success(
+            "Loaded product detail for {$dto->title}.",
+            ['type' => 'product_detail'] + $payload,
+        );
+    }
+
+    /**
+     * Resolve the Storefront `product(handle:|id:)` variables from whatever the
+     * model passed (handle, Product GID, bare numeric id, slug, or free text).
+     *
+     * @param  array<string, mixed>  $args
+     * @return array{handle:string}|array{id:string}|null
+     */
+    private function resolveProductDetailVars(array $args, ChatSessionContext $ctx): ?array
+    {
+        $handle = trim((string) ($args['handle'] ?? ''));
+        if ($handle !== '') {
+            return ['handle' => $handle];
+        }
+
+        $pid = trim((string) ($args['product_id'] ?? ''));
+        if ($pid === '') {
+            return null;
+        }
+
+        if (str_starts_with($pid, 'gid://shopify/Product/')) {
+            return ['id' => $pid];
+        }
+        if (ctype_digit($pid)) {
+            return ['id' => $this->toGid('Product', $pid)];
+        }
+        // A bare handle/slug: lowercase alphanumerics + dashes, no spaces.
+        if (preg_match('/^[a-z0-9][a-z0-9\-]*$/', $pid) === 1) {
+            return ['handle' => $pid];
+        }
+
+        // Free text / title — resolve to a GID via the Storefront search.
+        $resolved = $this->resolveProductIdFromQuery($pid, $ctx);
+
+        return $resolved !== null ? ['id' => $resolved] : null;
+    }
+
+    /**
      * @param  array<string, mixed>  $mcpResult
      */
-    private function handleCart(array $mcpResult): ToolResult
+    private function handleCart(array $mcpResult, ChatSessionContext $ctx): ToolResult
     {
         $dto = CartMapper::fromCart($mcpResult);
         if ($dto === null) {
             return ToolResult::error('Cart not found.');
         }
 
-        $payload = ['cart' => $dto->toArray()];
+        $cart = $dto->toArray();
+        // Shopify's MCP cart omits line imagery — backfill from the Storefront
+        // API so the widget's cart view can render product thumbnails.
+        $cart['items'] = $this->attachCartLineImages($cart['items'], $ctx);
+        $payload = ['cart' => $cart];
         $this->emitter->emit('cart_state', $payload);
 
-        // Echo the actual cart_id back to the model so subsequent tool calls
-        // (start_checkout, suggest_upsell, update_cart) can target the right
-        // cart instead of inventing placeholders.
+        // Echo the cart_id AND a line-id ↔ title map so the model removes /
+        // changes quantity using the correct CartLine GID (not the variant id).
+        $lineHints = [];
+        foreach ($cart['items'] as $line) {
+            if (! empty($line['id'])) {
+                $lineHints[] = "{$line['title']} → line {$line['id']} (qty {$line['quantity']})";
+            }
+        }
+        $hint = $lineHints === [] ? '' : ' Lines: '.implode('; ', $lineHints).'. Use the line id for update_items/remove_line_ids.';
+
         return ToolResult::success(
-            "Cart {$dto->id} now has {$dto->itemCount} item(s). Use this cart_id in any follow-up cart / checkout tool call.",
+            "Cart {$dto->id} now has {$dto->itemCount} item(s). Use this cart_id in any follow-up cart / checkout tool call.".$hint,
             ['type' => 'cart_state'] + $payload,
         );
+    }
+
+    /**
+     * Translate variant / bare ids the model passed in `update_items[].id` or
+     * `remove_line_ids` into the real Shopify CartLine GIDs by reading the live
+     * cart. Leaves values already shaped like a CartLine GID untouched.
+     *
+     * @param  array<string, mixed>  $args
+     * @return array<string, mixed>
+     */
+    private function resolveCartLineRefs(array $args, ChatSessionContext $ctx): array
+    {
+        $hasUpdate = isset($args['update_items']) && is_array($args['update_items']);
+        $hasRemove = isset($args['remove_line_ids']) && is_array($args['remove_line_ids']);
+        if (! $hasUpdate && ! $hasRemove) {
+            return $args;
+        }
+
+        // Skip the cart read when every ref is already a CartLine GID.
+        $needsResolve = false;
+        if ($hasRemove) {
+            foreach ($args['remove_line_ids'] as $ref) {
+                if (! self::isCartLineGid((string) $ref)) {
+                    $needsResolve = true;
+                    break;
+                }
+            }
+        }
+        if (! $needsResolve && $hasUpdate) {
+            foreach ($args['update_items'] as $row) {
+                if (is_array($row) && ! self::isCartLineGid((string) ($row['id'] ?? ''))) {
+                    $needsResolve = true;
+                    break;
+                }
+            }
+        }
+        if (! $needsResolve) {
+            return $args;
+        }
+
+        $cartId = (string) ($args['cart_id'] ?? $ctx->cartId ?? '');
+        if (! str_starts_with($cartId, 'gid://shopify/Cart/')) {
+            return $args;
+        }
+
+        try {
+            $cart = $this->storefront->callTool(ToolDefinitions::TOOL_GET_CART, ['cart_id' => $cartId], $ctx->shopDomain);
+        } catch (Throwable $e) {
+            $this->logToolError('update_cart.resolve_lines', $ctx, $e);
+
+            return $args;
+        }
+
+        $map = $this->buildVariantToLineMap($cart);
+        if ($map === []) {
+            return $args;
+        }
+
+        if ($hasRemove) {
+            $args['remove_line_ids'] = array_values(array_map(
+                fn ($ref): string => self::mapToLineId((string) $ref, $map),
+                $args['remove_line_ids'],
+            ));
+        }
+        if ($hasUpdate) {
+            foreach ($args['update_items'] as $idx => $row) {
+                if (is_array($row) && isset($row['id'])) {
+                    $args['update_items'][$idx]['id'] = self::mapToLineId((string) $row['id'], $map);
+                }
+            }
+        }
+
+        return $args;
+    }
+
+    /**
+     * Map both variant GIDs and bare variant numerics → CartLine GID.
+     *
+     * @param  array<string, mixed>  $cartResult
+     * @return array<string, string>
+     */
+    private function buildVariantToLineMap(array $cartResult): array
+    {
+        $dto = CartMapper::fromCart($cartResult);
+        if ($dto === null) {
+            return [];
+        }
+
+        $map = [];
+        foreach ($dto->items as $line) {
+            $lineId = $line['id'] ?? null;
+            $variantId = $line['variant_id'] ?? null;
+            if (! is_string($lineId) || $lineId === '' || ! is_string($variantId) || $variantId === '') {
+                continue;
+            }
+            $map[$variantId] = $lineId;
+            // Also key on the bare numeric tail so a stripped id still resolves.
+            if (preg_match('~/(\d+)$~', $variantId, $m) === 1) {
+                $map[$m[1]] = $lineId;
+            }
+        }
+
+        return $map;
+    }
+
+    /**
+     * @param  array<string, string>  $map
+     */
+    private static function mapToLineId(string $ref, array $map): string
+    {
+        if (self::isCartLineGid($ref)) {
+            return $ref;
+        }
+
+        return $map[$ref] ?? $ref;
+    }
+
+    private static function isCartLineGid(string $value): bool
+    {
+        return str_starts_with($value, 'gid://shopify/CartLine/');
+    }
+
+    /**
+     * Backfill `image` on each cart line from the Storefront API (the MCP cart
+     * payload has no imagery). Best-effort: returns lines unchanged on failure.
+     *
+     * @param  list<array<string, mixed>>  $items
+     * @return list<array<string, mixed>>
+     */
+    private function attachCartLineImages(array $items, ChatSessionContext $ctx): array
+    {
+        $variantIds = [];
+        foreach ($items as $line) {
+            if (empty($line['image']) && ! empty($line['variant_id'])) {
+                $variantIds[] = (string) $line['variant_id'];
+            }
+        }
+        $variantIds = array_values(array_unique($variantIds));
+        if ($variantIds === []) {
+            return $items;
+        }
+
+        try {
+            $resp = $this->storefrontApi()->query('storefront/products/get_variant_images', ['ids' => $variantIds]);
+        } catch (Throwable $e) {
+            $this->logToolError('cart.variant_images', $ctx, $e);
+
+            return $items;
+        }
+
+        $byVariant = [];
+        foreach ((array) ($resp['data']['nodes'] ?? []) as $node) {
+            if (! is_array($node) || empty($node['id'])) {
+                continue;
+            }
+            $url = $node['image']['url'] ?? $node['product']['featuredImage']['url'] ?? null;
+            if (is_string($url) && $url !== '') {
+                $byVariant[(string) $node['id']] = $url;
+            }
+        }
+
+        foreach ($items as $idx => $line) {
+            if (empty($line['image']) && ! empty($line['variant_id']) && isset($byVariant[$line['variant_id']])) {
+                $items[$idx]['image'] = $byVariant[$line['variant_id']];
+            }
+        }
+
+        return $items;
     }
 
     /**
@@ -784,6 +1056,17 @@ class ToolExecutor
         }
 
         if ($toolName === ToolDefinitions::TOOL_UPDATE_CART) {
+            // Drop a bogus cart_id (empty string, placeholder, or anything that
+            // is not a real Shopify Cart GID). The model frequently invents one
+            // on the first add — leaving it in makes Shopify reject the call
+            // with "Invalid cart_id format" instead of minting a fresh cart.
+            if (isset($args['cart_id'])) {
+                $cid = is_string($args['cart_id']) ? trim($args['cart_id']) : '';
+                if (! str_starts_with($cid, 'gid://shopify/Cart/')) {
+                    unset($args['cart_id']);
+                }
+            }
+
             foreach (['add_items'] as $key) {
                 if (! isset($args[$key]) || ! is_array($args[$key])) {
                     continue;

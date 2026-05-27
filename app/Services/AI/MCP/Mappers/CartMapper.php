@@ -49,7 +49,7 @@ final class CartMapper
 
     /**
      * @param  array<string, mixed>  $cart
-     * @return list<array{variant_id:string,product_id:?string,title:string,image:?string,quantity:int,line_price_minor_units:?int}>
+     * @return list<array{id:?string,variant_id:string,product_id:?string,title:string,image:?string,quantity:int,line_price_minor_units:?int}>
      */
     private static function extractLines(array $cart): array
     {
@@ -75,6 +75,10 @@ final class CartMapper
             }
 
             $out[] = [
+                // Shopify cart-line GID — required to update quantity or remove
+                // a line (`update_items`/`remove_line_ids` key off this, NOT the
+                // variant id).
+                'id' => self::stringOrNull($line['id'] ?? $line['line_id'] ?? null),
                 'variant_id' => $variantId,
                 'product_id' => self::stringOrNull(
                     $line['product_id']
