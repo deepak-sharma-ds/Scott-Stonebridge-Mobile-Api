@@ -83,18 +83,33 @@ class CustomerOAuthController
 
         $config = $this->discoverOidcConfig((string) $payload['shop_domain']);
 
-        $tokenResponse = Http::asForm()->post($config['token_endpoint'], [
+        $clientId = (string) config('chatbot.oauth.client_id');
+        $clientSecret = (string) config('chatbot.oauth.client_secret');
+
+        $form = [
             'grant_type' => 'authorization_code',
-            'client_id' => (string) config('chatbot.oauth.client_id'),
+            'client_id' => $clientId,
             'redirect_uri' => (string) config('chatbot.oauth.redirect_uri'),
             'code' => $validated['code'],
             'code_verifier' => (string) $payload['verifier'],
-        ]);
+        ];
+
+        // Shopify advertises `token_endpoint_auth_methods_supported:
+        // ["client_secret_basic"]` for confidential clients — send the secret
+        // via HTTP Basic. Public PKCE clients leave the secret blank.
+        $request = Http::asForm();
+        if ($clientSecret !== '') {
+            $request = $request->withBasicAuth($clientId, $clientSecret);
+        }
+
+        $tokenResponse = $request->post($config['token_endpoint'], $form);
 
         if (! $tokenResponse->successful()) {
             Log::channel('ai')->warning('oauth.token_exchange_failed', [
                 'session_id' => $payload['session_id'],
                 'http_status' => $tokenResponse->status(),
+                'error' => $tokenResponse->json('error'),
+                'error_description' => $tokenResponse->json('error_description'),
             ]);
 
             return $this->errorPage('Sign-in failed. Please try again.', 400);

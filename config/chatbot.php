@@ -196,8 +196,14 @@ return [
     */
     'oauth' => [
         'client_id' => env('SHOPIFY_CUSTOMER_CLIENT_ID'),
-        'redirect_uri' => env('APP_URL').'/api/v1/ai/oauth/customer/callback',
-        'scopes' => ['customer-account-api:full'],
+        // Confidential clients (token_endpoint_auth_methods = client_secret_basic)
+        // require the secret on the token exchange. Leave blank for a public
+        // PKCE-only client.
+        'client_secret' => env('SHOPIFY_CUSTOMER_CLIENT_SECRET'),
+        'redirect_uri' => env('SHOPIFY_CUSTOMER_REDIRECT_URI', env('APP_URL').'/api/v1/ai/oauth/customer/callback'),
+        // `openid` is required by the auth server; the mcp-api scope is what
+        // grants the issued token access to the Customer Account MCP (orders).
+        'scopes' => ['openid', 'email', 'customer-account-api:full', 'customer-account-mcp-api:full'],
         'pkce_session_ttl' => (int) env('SHOPIFY_OAUTH_PKCE_TTL', 600),
         'token_ttl_seconds' => (int) env('SHOPIFY_OAUTH_TOKEN_TTL', 3600),
     ],

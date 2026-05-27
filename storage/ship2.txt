@@ -1,0 +1,172 @@
+data: {"type":"policy_answer","answer":"**Shipping Policy**\nI work with suppliers around the world to source the best high quality products. My suppliers typically ship items within one to two days of receiving an order. From that point, it may take approximately 10 to 19 working days for items to arrive. As soon as your product ships, you’ll receive a tracking order number that will let you keep tabs of where your order is at all times. This can be located on my website under “ where’s my stuff “\n\nDue to the pandemic deliveries may take longer than estimated delivery times. \n\n---\n\n**What is the return policy?**\nThe store accepts returns.\nThe store accepts returns within 30 days days of delivery.\nThe store does not charge a restocking fee.\nThe store does not charge a return fee.\nThe store provides return labels for returns.\n\n**What countries do you ship to?**\nThe store ships to the following locations: Rest of world, AC, AD, AE, AF, AG, AI, AL, AM, AO, AR, AT, AU, AW, AX, AZ, BA, BB, BD, BE, BF, BG, BH, BI, BJ, BL, BM, BN, BO, BQ, BR, BS, BT, BW, BY, BZ, CA, CC, CD, CF, CG, CH, CI, CK, CL, CM, CN, CO, CR, CV, CW, CX, CY, CZ, DE, DJ, DK, DM, DO, DZ, EC, EE, EG, EH, ER, ES, ET, FI, FJ, FK, FO, FR, GA, GB, GD, GE, GF, GG, GH, GI, GL, GM, GN, GP, GQ, GR, GS, GT, GW, GY, HK, HN, HR, HT, HU, ID, IE, IL, IM, IN, IO, IQ, IS, IT, JE, JM, JO, JP, KE, KG, KH, KI, KM, KN, KR, KW, KY, KZ, LA, LB, LC, LI, LK, LR, LS, LT, LU, LV, LY, MA, MC, MD, ME, MF, MG, MK, ML, MM, MN, MO, MQ, MR, MS, MT, MU, MV, MW, MX, MY, MZ, NA, NC, NE, NF, NG, NI, NL, NO, NP, NR, NU, NZ, OM, PA, PE, PF, PG, PH, PK, PL, PM, PN, PS, PT, PY, QA, RE, RO, RS, RU, RW, SA, SB, SC, SD, SE, SG, SH, SI, SJ, SK, SL, SM, SN, SO, SR, SS, ST, SV, SX, SZ, TA, TC, TD, TF, TG, TH, TJ, TK, TL, TM, TN, TO, TR, TT, TV, TW, TZ, UA, UG, UM, US, UY, UZ, VA, VC, VE, VG, VN, VU, WF, WS, XK, YE, YT, ZA, ZM, ZW\n\n**What shipping options and policies do you offer?**\nInternational shipping available\nExpress shipping available","citations":[{"title":"Shipping Policy","url":"https://checkout.shopify.com/58549239982/policies/25091637422.html?locale=en"}]}
+
+data: {"type":"text","content":"The"}
+
+data: {"type":"text","content":" shipping"}
+
+data: {"type":"text","content":" policy"}
+
+data: {"type":"text","content":" states"}
+
+data: {"type":"text","content":" that"}
+
+data: {"type":"text","content":" suppliers"}
+
+data: {"type":"text","content":" typically"}
+
+data: {"type":"text","content":" ship"}
+
+data: {"type":"text","content":" items"}
+
+data: {"type":"text","content":" within"}
+
+data: {"type":"text","content":" one"}
+
+data: {"type":"text","content":" to"}
+
+data: {"type":"text","content":" two"}
+
+data: {"type":"text","content":" days"}
+
+data: {"type":"text","content":" of"}
+
+data: {"type":"text","content":" receiving"}
+
+data: {"type":"text","content":" an"}
+
+data: {"type":"text","content":" order"}
+
+data: {"type":"text","content":"."}
+
+data: {"type":"text","content":" After"}
+
+data: {"type":"text","content":" that"}
+
+data: {"type":"text","content":","}
+
+data: {"type":"text","content":" it"}
+
+data: {"type":"text","content":" may"}
+
+data: {"type":"text","content":" take"}
+
+data: {"type":"text","content":" approximately"}
+
+data: {"type":"text","content":" "}
+
+data: {"type":"text","content":"10"}
+
+data: {"type":"text","content":" to"}
+
+data: {"type":"text","content":" "}
+
+data: {"type":"text","content":"19"}
+
+data: {"type":"text","content":" working"}
+
+data: {"type":"text","content":" days"}
+
+data: {"type":"text","content":" for"}
+
+data: {"type":"text","content":" items"}
+
+data: {"type":"text","content":" to"}
+
+data: {"type":"text","content":" arrive"}
+
+data: {"type":"text","content":"."}
+
+data: {"type":"text","content":" You'll"}
+
+data: {"type":"text","content":" receive"}
+
+data: {"type":"text","content":" a"}
+
+data: {"type":"text","content":" tracking"}
+
+data: {"type":"text","content":" number"}
+
+data: {"type":"text","content":" once"}
+
+data: {"type":"text","content":" your"}
+
+data: {"type":"text","content":" product"}
+
+data: {"type":"text","content":" ships"}
+
+data: {"type":"text","content":" to"}
+
+data: {"type":"text","content":" track"}
+
+data: {"type":"text","content":" your"}
+
+data: {"type":"text","content":" order"}
+
+data: {"type":"text","content":"."}
+
+data: {"type":"text","content":" Due"}
+
+data: {"type":"text","content":" to"}
+
+data: {"type":"text","content":" the"}
+
+data: {"type":"text","content":" pandemic"}
+
+data: {"type":"text","content":","}
+
+data: {"type":"text","content":" deliveries"}
+
+data: {"type":"text","content":" may"}
+
+data: {"type":"text","content":" take"}
+
+data: {"type":"text","content":" longer"}
+
+data: {"type":"text","content":" than"}
+
+data: {"type":"text","content":" the"}
+
+data: {"type":"text","content":" estimated"}
+
+data: {"type":"text","content":" times"}
+
+data: {"type":"text","content":"."}
+
+data: {"type":"text","content":" You"}
+
+data: {"type":"text","content":" can"}
+
+data: {"type":"text","content":" also"}
+
+data: {"type":"text","content":" check"}
+
+data: {"type":"text","content":" your"}
+
+data: {"type":"text","content":" order"}
+
+data: {"type":"text","content":" status"}
+
+data: {"type":"text","content":" on"}
+
+data: {"type":"text","content":" the"}
+
+data: {"type":"text","content":" website"}
+
+data: {"type":"text","content":" under"}
+
+data: {"type":"text","content":" \""}
+
+data: {"type":"text","content":"where"}
+
+data: {"type":"text","content":"'s"}
+
+data: {"type":"text","content":" my"}
+
+data: {"type":"text","content":" stuff"}
+
+data: {"type":"text","content":".\""}
+
+data: {"type":"done","done":true}
+
+data: [DONE]
+

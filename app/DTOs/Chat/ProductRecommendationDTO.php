@@ -59,8 +59,15 @@ class ProductRecommendationDTO extends BaseDTO
         $price ??= $node['priceRange']['minVariantPrice']['amount'] ?? null;
         $currency ??= $node['priceRange']['minVariantPrice']['currencyCode'] ?? null;
 
-        $image = $node['featuredImage']['url'] ?? $node['images']['edges'][0]['node']['url'] ?? null;
+        $image = $node['featuredImage']['url']
+            ?? $variant['image']['url']
+            ?? $node['images']['edges'][0]['node']['url']
+            ?? null;
         $handle = (string) ($node['handle'] ?? '');
+
+        // Storefront money is a major-unit decimal string ("31.11") — convert
+        // to integer minor units for the SSE `products` chunk.
+        $priceMinor = is_numeric($price) ? (int) round(((float) $price) * 100) : null;
 
         return new self(
             id: (string) ($node['id'] ?? ''),
@@ -72,6 +79,8 @@ class ProductRecommendationDTO extends BaseDTO
             image: $image !== null ? (string) $image : null,
             available: (bool) ($node['availableForSale'] ?? true),
             url: $shopDomain !== null && $handle !== '' ? "https://{$shopDomain}/products/{$handle}" : null,
+            variantId: isset($variant['id']) ? (string) $variant['id'] : null,
+            priceMinorUnits: $priceMinor,
         );
     }
 

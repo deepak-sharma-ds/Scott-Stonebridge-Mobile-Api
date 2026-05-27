@@ -60,7 +60,13 @@ class CustomerMcpClient
             }
 
             $config = (array) $response->json();
-            $endpoint = $config['mcp_endpoint'] ?? $config['tools_endpoint'] ?? null;
+            // Shopify `.well-known/customer-account-api` returns
+            // `{ graphql_api, mcp_api }`. Older guesses used mcp_endpoint /
+            // tools_endpoint — keep them as fallbacks.
+            $endpoint = $config['mcp_api']
+                ?? $config['mcp_endpoint']
+                ?? $config['tools_endpoint']
+                ?? null;
             if (! is_string($endpoint) || $endpoint === '') {
                 throw new McpToolException(
                     'Customer Account discovery missing MCP endpoint.',

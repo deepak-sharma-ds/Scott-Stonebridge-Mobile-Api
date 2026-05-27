@@ -1,0 +1,56 @@
+data: {"type":"policy_answer","answer":"**Do you allow customers to request and manage their own returns?**\nCustomers must contact the merchant to request a return.\n\n**What is the return policy?**\nThe store accepts returns.\nThe store accepts returns within 30 days days of delivery.\nThe store does not charge a restocking fee.\nThe store does not charge a return fee.\nThe store provides return labels for returns.","citations":[{"title":"Do you allow customers to request and manage their own returns?","url":""},{"title":"What is the return policy?","url":""}]}
+
+data: {"type":"text","content":"I"}
+
+data: {"type":"text","content":" couldn't"}
+
+data: {"type":"text","content":" find"}
+
+data: {"type":"text","content":" the"}
+
+data: {"type":"text","content":" privacy"}
+
+data: {"type":"text","content":" policy"}
+
+data: {"type":"text","content":" details"}
+
+data: {"type":"text","content":" for"}
+
+data: {"type":"text","content":" this"}
+
+data: {"type":"text","content":" store"}
+
+data: {"type":"text","content":"."}
+
+data: {"type":"text","content":" Would"}
+
+data: {"type":"text","content":" you"}
+
+data: {"type":"text","content":" like"}
+
+data: {"type":"text","content":" me"}
+
+data: {"type":"text","content":" to"}
+
+data: {"type":"text","content":" connect"}
+
+data: {"type":"text","content":" you"}
+
+data: {"type":"text","content":" to"}
+
+data: {"type":"text","content":" a"}
+
+data: {"type":"text","content":" human"}
+
+data: {"type":"text","content":" for"}
+
+data: {"type":"text","content":" further"}
+
+data: {"type":"text","content":" assistance"}
+
+data: {"type":"text","content":"?"}
+
+data: {"type":"done","done":true}
+
+data: [DONE]
+
