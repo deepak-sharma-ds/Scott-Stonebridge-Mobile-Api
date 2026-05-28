@@ -137,6 +137,18 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
                 $types[$type] = true;
             }
         }
+
+        // Fallback to the `_default` bucket when none of the supplied
+        // intents map to a content_type. Without this, unknown intents
+        // (INTENT_UNKNOWN, INTENT_GREETING, classifier null returns)
+        // would emit an empty STORE KNOWLEDGE block even with rows in
+        // the table.
+        if ($types === []) {
+            foreach ((array) ($map['_default'] ?? []) as $type) {
+                $types[$type] = true;
+            }
+        }
+
         if ($types === []) {
             return '';
         }

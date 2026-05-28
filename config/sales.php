@@ -114,15 +114,22 @@ return [
         'admin_page_size' => (int) env('SALES_KNOWLEDGE_PAGE_SIZE', 50),
 
         // Intent → content_type mapping for getKnowledgeForPrompt().
+        // Broadened: every intent now sees `faq` + `custom` rows too so
+        // merchant-authored knowledge always has a chance to land in the
+        // prompt. The `_default` key is a catch-all used by the prompt
+        // builder when the detected intent is missing from the map
+        // (e.g. INTENT_UNKNOWN, INTENT_GREETING) — empty intents would
+        // otherwise produce an empty STORE KNOWLEDGE block.
         'intent_content_map' => [
-            'refund_policy' => ['policy'],
-            'shipping_question' => ['policy'],
-            'product_support' => ['page', 'blog'],
-            'recommendation' => ['blog', 'page'],
-            'order_tracking' => ['policy'],
-            'cart_help' => ['policy'],
-            'upsell_opportunity' => ['blog'],
-            'cross_sell_opportunity' => ['blog'],
+            '_default' => ['page', 'policy', 'blog', 'faq', 'custom'],
+            'refund_policy' => ['policy', 'faq', 'custom'],
+            'shipping_question' => ['policy', 'faq', 'custom'],
+            'product_support' => ['page', 'blog', 'faq', 'custom'],
+            'recommendation' => ['blog', 'page', 'faq', 'custom'],
+            'order_tracking' => ['policy', 'faq', 'custom'],
+            'cart_help' => ['policy', 'faq', 'custom'],
+            'upsell_opportunity' => ['blog', 'faq', 'custom'],
+            'cross_sell_opportunity' => ['blog', 'faq', 'custom'],
         ],
     ],
 
