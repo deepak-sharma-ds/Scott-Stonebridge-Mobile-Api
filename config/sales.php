@@ -96,7 +96,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'knowledge' => [
-        'content_types' => ['page', 'policy', 'blog', 'faq', 'custom'],
+        'content_types' => ['page', 'policy', 'blog', 'faq', 'custom', 'product', 'url'],
 
         // Hour-of-day (0–23) for the daily sync job to run.
         'sync_hour' => (int) env('KNOWLEDGE_SYNC_HOUR', 2),
@@ -121,15 +121,35 @@ return [
         // (e.g. INTENT_UNKNOWN, INTENT_GREETING) — empty intents would
         // otherwise produce an empty STORE KNOWLEDGE block.
         'intent_content_map' => [
-            '_default' => ['page', 'policy', 'blog', 'faq', 'custom'],
-            'refund_policy' => ['policy', 'faq', 'custom'],
-            'shipping_question' => ['policy', 'faq', 'custom'],
-            'product_support' => ['page', 'blog', 'faq', 'custom'],
-            'recommendation' => ['blog', 'page', 'faq', 'custom'],
-            'order_tracking' => ['policy', 'faq', 'custom'],
-            'cart_help' => ['policy', 'faq', 'custom'],
-            'upsell_opportunity' => ['blog', 'faq', 'custom'],
-            'cross_sell_opportunity' => ['blog', 'faq', 'custom'],
+            '_default' => ['page', 'policy', 'blog', 'faq', 'custom', 'product', 'url'],
+            'refund_policy' => ['policy', 'faq', 'custom', 'url'],
+            'shipping_question' => ['policy', 'faq', 'custom', 'url'],
+            'product_support' => ['page', 'blog', 'faq', 'custom', 'product', 'url'],
+            'recommendation' => ['blog', 'page', 'faq', 'custom', 'product', 'url'],
+            'order_tracking' => ['policy', 'faq', 'custom', 'url'],
+            'cart_help' => ['policy', 'faq', 'custom', 'url'],
+            'upsell_opportunity' => ['blog', 'faq', 'custom', 'product'],
+            'cross_sell_opportunity' => ['blog', 'faq', 'custom', 'product'],
+        ],
+
+        // Tunables for the product-knowledge sync (knowledge:sync-products).
+        // Pulls products via Storefront GraphQL get_all_products in cursor-
+        // paginated pages, dispatches one SummariseKnowledgeItemJob per row.
+        'products' => [
+            'page_size' => (int) env('SALES_KNOWLEDGE_PRODUCTS_PAGE_SIZE', 50),
+            'max_pages' => (int) env('SALES_KNOWLEDGE_PRODUCTS_MAX_PAGES', 10),
+        ],
+
+        // Tunables for the URL/sitemap knowledge sync (knowledge:sync-urls).
+        // Concurrency is enforced via Http::pool; sitemap_max_urls caps the
+        // discovery loop so a misbehaving shop sitemap can't blow up the
+        // sync. User agent is required so Shopify storefronts can attribute
+        // and rate-limit our requests politely.
+        'urls' => [
+            'concurrency' => (int) env('SALES_KNOWLEDGE_URL_CONCURRENCY', 4),
+            'fetch_timeout' => (int) env('SALES_KNOWLEDGE_URL_TIMEOUT', 15),
+            'sitemap_max_urls' => (int) env('SALES_KNOWLEDGE_SITEMAP_MAX', 200),
+            'user_agent' => env('SALES_KNOWLEDGE_USER_AGENT', 'ScottStonebridgeBot/1.0 (+https://scottstonebridge.com)'),
         ],
     ],
 

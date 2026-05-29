@@ -18,7 +18,9 @@
         "phpclassic/php-shopify": "^1.2",
         "setasign/fpdf": "^1.8",
         "setasign/fpdi": "^2.6",
-        "spatie/laravel-permission": "^6.19"
+        "spatie/laravel-permission": "^6.19",
+        "symfony/css-selector": "^7.4",
+        "symfony/dom-crawler": "^7.4"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

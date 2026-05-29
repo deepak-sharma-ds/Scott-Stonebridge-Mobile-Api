@@ -6,11 +6,16 @@ namespace App\Services\Sales;
 
 use App\Contracts\Services\Sales\StoreKnowledgeServiceInterface;
 use App\Contracts\Shopify\AdminApiClientInterface;
+use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\Jobs\Sales\SummariseKnowledgeItemJob;
 use App\Models\StoreKnowledge;
 use App\Services\Base\BaseService;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use SimpleXMLElement;
+use Symfony\Component\DomCrawler\Crawler;
 use Throwable;
 
 /**
@@ -39,8 +44,22 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
 
     public function __construct(
         private readonly AdminApiClientInterface $admin,
+        // Nullable so legacy test factories that hand-construct the
+        // service with only the admin client still pass. Production
+        // wiring resolves both via the container.
+        private readonly ?StorefrontApiClientInterface $storefront = null,
     ) {
         parent::__construct();
+    }
+
+    /**
+     * Lazy-resolve the storefront client. Throws if a caller invokes a
+     * URL/product path on an instance built without one, but never
+     * triggers during construction so existing tests keep working.
+     */
+    private function storefront(): StorefrontApiClientInterface
+    {
+        return $this->storefront ?? app(StorefrontApiClientInterface::class);
     }
 
     public function syncAll(string $shopDomain): void
@@ -162,10 +181,14 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
         $maxChars = (int) config('sales.knowledge.prompt_block_max_tokens', 500) * self::CHARS_PER_TOKEN;
 
         return Cache::remember($cacheKey, $ttl, function () use ($shopDomain, $types, $maxChars): string {
+            // Order by recency so freshly-synced types (e.g. products
+            // and URLs just pulled in by knowledge:sync-products /
+            // knowledge:sync-urls) reliably surface in the prompt
+            // block, instead of being pushed past the char cap by
+            // older page/policy rows.
             $rows = StoreKnowledge::query()
                 ->forShop($shopDomain)
                 ->forTypes(array_keys($types))
-                ->orderBy('content_type')
                 ->orderBy('updated_at', 'desc')
                 ->limit(20)
                 ->get(['content_type', 'title', 'summary']);
@@ -240,6 +263,413 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
         $this->invalidateCache($shopDomain);
 
         return $faq;
+    }
+
+    public function syncProducts(string $shopDomain, ?int $limit = null): int
+    {
+        $shopDomain = trim($shopDomain);
+        if ($shopDomain === '') {
+            return 0;
+        }
+
+        $pageSize = (int) config('sales.knowledge.products.page_size', 50);
+        $maxPages = (int) config('sales.knowledge.products.max_pages', 10);
+        $connection = (string) config('sales.queue.connection', 'redis');
+        $queue = (string) config('sales.queue.sync', 'sync');
+        $cap = $limit !== null && $limit > 0 ? $limit : PHP_INT_MAX;
+
+        $dispatched = 0;
+        $cursor = null;
+
+        for ($page = 0; $page < $maxPages; $page++) {
+            try {
+                $response = $this->storefront()->query('storefront/products/get_all_products', [
+                    'limit' => min($pageSize, max(1, $cap - $dispatched)),
+                    'after' => $cursor,
+                    'sortKey' => 'TITLE',
+                    'reverse' => false,
+                    'query' => null,
+                    'country' => null,
+                ]);
+            } catch (Throwable $e) {
+                $this->logWarning('Knowledge sync: products page failed', [
+                    'shop' => $shopDomain,
+                    'page' => $page,
+                    'error' => $e->getMessage(),
+                ], 'ai');
+                break;
+            }
+
+            $productsConn = $response['data']['products'] ?? [];
+            $edges = $productsConn['edges'] ?? [];
+            if (! is_array($edges) || $edges === []) {
+                break;
+            }
+
+            foreach ($edges as $edge) {
+                if ($dispatched >= $cap) {
+                    break 2;
+                }
+                $node = $edge['node'] ?? null;
+                if (! is_array($node)) {
+                    continue;
+                }
+
+                $title = (string) ($node['title'] ?? 'Untitled product');
+                $handle = (string) ($node['handle'] ?? Str::slug($title));
+                if ($handle === '') {
+                    $handle = 'product-'.substr(md5($title), 0, 8);
+                }
+
+                $rawContent = $this->composeProductRawContent($node);
+
+                SummariseKnowledgeItemJob::dispatch(
+                    $shopDomain,
+                    StoreKnowledge::TYPE_PRODUCT,
+                    $title,
+                    $handle,
+                    $rawContent,
+                    isset($node['updatedAt']) ? (string) $node['updatedAt'] : null,
+                )->onConnection($connection)->onQueue($queue);
+
+                $dispatched++;
+            }
+
+            $pageInfo = $productsConn['pageInfo'] ?? [];
+            if (empty($pageInfo['hasNextPage'])) {
+                break;
+            }
+            $cursor = (string) ($pageInfo['endCursor'] ?? '');
+            if ($cursor === '') {
+                break;
+            }
+        }
+
+        return $dispatched;
+    }
+
+    public function syncUrls(string $shopDomain, array $urls): int
+    {
+        $shopDomain = trim($shopDomain);
+        if ($shopDomain === '' || $urls === []) {
+            return 0;
+        }
+
+        $urls = $this->normaliseUrlList($urls);
+        if ($urls === []) {
+            return 0;
+        }
+
+        $concurrency = max(1, (int) config('sales.knowledge.urls.concurrency', 4));
+        $timeout = max(1, (int) config('sales.knowledge.urls.fetch_timeout', 15));
+        $userAgent = (string) config('sales.knowledge.urls.user_agent', 'ScottStonebridgeBot/1.0');
+        $connection = (string) config('sales.queue.connection', 'redis');
+        $queue = (string) config('sales.queue.sync', 'sync');
+
+        $dispatched = 0;
+
+        // Process URLs in chunks so Http::pool stays bounded and Shopify
+        // storefronts aren't hit harder than $concurrency at once.
+        foreach (array_chunk($urls, $concurrency) as $batch) {
+            $responses = Http::pool(function ($pool) use ($batch, $timeout, $userAgent) {
+                $calls = [];
+                foreach ($batch as $url) {
+                    $calls[] = $pool
+                        ->withHeaders(['User-Agent' => $userAgent, 'Accept' => 'text/html'])
+                        ->timeout($timeout)
+                        ->retry(2, 500, throw: false)
+                        ->get($url);
+                }
+
+                return $calls;
+            });
+
+            foreach ($batch as $i => $url) {
+                $response = $responses[$i] ?? null;
+                if ($response === null || ! method_exists($response, 'successful') || ! $response->successful()) {
+                    Log::channel('ai')->info('knowledge:sync-urls: skip', [
+                        'shop' => $shopDomain,
+                        'url' => $url,
+                        'status' => $response && method_exists($response, 'status') ? $response->status() : null,
+                    ]);
+
+                    continue;
+                }
+
+                $html = (string) $response->body();
+                if ($html === '') {
+                    continue;
+                }
+
+                [$title, $text] = $this->extractTextFromHtml($html, $url);
+                if ($text === '') {
+                    continue;
+                }
+
+                SummariseKnowledgeItemJob::dispatch(
+                    $shopDomain,
+                    StoreKnowledge::TYPE_URL,
+                    $title,
+                    'url-'.md5($url),
+                    "URL: {$url}\n\n{$text}",
+                    null,
+                )->onConnection($connection)->onQueue($queue);
+
+                $dispatched++;
+            }
+        }
+
+        return $dispatched;
+    }
+
+    public function discoverSitemapUrls(string $shopDomain): array
+    {
+        $shopDomain = trim($shopDomain);
+        if ($shopDomain === '') {
+            return [];
+        }
+
+        $max = max(1, (int) config('sales.knowledge.urls.sitemap_max_urls', 200));
+        $timeout = max(1, (int) config('sales.knowledge.urls.fetch_timeout', 15));
+        $userAgent = (string) config('sales.knowledge.urls.user_agent', 'ScottStonebridgeBot/1.0');
+        $rootUrl = 'https://'.$shopDomain.'/sitemap.xml';
+
+        $collected = [];
+        $queue = [$rootUrl];
+        $seenSitemaps = [];
+
+        while ($queue !== [] && count($collected) < $max) {
+            $sitemapUrl = array_shift($queue);
+            if (isset($seenSitemaps[$sitemapUrl])) {
+                continue;
+            }
+            $seenSitemaps[$sitemapUrl] = true;
+
+            try {
+                $response = Http::withHeaders(['User-Agent' => $userAgent])
+                    ->timeout($timeout)
+                    ->retry(2, 500, throw: false)
+                    ->get($sitemapUrl);
+            } catch (Throwable $e) {
+                $this->logWarning('Knowledge sync: sitemap fetch failed', [
+                    'shop' => $shopDomain,
+                    'sitemap' => $sitemapUrl,
+                    'error' => $e->getMessage(),
+                ], 'ai');
+
+                continue;
+            }
+
+            if (! $response->successful()) {
+                continue;
+            }
+
+            try {
+                $xml = new SimpleXMLElement($response->body());
+            } catch (Throwable $e) {
+                Log::channel('ai')->info('knowledge:sync-urls: invalid sitemap', [
+                    'shop' => $shopDomain,
+                    'sitemap' => $sitemapUrl,
+                ]);
+
+                continue;
+            }
+
+            $name = $xml->getName();
+            if ($name === 'sitemapindex') {
+                foreach ($xml->sitemap as $entry) {
+                    $loc = trim((string) $entry->loc);
+                    if ($loc !== '') {
+                        $queue[] = $loc;
+                    }
+                }
+
+                continue;
+            }
+
+            // <urlset>
+            foreach ($xml->url as $entry) {
+                $loc = trim((string) $entry->loc);
+                if ($loc === '') {
+                    continue;
+                }
+                $collected[$loc] = true;
+                if (count($collected) >= $max) {
+                    break;
+                }
+            }
+        }
+
+        return array_keys($collected);
+    }
+
+    /**
+     * Build the raw content string that gets summarised for a product row.
+     * Combines descriptionHtml (stripped) with structured fields so the
+     * summariser has enough signal to write a useful one-liner.
+     *
+     * @param  array<string, mixed>  $node
+     */
+    private function composeProductRawContent(array $node): string
+    {
+        $description = trim((string) ($node['description'] ?? ''));
+        if ($description === '') {
+            $description = trim(strip_tags((string) ($node['descriptionHtml'] ?? '')));
+        }
+
+        $vendor = trim((string) ($node['vendor'] ?? ''));
+        $type = trim((string) ($node['productType'] ?? ''));
+        $tags = $node['tags'] ?? [];
+        if (! is_array($tags)) {
+            $tags = [];
+        }
+        $tagsLine = implode(', ', array_map('strval', $tags));
+
+        $variantTitles = [];
+        foreach (($node['variants']['edges'] ?? []) as $edge) {
+            $vNode = $edge['node'] ?? [];
+            if (! is_array($vNode)) {
+                continue;
+            }
+            $vTitle = (string) ($vNode['title'] ?? '');
+            if ($vTitle === '' || $vTitle === 'Default Title') {
+                continue;
+            }
+            $variantTitles[] = $vTitle;
+            if (count($variantTitles) >= 20) {
+                break;
+            }
+        }
+        $variantsLine = implode(', ', $variantTitles);
+
+        $url = (string) ($node['onlineStoreUrl'] ?? '');
+
+        $parts = [$description];
+        if ($vendor !== '') {
+            $parts[] = "Vendor: {$vendor}";
+        }
+        if ($type !== '') {
+            $parts[] = "Type: {$type}";
+        }
+        if ($tagsLine !== '') {
+            $parts[] = "Tags: {$tagsLine}";
+        }
+        if ($variantsLine !== '') {
+            $parts[] = "Variants: {$variantsLine}";
+        }
+        if ($url !== '') {
+            $parts[] = "URL: {$url}";
+        }
+
+        return implode("\n\n", array_filter($parts, static fn ($s) => trim((string) $s) !== ''));
+    }
+
+    /**
+     * Normalise a user-supplied URL list — trims, drops empties, dedupes,
+     * and keeps only http(s) URLs. Defensive: anything else is silently
+     * dropped so a single bad URL can't poison the whole batch.
+     *
+     * @param  list<string>  $urls
+     * @return list<string>
+     */
+    private function normaliseUrlList(array $urls): array
+    {
+        $out = [];
+        foreach ($urls as $url) {
+            $url = trim((string) $url);
+            if ($url === '') {
+                continue;
+            }
+            if (! preg_match('#^https?://#i', $url)) {
+                continue;
+            }
+            $out[$url] = true;
+        }
+
+        return array_keys($out);
+    }
+
+    /**
+     * Extract a readable title + body text from an HTML response. Removes
+     * script/style/nav/footer noise via DomCrawler so the summariser only
+     * sees content the human visitor would read.
+     *
+     * @return array{0:string, 1:string} [title, text]
+     */
+    private function extractTextFromHtml(string $html, string $url): array
+    {
+        try {
+            $crawler = new Crawler($html);
+        } catch (Throwable $e) {
+            return [$this->fallbackTitleFromUrl($url), ''];
+        }
+
+        $title = $this->fallbackTitleFromUrl($url);
+        try {
+            $titleNode = $crawler->filter('title');
+            if ($titleNode->count() > 0) {
+                $candidate = trim($titleNode->first()->text(''));
+                if ($candidate !== '') {
+                    $title = mb_substr($candidate, 0, 200);
+                }
+            }
+        } catch (Throwable) {
+            // ignore — fall back to URL-derived title
+        }
+
+        // Drop only the high-noise nodes. Aggressive stripping (noscript,
+        // nav, header, footer) wipes the entire body on some Shopify
+        // themes that wrap the main content inside a CSS-toggled
+        // <noscript>-adjacent block, so we keep the selector list
+        // intentionally narrow and let the summariser cope with a
+        // small amount of navigation chrome.
+        foreach (['script', 'style', 'iframe', 'svg'] as $selector) {
+            try {
+                $crawler->filter($selector)->each(function (Crawler $node): void {
+                    foreach ($node as $domNode) {
+                        if ($domNode->parentNode !== null) {
+                            $domNode->parentNode->removeChild($domNode);
+                        }
+                    }
+                });
+            } catch (Throwable) {
+                // ignore — DOM mutation is best-effort
+            }
+        }
+
+        // Prefer <main> or <article>; fall back to <body>.
+        $text = '';
+        foreach (['main', 'article', 'body'] as $selector) {
+            try {
+                $node = $crawler->filter($selector);
+                if ($node->count() > 0) {
+                    $text = trim($node->first()->text(''));
+                    if ($text !== '') {
+                        break;
+                    }
+                }
+            } catch (Throwable) {
+                continue;
+            }
+        }
+
+        // Collapse runs of whitespace so the summariser doesn't waste
+        // tokens on indentation noise.
+        $text = trim((string) preg_replace('/\s+/u', ' ', $text));
+
+        return [$title, $text];
+    }
+
+    private function fallbackTitleFromUrl(string $url): string
+    {
+        $path = parse_url($url, PHP_URL_PATH) ?: '/';
+        $segments = array_values(array_filter(explode('/', $path), static fn ($s) => $s !== ''));
+        $last = end($segments);
+        if ($last === false || $last === '') {
+            return $url;
+        }
+
+        return mb_substr(Str::title(str_replace(['-', '_'], ' ', (string) $last)), 0, 200);
     }
 
     /**

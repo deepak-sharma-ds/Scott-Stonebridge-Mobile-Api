@@ -42,6 +42,10 @@ class StoreKnowledge extends Model
 
     public const TYPE_CUSTOM = 'custom';
 
+    public const TYPE_PRODUCT = 'product';
+
+    public const TYPE_URL = 'url';
+
     protected $fillable = [
         'shop_domain',
         'content_type',
