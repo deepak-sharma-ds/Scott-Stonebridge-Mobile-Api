@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\AI\Tools;
 
+use App\Contracts\Services\Sales\StoreKnowledgeServiceInterface;
 use App\Contracts\Services\Sales\UpsellServiceInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\Chat\ProductRecommendationDTO;
@@ -284,8 +285,60 @@ class ToolExecutor
             ToolDefinitions::TOOL_SUGGEST_QUICK_REPLIES => $this->handleQuickReplies($args),
             ToolDefinitions::TOOL_SUGGEST_UPSELL => $this->handleUpsell($args, $ctx),
             ToolDefinitions::TOOL_START_CHECKOUT => $this->handleStartCheckout($args, $ctx),
+            ToolDefinitions::TOOL_SEARCH_KNOWLEDGE => $this->handleSearchKnowledge($args, $ctx),
             default => ToolResult::error("Unknown internal tool: {$toolName}"),
         };
+    }
+
+    /**
+     * `search_knowledge_base` — local knowledge lookup. Calls the hybrid
+     * keyword + semantic ranker on the StoreKnowledgeService so the LLM
+     * can recover when the auto-injected STORE KNOWLEDGE block missed a
+     * relevant row. Results are returned to the model verbatim (no SSE
+     * emission — the model paraphrases them into the reply).
+     *
+     * @param  array<string, mixed>  $args
+     */
+    private function handleSearchKnowledge(array $args, ChatSessionContext $ctx): ToolResult
+    {
+        $query = trim((string) ($args['query'] ?? ''));
+        if ($query === '') {
+            return ToolResult::error('search_knowledge_base requires query.');
+        }
+
+        $contentTypes = isset($args['content_types']) && is_array($args['content_types'])
+            ? array_values(array_filter(array_map(
+                static fn ($t): string => is_string($t) ? trim($t) : '',
+                $args['content_types'],
+            ), static fn (string $t): bool => $t !== ''))
+            : null;
+
+        $limit = isset($args['limit']) ? (int) $args['limit'] : 5;
+        $limit = max(1, min($limit, 8));
+
+        $shop = (string) ($ctx->shopDomain ?? config('shopify.store_domain'));
+        if ($shop === '') {
+            return ToolResult::error('search_knowledge_base requires shop context.');
+        }
+
+        try {
+            /** @var StoreKnowledgeServiceInterface $knowledge */
+            $knowledge = app(StoreKnowledgeServiceInterface::class);
+            $results = $knowledge->searchForTool($shop, $query, $contentTypes, $limit);
+        } catch (Throwable $e) {
+            $this->logToolError('search_knowledge_base', $ctx, $e);
+
+            return ToolResult::error('Knowledge search failed.');
+        }
+
+        return ToolResult::success(
+            'Knowledge search complete.',
+            [
+                'type' => 'knowledge_search',
+                'query' => $query,
+                'results' => $results,
+            ],
+        );
     }
 
     /**

@@ -30,9 +30,25 @@ interface StoreKnowledgeServiceInterface
      * detected intents. Reads the Redis index first; rebuilds from DB on
      * miss. Output is bounded by config('sales.knowledge.prompt_block_max_tokens').
      *
+     * When `$userQuery` is non-empty the picker switches to hybrid
+     * keyword + semantic relevance ranking and only falls back to the
+     * pure intent → recency path when ranking yields no candidates.
+     *
      * @param  list<string>  $intents
      */
-    public function getKnowledgeForPrompt(string $shopDomain, array $intents): string;
+    public function getKnowledgeForPrompt(string $shopDomain, array $intents, ?string $userQuery = null): string;
+
+    /**
+     * Return ranked knowledge rows for the LLM-callable
+     * `search_knowledge_base` tool. Same hybrid ranking pipeline as
+     * `getKnowledgeForPrompt` but returns structured rows (not the
+     * concatenated prompt block) so ToolExecutor can hand them to the
+     * model verbatim.
+     *
+     * @param  list<string>|null  $contentTypes  Optional content_type filter
+     * @return list<array{title:string, content_type:string, handle:string|null, summary:string, score:float}>
+     */
+    public function searchForTool(string $shopDomain, string $query, ?array $contentTypes = null, int $limit = 5): array;
 
     /**
      * Drop the Redis index for the shop so the next prompt call rebuilds

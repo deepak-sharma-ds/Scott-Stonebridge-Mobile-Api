@@ -70,7 +70,7 @@ class PromptBuilderService extends BaseService implements PromptBuilderServiceIn
             'products' => $recommendations,
             // Phase 2 blocks — Blade renders each conditionally.
             'upsell_block' => $this->injectUpsellContext($intent, $context, $upsells),
-            'knowledge_block' => $this->injectStoreKnowledge($intent, $context),
+            'knowledge_block' => $this->injectStoreKnowledge($intent, $context, $userMessage),
             'locale_block' => $this->injectLocaleRule($context->locale),
         ])->render();
 
@@ -169,14 +169,19 @@ class PromptBuilderService extends BaseService implements PromptBuilderServiceIn
      * Empty when no rows match (e.g. greetings, unknown intents) so the
      * Blade template gracefully skips the section.
      */
-    public function injectStoreKnowledge(IntentDTO $intent, ChatContextDTO $context): string
+    public function injectStoreKnowledge(IntentDTO $intent, ChatContextDTO $context, string $userMessage = ''): string
     {
         $shopDomain = (string) ($context->shopDomain ?? config('shopify.store_domain'));
         if ($shopDomain === '') {
             return '';
         }
 
-        $snippets = $this->knowledge->getKnowledgeForPrompt($shopDomain, [$intent->name]);
+        // Only forward the user message when present so legacy callers
+        // and mocks that stub the 2-arg signature keep matching. The
+        // service signature itself widened with an optional 3rd arg.
+        $snippets = $userMessage !== ''
+            ? $this->knowledge->getKnowledgeForPrompt($shopDomain, [$intent->name], $userMessage)
+            : $this->knowledge->getKnowledgeForPrompt($shopDomain, [$intent->name]);
         if ($snippets === '') {
             return '';
         }

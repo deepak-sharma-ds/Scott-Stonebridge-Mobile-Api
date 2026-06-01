@@ -32,6 +32,8 @@ final class ToolDefinitions
 
     public const TOOL_SUGGEST_UPSELL = 'suggest_upsell';
 
+    public const TOOL_SEARCH_KNOWLEDGE = 'search_knowledge_base';
+
     /** @var list<string> */
     public const STOREFRONT_MCP_TOOLS = [
         self::TOOL_SEARCH_CATALOG,
@@ -58,6 +60,7 @@ final class ToolDefinitions
         self::TOOL_SUGGEST_QUICK_REPLIES,
         self::TOOL_SUGGEST_UPSELL,
         self::TOOL_START_CHECKOUT,
+        self::TOOL_SEARCH_KNOWLEDGE,
     ];
 
     /**
@@ -156,6 +159,23 @@ final class ToolDefinitions
                     'type' => 'object',
                     'properties' => [
                         'query' => ['type' => 'string', 'minLength' => 1],
+                    ],
+                    'required' => ['query'],
+                    'additionalProperties' => false,
+                ],
+            ),
+            $this->fn(self::TOOL_SEARCH_KNOWLEDGE,
+                'Use when the user asks about Scott Stonebridge, his story, services, blog topics, store pages, or anything that might be covered by the STORE KNOWLEDGE block. Always call this BEFORE saying "I don\'t have that info" — it searches the full local knowledge base (pages, blogs, FAQs, products, scraped URLs) ranked by relevance to the query. Prefer this over `search_shop_policies_and_faqs` for non-policy topics.',
+                [
+                    'type' => 'object',
+                    'properties' => [
+                        'query' => ['type' => 'string', 'minLength' => 1, 'description' => 'Natural-language search terms. Use the user\'s own phrasing where possible.'],
+                        'content_types' => [
+                            'type' => 'array',
+                            'description' => 'Optional narrowing filter. Omit unless the user clearly cares about one type.',
+                            'items' => ['type' => 'string', 'enum' => ['page', 'policy', 'blog', 'faq', 'custom', 'product', 'url']],
+                        ],
+                        'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 8],
                     ],
                     'required' => ['query'],
                     'additionalProperties' => false,

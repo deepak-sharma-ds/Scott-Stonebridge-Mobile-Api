@@ -19,6 +19,9 @@ use Illuminate\Support\Carbon;
  * @property string $title
  * @property string|null $handle
  * @property string $summary
+ * @property array<int, float>|null $embedding
+ * @property string|null $embedding_model
+ * @property Carbon|null $embedded_at
  * @property string $raw_content
  * @property Carbon $last_synced_at
  * @property Carbon|null $shopify_updated_at
@@ -52,6 +55,9 @@ class StoreKnowledge extends Model
         'title',
         'handle',
         'summary',
+        'embedding',
+        'embedding_model',
+        'embedded_at',
         'raw_content',
         'last_synced_at',
         'shopify_updated_at',
@@ -62,6 +68,8 @@ class StoreKnowledge extends Model
         return [
             'last_synced_at' => 'datetime',
             'shopify_updated_at' => 'datetime',
+            'embedded_at' => 'datetime',
+            'embedding' => 'array',
         ];
     }
 

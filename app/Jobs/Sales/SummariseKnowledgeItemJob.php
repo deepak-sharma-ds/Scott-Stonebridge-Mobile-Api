@@ -54,21 +54,35 @@ class SummariseKnowledgeItemJob implements ShouldQueue
 
         $summary = $this->summarise($this->rawContent);
 
+        // Embed the summary so the retrieval picker can rank by cosine
+        // similarity. Best-effort: if the embeddings API fails the row
+        // still saves with embedding=null and the keyword path keeps
+        // working — `knowledge:embed --missing-only` can backfill later.
+        $embedding = $this->embed("{$this->title}\n\n{$summary}");
+
+        $attrs = [
+            'title' => $this->title,
+            'summary' => $summary,
+            'raw_content' => $this->rawContent,
+            'last_synced_at' => now(),
+            'shopify_updated_at' => $this->shopifyUpdatedAt !== null
+                ? Carbon::parse($this->shopifyUpdatedAt)
+                : null,
+        ];
+
+        if ($embedding !== null) {
+            $attrs['embedding'] = $embedding;
+            $attrs['embedding_model'] = (string) config('sales.knowledge.embedding.model', 'text-embedding-3-small');
+            $attrs['embedded_at'] = now();
+        }
+
         StoreKnowledge::query()->updateOrCreate(
             [
                 'shop_domain' => $this->shopDomain,
                 'content_type' => $this->contentType,
                 'handle' => $this->handle !== '' ? $this->handle : null,
             ],
-            [
-                'title' => $this->title,
-                'summary' => $summary,
-                'raw_content' => $this->rawContent,
-                'last_synced_at' => now(),
-                'shopify_updated_at' => $this->shopifyUpdatedAt !== null
-                    ? Carbon::parse($this->shopifyUpdatedAt)
-                    : null,
-            ],
+            $attrs,
         );
 
         $knowledge->invalidateCache($this->shopDomain);
@@ -133,5 +147,47 @@ class SummariseKnowledgeItemJob implements ShouldQueue
         }
 
         return mb_strimwidth($stripped, 0, $maxTokens * 4, '…');
+    }
+
+    /**
+     * Generate an OpenAI embedding for the row text. Wrapped in
+     * try/catch so an embeddings outage never blocks the summary
+     * upsert path — the FULLTEXT layer keeps working in degraded mode.
+     *
+     * @return list<float>|null
+     */
+    private function embed(string $text): ?array
+    {
+        $text = trim($text);
+        if ($text === '') {
+            return null;
+        }
+
+        try {
+            $model = (string) config('sales.knowledge.embedding.model', 'text-embedding-3-small');
+            // Embeddings API caps at ~8k tokens; trim aggressively so
+            // long product descriptions don't break the call.
+            $input = mb_strimwidth($text, 0, 8000, '…');
+
+            $response = OpenAI::embeddings()->create([
+                'model' => $model,
+                'input' => $input,
+            ]);
+
+            $vector = $response->embeddings[0]->embedding ?? null;
+            if (! is_array($vector) || $vector === []) {
+                return null;
+            }
+
+            return array_map('floatval', $vector);
+        } catch (Throwable $e) {
+            Log::channel('ai')->warning('Knowledge embedding generation failed', [
+                'shop' => $this->shopDomain,
+                'handle' => $this->handle,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 }

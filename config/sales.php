@@ -108,7 +108,11 @@ return [
         'item_summary_max_tokens' => (int) env('SALES_KNOWLEDGE_ITEM_TOKENS', 300),
 
         // Total injected knowledge cap when assembling the prompt block.
-        'prompt_block_max_tokens' => (int) env('SALES_KNOWLEDGE_PROMPT_TOKENS', 500),
+        // Bumped from 500 → 1200 so the top 5-8 ranked rows actually fit
+        // after the relevance picker. Still well under the 800-token system
+        // prompt guard once the rest of the system prompt is accounted for
+        // because the picker only emits short summary lines.
+        'prompt_block_max_tokens' => (int) env('SALES_KNOWLEDGE_PROMPT_TOKENS', 1200),
 
         // Pagination size for Admin API list queries.
         'admin_page_size' => (int) env('SALES_KNOWLEDGE_PAGE_SIZE', 50),
@@ -150,6 +154,45 @@ return [
             'fetch_timeout' => (int) env('SALES_KNOWLEDGE_URL_TIMEOUT', 15),
             'sitemap_max_urls' => (int) env('SALES_KNOWLEDGE_SITEMAP_MAX', 200),
             'user_agent' => env('SALES_KNOWLEDGE_USER_AGENT', 'ScottStonebridgeBot/1.0 (+https://scottstonebridge.com)'),
+        ],
+
+        /*
+        | Hybrid retrieval tunables for getKnowledgeForPrompt(). Final
+        | score per candidate row is:
+        |   semantic_weight  * cosine(query_embedding, row_embedding)
+        | + fulltext_weight  * normalised_fulltext_score
+        | + recency_weight   * recency_decay(updated_at)
+        | + intent_boost     * (1 if row's content_type ∈ intent map else 0)
+        | Rows below `min_score` are dropped. `top_n` caps the rows that
+        | reach the prompt char budget.
+        |
+        | `enable_semantic` is a global feature flag. Leave false until
+        | embeddings are backfilled, then flip via .env so the picker can
+        | use cosine without redeploying.
+        */
+        'retrieval' => [
+            'top_n' => (int) env('SALES_KNOWLEDGE_TOP_N', 8),
+            'fulltext_weight' => (float) env('SALES_KNOWLEDGE_FT_WEIGHT', 0.3),
+            'semantic_weight' => (float) env('SALES_KNOWLEDGE_SEM_WEIGHT', 0.6),
+            'recency_weight' => (float) env('SALES_KNOWLEDGE_REC_WEIGHT', 0.1),
+            'intent_boost' => (float) env('SALES_KNOWLEDGE_INTENT_BOOST', 0.15),
+            'min_score' => (float) env('SALES_KNOWLEDGE_MIN_SCORE', 0.05),
+            'candidate_limit' => (int) env('SALES_KNOWLEDGE_CANDIDATES', 40),
+            'recency_half_life_days' => (float) env('SALES_KNOWLEDGE_RECENCY_HALFLIFE', 90.0),
+            'enable_semantic' => (bool) env('SALES_KNOWLEDGE_ENABLE_SEMANTIC', false),
+        ],
+
+        /*
+        | OpenAI embedding tunables. text-embedding-3-small (1536 dim) is
+        | the sweet spot for cost ($0.02 per 1M tokens) vs recall. Batched
+        | so the backfill command can embed ~50 rows per round-trip.
+        */
+        'embedding' => [
+            'model' => env('SALES_KNOWLEDGE_EMBEDDING_MODEL', 'text-embedding-3-small'),
+            'dim' => (int) env('SALES_KNOWLEDGE_EMBEDDING_DIM', 1536),
+            'query_cache_ttl' => (int) env('SALES_KNOWLEDGE_EMBEDDING_TTL', 3600),
+            'batch_size' => (int) env('SALES_KNOWLEDGE_EMBEDDING_BATCH', 50),
+            'batch_sleep_ms' => (int) env('SALES_KNOWLEDGE_EMBEDDING_BATCH_SLEEP_MS', 0),
         ],
     ],
 
