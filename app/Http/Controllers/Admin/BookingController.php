@@ -126,7 +126,7 @@ class BookingController extends Controller
 
             if ($booking->status === 'needs_reschedule') {
                 // Cancel old event
-                if (!empty($booking->event_id)) {
+                if (!empty($booking->event_id) && !isset($booking->event_id) && $booking->event_id !== '') {
                     try {
                         $log->info('Cancelling old calendar event for rescheduled booking', ['booking_id' => $booking->id, 'event_id' => $booking->event_id]);
                         $calendarService->events->delete('primary', $booking->event_id, ['sendUpdates' => 'all']);
@@ -153,11 +153,11 @@ class BookingController extends Controller
             //     $event = $calendarService->events->get('primary', $booking->event_id);
             //     $event->setStart(new Google_Service_Calendar_EventDateTime([
             //         'dateTime' => $startDateTime->toRfc3339String(),
-            //         'timeZone' => 'Asia/Kolkata'
+            //         'timeZone' => 'Europe/London'
             //     ]));
             //     $event->setEnd(new Google_Service_Calendar_EventDateTime([
             //         'dateTime' => $endDateTime->toRfc3339String(),
-            //         'timeZone' => 'Asia/Kolkata'
+            //         'timeZone' => 'Europe/London'
             //     ]));
 
             //     $calendarService->events->update('primary', $booking->event_id, $event, ['sendUpdates' => 'all']);
@@ -179,11 +179,11 @@ class BookingController extends Controller
                     // Update existing event
                     $event->setStart(new Google_Service_Calendar_EventDateTime([
                         'dateTime' => $startDateTime->toRfc3339String(),
-                        'timeZone' => 'Asia/Kolkata'
+                        'timeZone' => 'Europe/London'
                     ]));
                     $event->setEnd(new Google_Service_Calendar_EventDateTime([
                         'dateTime' => $endDateTime->toRfc3339String(),
-                        'timeZone' => 'Asia/Kolkata'
+                        'timeZone' => 'Europe/London'
                     ]));
 
                     $calendarService->events->update('primary', $booking->event_id, $event, ['sendUpdates' => 'all']);
@@ -334,8 +334,8 @@ class BookingController extends Controller
         return new Google_Service_Calendar_Event([
             'summary' => 'Meeting with ' . $booking->name,
             'description' => "Booking rescheduled.\nPhone: " . $booking->phone,
-            'start' => ['dateTime' => $start->toRfc3339String(), 'timeZone' => 'Asia/Kolkata'],
-            'end' => ['dateTime' => $end->toRfc3339String(), 'timeZone' => 'Asia/Kolkata'],
+            'start' => ['dateTime' => $start->toRfc3339String(), 'timeZone' => 'Europe/London'],
+            'end' => ['dateTime' => $end->toRfc3339String(), 'timeZone' => 'Europe/London'],
             'attendees' => [['email' => $booking->email]],
             'conferenceData' => [
                 'createRequest' => ['conferenceSolutionKey' => ['type' => 'hangoutsMeet'], 'requestId' => uniqid()]
