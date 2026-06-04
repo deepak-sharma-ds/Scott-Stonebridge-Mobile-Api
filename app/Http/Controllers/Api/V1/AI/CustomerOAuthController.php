@@ -181,12 +181,23 @@ class CustomerOAuthController
         }
 
         $expiresIn = (int) ($tokenPayload['expires_in'] ?? config('chatbot.oauth.token_ttl_seconds', 3600));
+        $refreshToken = (string) ($tokenPayload['refresh_token'] ?? '');
+        // Shopify Customer Account API issues refresh tokens that live ~14
+        // days; `refresh_token_expires_in` (if present) gives the absolute
+        // ceiling. Fall back to a 13-day default so we never assume a refresh
+        // token outlives Shopify's policy.
+        $refreshExpiresIn = (int) ($tokenPayload['refresh_token_expires_in']
+            ?? config('chatbot.oauth.refresh_token_ttl_seconds', 13 * 24 * 3600));
 
         AiCustomerSession::updateOrCreate(
             ['session_id' => $payload['session_id']],
             [
                 'customer_access_token' => $accessToken,
+                'refresh_token' => $refreshToken !== '' ? $refreshToken : null,
                 'expires_at' => now()->addSeconds($expiresIn),
+                'refresh_token_expires_at' => $refreshToken !== ''
+                    ? now()->addSeconds($refreshExpiresIn)
+                    : null,
             ],
         );
 
@@ -198,6 +209,8 @@ class CustomerOAuthController
         Log::channel('ai')->info('oauth.token_persisted', [
             'session_id' => $payload['session_id'],
             'expires_in' => $expiresIn,
+            'has_refresh_token' => $refreshToken !== '',
+            'refresh_token_expires_in' => $refreshToken !== '' ? $refreshExpiresIn : null,
         ]);
 
         return $this->closePopupPage((string) $payload['session_id']);
@@ -211,16 +224,30 @@ class CustomerOAuthController
 
         $session = AiCustomerSession::query()
             ->where('session_id', $validated['session_id'])
-            ->active()
             ->first();
 
         if ($session === null) {
             return response()->json(['authenticated' => false]);
         }
 
+        // Treat a still-redeemable refresh token as "authenticated" — the
+        // tool layer transparently exchanges it on the next MCP call, so the
+        // widget can keep the signed-in UI even when the access token has
+        // lapsed past its 1-hour window.
+        $accessLive = ! $session->isExpired();
+        $refreshLive = is_string($session->refresh_token)
+            && $session->refresh_token !== ''
+            && ($session->refresh_token_expires_at === null
+                || $session->refresh_token_expires_at->isFuture());
+
+        if (! $accessLive && ! $refreshLive) {
+            return response()->json(['authenticated' => false]);
+        }
+
         return response()->json([
             'authenticated' => true,
             'expires_at' => $session->expires_at->toIso8601String(),
+            'refreshable' => $refreshLive,
         ]);
     }
 

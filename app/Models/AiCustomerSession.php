@@ -28,14 +28,18 @@ class AiCustomerSession extends Model
     protected $fillable = [
         'session_id',
         'customer_access_token',
+        'refresh_token',
         'expires_at',
+        'refresh_token_expires_at',
     ];
 
     protected function casts(): array
     {
         return [
             'customer_access_token' => 'encrypted',
+            'refresh_token' => 'encrypted',
             'expires_at' => 'datetime',
+            'refresh_token_expires_at' => 'datetime',
         ];
     }
 

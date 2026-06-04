@@ -21,6 +21,7 @@ use App\Services\AI\MCP\Mappers\ProductMapper;
 use App\Services\AI\MCP\StorefrontMcpClient;
 use App\Services\AI\Streaming\ChunkEmitter;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -284,7 +285,7 @@ class ToolExecutor
      */
     private function executeCustomerMcp(string $toolName, array $args, ChatSessionContext $ctx): ToolResult
     {
-        $token = $ctx->customerAccessToken ?? $this->resolveCustomerToken($ctx->sessionId);
+        $token = $ctx->customerAccessToken ?? $this->resolveCustomerToken($ctx->sessionId, $ctx->shopDomain);
         if ($token === null) {
             return $this->emitAuthRequired($ctx);
         }
@@ -1158,14 +1159,136 @@ class ToolExecutor
         );
     }
 
-    private function resolveCustomerToken(string $sessionId): ?string
+    private function resolveCustomerToken(string $sessionId, string $shopDomain = ''): ?string
     {
         $row = AiCustomerSession::query()
             ->where('session_id', $sessionId)
-            ->active()
             ->first();
 
-        return $row?->customer_access_token;
+        if ($row === null) {
+            return null;
+        }
+
+        if (! $row->isExpired()) {
+            return $row->customer_access_token;
+        }
+
+        // Access token expired — silently exchange refresh_token before
+        // falling back to the auth_required popup. Saves the user from a
+        // re-OAuth every hour.
+        $refreshed = $this->refreshCustomerToken($row, $shopDomain);
+
+        return $refreshed?->customer_access_token;
+    }
+
+    private function refreshCustomerToken(AiCustomerSession $row, string $shopDomain): ?AiCustomerSession
+    {
+        $refreshToken = $row->refresh_token;
+        if (! is_string($refreshToken) || $refreshToken === '') {
+            return null;
+        }
+
+        if ($row->refresh_token_expires_at !== null && $row->refresh_token_expires_at->isPast()) {
+            return null;
+        }
+
+        if ($shopDomain === '') {
+            // Cannot discover the token endpoint without a shop domain; the
+            // caller is responsible for passing it. Fail soft so we don't
+            // explode an in-flight MCP tool call.
+            Log::channel('ai')->warning('oauth.refresh_skipped_no_shop', [
+                'session_id' => $row->session_id,
+            ]);
+
+            return null;
+        }
+
+        try {
+            $config = $this->discoverOidcConfig($shopDomain);
+        } catch (Throwable $e) {
+            Log::channel('ai')->warning('oauth.refresh_discovery_failed', [
+                'session_id' => $row->session_id,
+                'shop' => $shopDomain,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        $clientId = (string) config('chatbot.oauth.client_id');
+        $clientSecret = (string) config('chatbot.oauth.client_secret');
+
+        $request = Http::asForm();
+        if ($clientSecret !== '') {
+            $request = $request->withBasicAuth($clientId, $clientSecret);
+        }
+
+        $response = $request->post($config['token_endpoint'], [
+            'grant_type' => 'refresh_token',
+            'client_id' => $clientId,
+            'refresh_token' => $refreshToken,
+        ]);
+
+        if (! $response->successful()) {
+            Log::channel('ai')->warning('oauth.refresh_failed', [
+                'session_id' => $row->session_id,
+                'http_status' => $response->status(),
+                'error' => $response->json('error'),
+                'error_description' => $response->json('error_description'),
+            ]);
+
+            return null;
+        }
+
+        $payload = (array) $response->json();
+        $accessToken = (string) ($payload['access_token'] ?? '');
+        if ($accessToken === '') {
+            return null;
+        }
+
+        $expiresIn = (int) ($payload['expires_in'] ?? config('chatbot.oauth.token_ttl_seconds', 3600));
+        $newRefresh = (string) ($payload['refresh_token'] ?? '');
+
+        // Shopify rotates refresh_tokens on each use — persist whatever was
+        // returned so the next refresh has a valid token to present.
+        $row->customer_access_token = $accessToken;
+        $row->expires_at = now()->addSeconds($expiresIn);
+        if ($newRefresh !== '') {
+            $row->refresh_token = $newRefresh;
+            $refreshExpiresIn = (int) ($payload['refresh_token_expires_in']
+                ?? config('chatbot.oauth.refresh_token_ttl_seconds', 13 * 24 * 3600));
+            $row->refresh_token_expires_at = now()->addSeconds($refreshExpiresIn);
+        }
+        $row->save();
+
+        Log::channel('ai')->info('oauth.token_refreshed', [
+            'session_id' => $row->session_id,
+            'expires_in' => $expiresIn,
+            'rotated_refresh' => $newRefresh !== '',
+        ]);
+
+        return $row;
+    }
+
+    /**
+     * @return array{authorization_endpoint: string, token_endpoint: string}
+     */
+    private function discoverOidcConfig(string $shopDomain): array
+    {
+        $cacheKey = "ai:oauth:oidc:{$shopDomain}";
+
+        return Cache::remember($cacheKey, 3600, function () use ($shopDomain): array {
+            $url = "https://{$shopDomain}/.well-known/openid-configuration";
+            $response = Http::timeout(10)->acceptJson()->get($url);
+            abort_unless($response->successful(), 502, 'OIDC discovery failed.');
+
+            $config = (array) $response->json();
+            $auth = $config['authorization_endpoint'] ?? null;
+            $token = $config['token_endpoint'] ?? null;
+            abort_unless(is_string($auth) && is_string($token), 502, 'OIDC discovery payload incomplete.');
+
+            return ['authorization_endpoint' => $auth, 'token_endpoint' => $token];
+        });
     }
 
     /**
