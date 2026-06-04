@@ -214,6 +214,11 @@ class UpsellService extends BaseService implements UpsellServiceInterface
      */
     private function fetchRecommendations(string $productId, string $country): array
     {
+        // Shopify Storefront's `productRecommendations` query rejects bare
+        // numeric ids with "Invalid global id". Coerce to a real GID first
+        // so cart payloads that carry raw product numerics still resolve.
+        $productId = $this->toProductGid($productId);
+
         $response = $this->storefront->query('storefront/products/get_product_recommendations', [
             'productId' => $productId,
             'country' => $country,
@@ -239,6 +244,32 @@ class UpsellService extends BaseService implements UpsellServiceInterface
         }
 
         return $ids;
+    }
+
+    /**
+     * Normalise a bare numeric product id (e.g. `7225017204910`) to the
+     * Shopify Storefront GID required by the GraphQL API. GIDs already
+     * formatted as `gid://shopify/Product/<id>` pass through untouched.
+     */
+    private function toProductGid(string $productId): string
+    {
+        $productId = trim($productId);
+        if ($productId === '' || str_starts_with($productId, 'gid://shopify/Product/')) {
+            return $productId;
+        }
+
+        // Strip a stray `gid://shopify/<Type>/` prefix on the wrong type and
+        // keep the trailing numeric, so callers that mistakenly passed e.g.
+        // a ProductVariant GID still get reshaped without crashing the call.
+        if (preg_match('~/(\d+)$~', $productId, $m) === 1) {
+            return 'gid://shopify/Product/'.$m[1];
+        }
+
+        if (ctype_digit($productId)) {
+            return 'gid://shopify/Product/'.$productId;
+        }
+
+        return $productId;
     }
 
     private function countryFromCurrency(?string $currency): string

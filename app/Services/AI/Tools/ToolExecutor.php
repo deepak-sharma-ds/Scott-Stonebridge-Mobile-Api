@@ -38,6 +38,16 @@ class ToolExecutor
 
     private const RATE_LIMIT_MAX = 60;
 
+    /**
+     * Cache key for the per-session Shopify Storefront Cart GID. Shopify
+     * carts expire roughly 10 days after last touch, so we keep ours 7 days
+     * so a returning visitor in the same chat session can still mutate the
+     * cart they built earlier without the model having to memorise the GID.
+     */
+    private const SESSION_CART_KEY = 'ai:session:%s:cart_id';
+
+    private const SESSION_CART_TTL = 604800;
+
     private ?StorefrontApiClientInterface $storefrontApi;
 
     public function __construct(
@@ -103,7 +113,27 @@ class ToolExecutor
      */
     private function executeStorefrontMcp(string $toolName, array $args, ChatSessionContext $ctx): ToolResult
     {
+        // Hydrate the cart_id from the session cache when the inbound request
+        // didn't carry one. Without this the model has to remember the GID
+        // across turns and Shopify mints a fresh empty cart on every miss.
+        if ($ctx->cartId === null) {
+            $cached = $this->recallSessionCartId($ctx->sessionId);
+            if ($cached !== null) {
+                $ctx = $ctx->withCartId($cached);
+            }
+        }
+
         $args = $this->normaliseStorefrontArgs($toolName, $args);
+
+        // Inject the known cart_id when the model omitted it on update_cart /
+        // get_cart so we keep mutating the SAME cart instead of spawning a new
+        // empty one on every turn.
+        if ($ctx->cartId !== null
+            && in_array($toolName, [ToolDefinitions::TOOL_UPDATE_CART, ToolDefinitions::TOOL_GET_CART], true)
+            && empty($args['cart_id'])
+        ) {
+            $args['cart_id'] = $ctx->cartId;
+        }
 
         // Product detail: Shopify MCP `get_product_details` only returns ONE
         // variant (`selectedOrFirstAvailableVariant`). Pull the full product —
@@ -590,6 +620,12 @@ class ToolExecutor
             return ToolResult::error('Cart not found.');
         }
 
+        // Persist the Storefront cart GID for this chat session so the next
+        // turn can mutate the same cart even when the widget forgot to send
+        // it back. Without this, every remove / quantity-change call risks
+        // landing on a brand new empty cart and Shopify rejecting the line ref.
+        $this->rememberSessionCartId($ctx->sessionId, $dto->id);
+
         $cart = $dto->toArray();
         // Shopify's MCP cart omits line imagery — backfill from the Storefront
         // API so the widget's cart view can render product thumbnails.
@@ -683,6 +719,24 @@ class ToolExecutor
             }
         }
 
+        // Drop refs that still failed to resolve into a real CartLine GID.
+        // Sending an unresolved ref straight through guarantees a Shopify
+        // "Invalid global id" rejection that the model can't recover from
+        // — better to silently filter so the rest of the mutation runs and
+        // the next get_cart re-syncs the model's view.
+        if ($hasRemove) {
+            $args['remove_line_ids'] = array_values(array_filter(
+                $args['remove_line_ids'],
+                static fn ($ref): bool => self::isCartLineGid((string) $ref),
+            ));
+        }
+        if ($hasUpdate) {
+            $args['update_items'] = array_values(array_filter(
+                $args['update_items'],
+                static fn ($row): bool => is_array($row) && self::isCartLineGid((string) ($row['id'] ?? '')),
+            ));
+        }
+
         return $args;
     }
 
@@ -725,12 +779,69 @@ class ToolExecutor
             return $ref;
         }
 
-        return $map[$ref] ?? $ref;
+        if (isset($map[$ref])) {
+            return $map[$ref];
+        }
+
+        // The Shopify ajax cart key format is `<variant_id>:<line_token>`;
+        // strip the trailing token so a bare-variant-numeric lookup wins.
+        if (str_contains($ref, ':') && ! str_starts_with($ref, 'gid://')) {
+            $head = strstr($ref, ':', true);
+            if (is_string($head) && isset($map[$head])) {
+                return $map[$head];
+            }
+        }
+
+        // Tail numeric on a stray GID type (e.g. ProductVariant GID) so the
+        // map's bare-numeric key still resolves the line.
+        if (preg_match('~/(\d+)(?:[:?].*)?$~', $ref, $m) === 1 && isset($map[$m[1]])) {
+            return $map[$m[1]];
+        }
+
+        return $ref;
     }
 
     private static function isCartLineGid(string $value): bool
     {
         return str_starts_with($value, 'gid://shopify/CartLine/');
+    }
+
+    /**
+     * Cache the active Shopify Storefront Cart GID for the chat session so
+     * future tool calls in the same session can reuse it without relying on
+     * the LLM to echo it back from the previous turn's message.
+     */
+    private function rememberSessionCartId(string $sessionId, string $cartId): void
+    {
+        if ($sessionId === '' || ! str_starts_with($cartId, 'gid://shopify/Cart/')) {
+            return;
+        }
+
+        Cache::put(sprintf(self::SESSION_CART_KEY, $sessionId), $cartId, self::SESSION_CART_TTL);
+    }
+
+    private function recallSessionCartId(string $sessionId): ?string
+    {
+        if ($sessionId === '') {
+            return null;
+        }
+
+        $value = Cache::get(sprintf(self::SESSION_CART_KEY, $sessionId));
+
+        return is_string($value) && str_starts_with($value, 'gid://shopify/Cart/') ? $value : null;
+    }
+
+    /**
+     * Drop the cached session cart GID — call when Shopify reports the cart
+     * has been consumed / abandoned and the next add should mint a new one.
+     */
+    private function forgetSessionCartId(string $sessionId): void
+    {
+        if ($sessionId === '') {
+            return;
+        }
+
+        Cache::forget(sprintf(self::SESSION_CART_KEY, $sessionId));
     }
 
     /**
@@ -1108,17 +1219,21 @@ class ToolExecutor
             }
         }
 
-        if ($toolName === ToolDefinitions::TOOL_UPDATE_CART) {
-            // Drop a bogus cart_id (empty string, placeholder, or anything that
-            // is not a real Shopify Cart GID). The model frequently invents one
-            // on the first add — leaving it in makes Shopify reject the call
-            // with "Invalid cart_id format" instead of minting a fresh cart.
-            if (isset($args['cart_id'])) {
-                $cid = is_string($args['cart_id']) ? trim($args['cart_id']) : '';
-                if (! str_starts_with($cid, 'gid://shopify/Cart/')) {
-                    unset($args['cart_id']);
-                }
+        // Drop a bogus cart_id (empty string, placeholder, or anything that
+        // is not a real Shopify Cart GID). The model frequently invents one
+        // on the first add — leaving it in makes Shopify reject the call
+        // with "Invalid cart_id format" instead of minting a fresh cart.
+        // Applies to every Storefront cart op, not just update_cart.
+        if (in_array($toolName, [ToolDefinitions::TOOL_UPDATE_CART, ToolDefinitions::TOOL_GET_CART], true)
+            && isset($args['cart_id'])
+        ) {
+            $cid = is_string($args['cart_id']) ? trim($args['cart_id']) : '';
+            if (! str_starts_with($cid, 'gid://shopify/Cart/')) {
+                unset($args['cart_id']);
             }
+        }
+
+        if ($toolName === ToolDefinitions::TOOL_UPDATE_CART) {
 
             foreach (['add_items'] as $key) {
                 if (! isset($args[$key]) || ! is_array($args[$key])) {

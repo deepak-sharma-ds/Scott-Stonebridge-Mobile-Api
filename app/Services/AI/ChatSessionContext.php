@@ -30,4 +30,16 @@ final class ChatSessionContext
             pageType: $this->pageType,
         );
     }
+
+    public function withCartId(?string $cartId): self
+    {
+        return new self(
+            sessionId: $this->sessionId,
+            shopDomain: $this->shopDomain,
+            cartId: $cartId,
+            customerAccessToken: $this->customerAccessToken,
+            locale: $this->locale,
+            pageType: $this->pageType,
+        );
+    }
 }

@@ -55,14 +55,28 @@ class CustomerOAuthController
             $ttl,
         );
 
+        $clientId = (string) config('chatbot.oauth.client_id');
+        $scopeString = implode(' ', (array) config('chatbot.oauth.scopes', []));
+
         $query = http_build_query([
             'response_type' => 'code',
-            'client_id' => (string) config('chatbot.oauth.client_id'),
+            'client_id' => $clientId,
             'redirect_uri' => (string) config('chatbot.oauth.redirect_uri'),
-            'scope' => implode(' ', (array) config('chatbot.oauth.scopes', [])),
+            'scope' => $scopeString,
             'state' => $state,
             'code_challenge' => $challenge,
             'code_challenge_method' => 'S256',
+        ]);
+
+        // Diagnostic — Shopify rejects "scope invalid" before redirecting back,
+        // so log the exact values we sent so we can compare against the
+        // Headless app's enabled scopes in admin.
+        Log::channel('ai')->info('oauth.authorize_start', [
+            'session_id' => $sessionId,
+            'shop_domain' => $shopDomain,
+            'client_id' => $clientId,
+            'scope' => $scopeString,
+            'authorize_endpoint' => $config['authorization_endpoint'],
         ]);
 
         return redirect()->away($config['authorization_endpoint'].'?'.$query);
@@ -70,15 +84,60 @@ class CustomerOAuthController
 
     public function callback(Request $request): Response
     {
+        // Unconditional entry log so we can prove the callback was hit even
+        // when validation fails before any other log line fires. Truncate the
+        // state value so logs don't leak the full nonce.
+        Log::channel('ai')->info('oauth.callback_hit', [
+            'has_state' => $request->filled('state'),
+            'has_code' => $request->filled('code'),
+            'has_error' => $request->filled('error'),
+            'state_prefix' => substr((string) $request->query('state', ''), 0, 8),
+            'query_keys' => array_keys($request->query()),
+            'user_agent' => substr((string) $request->userAgent(), 0, 120),
+        ]);
+
+        // Shopify can redirect with `error` / `error_description` (user denied,
+        // scope rejected) WITHOUT a `code`. Validate loosely so we can surface
+        // those errors instead of failing on the strict validator.
+        if ($request->filled('error')) {
+            Log::channel('ai')->warning('oauth.callback_provider_error', [
+                'error' => (string) $request->query('error'),
+                'error_description' => (string) $request->query('error_description'),
+                'state_prefix' => substr((string) $request->query('state', ''), 0, 8),
+            ]);
+
+            return $this->errorPage(
+                'Sign-in cancelled: '.(string) $request->query('error_description', 'unknown error'),
+                400,
+            );
+        }
+
         $validated = $request->validate([
             'state' => ['required', 'string'],
             'code' => ['required', 'string'],
         ]);
 
         $stateKey = self::STATE_PREFIX.$validated['state'];
-        $payload = Cache::pull($stateKey);
+        // Use Cache::get + explicit forget-on-success rather than Cache::pull.
+        // Chrome's network prefetcher (and `<link rel="prerender">` style
+        // speculative requests) can hit this URL before the user's real
+        // navigation, and `pull` would have already consumed the state. The
+        // OAuth `code` is single-use on Shopify's side, so replay is already
+        // bounded — keeping the state cached until token exchange succeeds is
+        // safe and rescues the prefetch race.
+        $payload = Cache::get($stateKey);
         if (! is_array($payload)) {
-            return $this->errorPage('Authentication session expired. Please try again.', 400);
+            $statePrefix = substr((string) $validated['state'], 0, 8);
+            Log::channel('ai')->warning('oauth.state_not_found', [
+                'state_prefix' => $statePrefix,
+                'reason' => 'cache_miss',
+                'note' => 'Either TTL expired (default 600s — extend SHOPIFY_OAUTH_PKCE_TTL) or callback was hit twice and a previous attempt already forgot the state.',
+            ]);
+
+            return $this->errorPage(
+                'Authentication session expired. Please close this window and click Sign in again from the chat.',
+                400,
+            );
         }
 
         $config = $this->discoverOidcConfig((string) $payload['shop_domain']);
@@ -130,6 +189,11 @@ class CustomerOAuthController
                 'expires_at' => now()->addSeconds($expiresIn),
             ],
         );
+
+        // Token is persisted — drop the PKCE state now that the single-use
+        // code has been redeemed. A subsequent callback hit (refresh) would
+        // then see a clean cache miss + already-authenticated session.
+        Cache::forget($stateKey);
 
         Log::channel('ai')->info('oauth.token_persisted', [
             'session_id' => $payload['session_id'],
@@ -207,7 +271,12 @@ class CustomerOAuthController
 </body></html>
 HTML;
 
-        return response($html, 200, ['Content-Type' => 'text/html; charset=utf-8']);
+        return response($html, 200, [
+            'Content-Type' => 'text/html; charset=utf-8',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
+            'Pragma' => 'no-cache',
+            'X-Robots-Tag' => 'noindex, nofollow',
+        ]);
     }
 
     private function errorPage(string $message, int $status): Response
@@ -223,6 +292,11 @@ HTML;
 </body></html>
 HTML;
 
-        return response($html, $status, ['Content-Type' => 'text/html; charset=utf-8']);
+        return response($html, $status, [
+            'Content-Type' => 'text/html; charset=utf-8',
+            'Cache-Control' => 'no-store, no-cache, must-revalidate, private',
+            'Pragma' => 'no-cache',
+            'X-Robots-Tag' => 'noindex, nofollow',
+        ]);
     }
 }

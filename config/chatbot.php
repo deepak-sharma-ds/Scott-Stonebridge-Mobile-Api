@@ -203,8 +203,25 @@ return [
         'redirect_uri' => env('SHOPIFY_CUSTOMER_REDIRECT_URI', env('APP_URL').'/api/v1/ai/oauth/customer/callback'),
         // `openid` is required by the auth server; the mcp-api scope is what
         // grants the issued token access to the Customer Account MCP (orders).
-        'scopes' => ['openid', 'email', 'customer-account-api:full', 'customer-account-mcp-api:full'],
-        'pkce_session_ttl' => (int) env('SHOPIFY_OAUTH_PKCE_TTL', 600),
+        // Override with SHOPIFY_CUSTOMER_SCOPES (space- or comma-separated) so
+        // a misconfigured Headless app can drop the mcp scope without a deploy.
+        // Default keeps the MCP scope only when the Headless app has it
+        // enabled — otherwise Shopify rejects with "requested scope is invalid".
+        'scopes' => array_values(array_filter(array_map(
+            'trim',
+            preg_split(
+                '/[\s,]+/',
+                (string) env(
+                    'SHOPIFY_CUSTOMER_SCOPES',
+                    'openid email customer-account-api:full',
+                ),
+            ) ?: [],
+        ))),
+        // PKCE state TTL — must outlast the full OAuth round-trip including
+        // OTP email delivery + user-read time. 600s (10min) was too tight in
+        // practice; 1800s (30min) covers slow email delivery without giving a
+        // stolen state value a meaningfully larger replay window.
+        'pkce_session_ttl' => (int) env('SHOPIFY_OAUTH_PKCE_TTL', 1800),
         'token_ttl_seconds' => (int) env('SHOPIFY_OAUTH_TOKEN_TTL', 3600),
     ],
 
