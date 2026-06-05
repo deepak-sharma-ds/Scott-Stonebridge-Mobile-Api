@@ -1143,6 +1143,12 @@ class ToolExecutor
 
     private function emitAuthRequired(ChatSessionContext $ctx): ToolResult
     {
+        Log::channel('ai')->info('tool.auth_required', [
+            'session_id' => $ctx->sessionId,
+            'shop_domain' => $ctx->shopDomain,
+            'has_row' => AiCustomerSession::query()->where('session_id', $ctx->sessionId)->exists(),
+        ]);
+
         $payload = [
             'reason' => 'customer_account',
             'oauth_start_url' => route('api.v1.ai.oauth.customer.start', [

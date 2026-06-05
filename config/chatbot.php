@@ -203,17 +203,22 @@ return [
         'redirect_uri' => env('SHOPIFY_CUSTOMER_REDIRECT_URI', env('APP_URL').'/api/v1/ai/oauth/customer/callback'),
         // `openid` is required by the auth server; the mcp-api scope is what
         // grants the issued token access to the Customer Account MCP (orders).
-        // Override with SHOPIFY_CUSTOMER_SCOPES (space- or comma-separated) so
-        // a misconfigured Headless app can drop the mcp scope without a deploy.
-        // Default keeps the MCP scope only when the Headless app has it
-        // enabled — otherwise Shopify rejects with "requested scope is invalid".
+        // Without `customer-account-mcp-api:full`, sign-in succeeds but every
+        // MCP tool_call returns HTTP 401 ("token lacks required scope") and
+        // the widget falls into a re-auth loop.
+        //
+        // The Headless channel app MUST have this scope enabled in admin →
+        // Apps → Headless → Storefronts → API access → Customer Account API
+        // → enable Customer Account MCP. If the app is misconfigured, drop
+        // the scope via SHOPIFY_CUSTOMER_SCOPES env so sign-in still works
+        // (orders won't, but auth loop stops).
         'scopes' => array_values(array_filter(array_map(
             'trim',
             preg_split(
                 '/[\s,]+/',
                 (string) env(
                     'SHOPIFY_CUSTOMER_SCOPES',
-                    'openid email customer-account-api:full',
+                    'openid email customer-account-api:full customer-account-mcp-api:full',
                 ),
             ) ?: [],
         ))),

@@ -88,7 +88,16 @@ class McpClient
         $status = $response->status();
 
         if ($status === 401) {
-            $this->logCall($toolName, $requestId, $startedAt, 'auth_required');
+            // Capture body so we can distinguish "no token" vs
+            // "token lacks scope" — Shopify Customer MCP returns
+            // `error_description: "Token does not contain required scope ..."`
+            // when the access_token was issued without `customer-account-mcp-api:full`.
+            $body = $response->body();
+            $bodySnippet = substr(is_string($body) ? $body : '', 0, 240);
+            $this->logCall($toolName, $requestId, $startedAt, 'auth_required', [
+                'http_body' => $bodySnippet,
+                'www_authenticate' => $response->header('WWW-Authenticate'),
+            ]);
             throw new AuthRequiredException(
                 'MCP endpoint returned 401.',
                 ['tool' => $toolName],
