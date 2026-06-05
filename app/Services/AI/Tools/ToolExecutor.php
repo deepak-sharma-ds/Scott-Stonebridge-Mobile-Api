@@ -408,10 +408,11 @@ class ToolExecutor
      */
     private function customerOrderQuery(string $toolName): string
     {
-        // Customer Account API: `Order.fulfillments` is `[Fulfillment!]!`
-        // (a flat list, NOT a Connection) so do NOT add `first:` / `edges`.
-        // Same for `Fulfillment.trackingInformation` — flat list of
-        // FulfillmentTrackingInfo objects.
+        // Customer Account API: `Order.fulfillments` IS a `FulfillmentConnection`
+        // (despite the Admin API exposing it as a flat list) so we MUST
+        // paginate with `first:` + `edges { node {} }`. Confirmed live via
+        // `Field 'estimatedDeliveryAt' doesn't exist on type 'FulfillmentConnection'`.
+        // `trackingInformation` on the Fulfillment node stays a flat list.
         $node = <<<'GRAPHQL'
         id
         name
@@ -420,9 +421,13 @@ class ToolExecutor
         fulfillmentStatus
         financialStatus
         shippingAddress { city }
-        fulfillments {
-          estimatedDeliveryAt
-          trackingInformation { number url company }
+        fulfillments(first: 5) {
+          edges {
+            node {
+              estimatedDeliveryAt
+              trackingInformation { number url company }
+            }
+          }
         }
         GRAPHQL;
 
