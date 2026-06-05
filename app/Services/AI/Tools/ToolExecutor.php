@@ -13,8 +13,10 @@ use App\Exceptions\AI\AuthRequiredException;
 use App\Exceptions\AI\McpToolException;
 use App\Models\AiCustomerSession;
 use App\Services\AI\ChatSessionContext;
+use App\Services\AI\MCP\CustomerAccountGraphClient;
 use App\Services\AI\MCP\CustomerMcpClient;
 use App\Services\AI\MCP\Mappers\CartMapper;
+use App\Services\AI\MCP\Mappers\CustomerGraphOrderMapper;
 use App\Services\AI\MCP\Mappers\OrderMapper;
 use App\Services\AI\MCP\Mappers\PolicyMapper;
 use App\Services\AI\MCP\Mappers\ProductMapper;
@@ -51,14 +53,28 @@ class ToolExecutor
 
     private ?StorefrontApiClientInterface $storefrontApi;
 
+    private ?CustomerAccountGraphClient $customerGraph;
+
     public function __construct(
         private readonly StorefrontMcpClient $storefront,
         private readonly CustomerMcpClient $customer,
         private readonly ChunkEmitter $emitter,
         private readonly UpsellServiceInterface $upsell,
         ?StorefrontApiClientInterface $storefrontApi = null,
+        ?CustomerAccountGraphClient $customerGraph = null,
     ) {
         $this->storefrontApi = $storefrontApi;
+        $this->customerGraph = $customerGraph;
+    }
+
+    /**
+     * Lazily resolve the Customer Account GraphQL client. Stays optional in
+     * the constructor so older service-container bindings (4 / 5 arg signatures
+     * + bind helpers in tests) keep working without modification.
+     */
+    private function customerGraph(): CustomerAccountGraphClient
+    {
+        return $this->customerGraph ??= app(CustomerAccountGraphClient::class);
     }
 
     /**
@@ -293,26 +309,18 @@ class ToolExecutor
         try {
             $result = $this->customer->callTool($toolName, $args, $ctx->shopDomain, $token);
         } catch (AuthRequiredException $e) {
-            // Token is persisted + non-expired but Shopify Customer MCP still
-            // rejected it (e.g. endpoint not enabled on the Headless app, or
-            // a token-shape mismatch the API surface). Re-emitting
-            // `auth_required` here would loop forever: widget reopens popup
-            // → Shopify sees session live → silent re-auth → close → next
-            // tool_call same 401. Degrade gracefully instead so the user can
-            // still chat — they just won't see live order data from this
-            // tool.
-            Log::channel('ai')->warning('tool.customer_mcp_rejected_valid_token', [
+            // MCP rejected a valid token. Fall back to the Customer Account
+            // GraphQL API, which uses the SAME `customer-account-api:full`
+            // scope but the GraphQL surface (always enabled on stock Headless
+            // apps). Bypassing MCP keeps the order flow working even when
+            // Shopify hasn't provisioned MCP for this app.
+            Log::channel('ai')->info('tool.customer_mcp_rejected_falling_back_to_graphql', [
                 'session_id' => $ctx->sessionId,
                 'shop_domain' => $ctx->shopDomain,
                 'tool' => $toolName,
             ]);
 
-            $this->emitter->emit('text', [
-                'content' => "You're signed in, but I can't reach the live order service right now. "
-                    .'Please check your order history in your account, or try again in a few minutes.',
-            ]);
-
-            return ToolResult::error('Customer MCP rejected a valid token.');
+            return $this->executeCustomerOrderViaGraph($toolName, $args, $ctx, $token);
         }
 
         $dto = OrderMapper::fromOrderStatus($result);
@@ -329,6 +337,143 @@ class ToolExecutor
             "Order {$dto->orderNumber} status: {$dto->status}.",
             ['type' => 'order_tracking'] + $payload,
         );
+    }
+
+    /**
+     * Fallback: query Customer Account GraphQL when the MCP endpoint rejected
+     * a valid token. Maps the GraphQL response onto the same OrderTrackingDTO
+     * so the downstream `order_tracking` chunk stays identical.
+     *
+     * @param  array<string, mixed>  $args
+     */
+    private function executeCustomerOrderViaGraph(string $toolName, array $args, ChatSessionContext $ctx, string $token): ToolResult
+    {
+        try {
+            $data = $this->customerGraph()->query(
+                $ctx->shopDomain,
+                $token,
+                $this->customerOrderQuery($toolName),
+                $this->customerOrderVariables($toolName, $args),
+            );
+        } catch (AuthRequiredException $e) {
+            // Token rejected by GraphQL too — genuine auth state mismatch.
+            // Emit a soft text instead of re-opening the popup (which would
+            // re-trigger the loop) and let the user retry from the chat UI.
+            Log::channel('ai')->warning('tool.customer_graph_rejected_valid_token', [
+                'session_id' => $ctx->sessionId,
+                'shop_domain' => $ctx->shopDomain,
+                'tool' => $toolName,
+            ]);
+
+            $this->emitter->emit('text', [
+                'content' => "You're signed in, but I can't reach the live order service right now. "
+                    .'Please check your order history in your account, or try again in a few minutes.',
+            ]);
+
+            return ToolResult::error('Customer Account GraphQL rejected a valid token.');
+        } catch (Throwable $e) {
+            $this->logToolError($toolName, $ctx, $e);
+
+            $this->emitter->emit('text', [
+                'content' => "I couldn't reach the order service just now. Please try again in a moment.",
+            ]);
+
+            return ToolResult::error("Customer GraphQL fallback failed: {$e->getMessage()}");
+        }
+
+        $dto = $toolName === ToolDefinitions::TOOL_GET_ORDER_STATUS
+            ? CustomerGraphOrderMapper::fromOrderNode($this->extractOrderNodeFromGraph($data))
+            : CustomerGraphOrderMapper::fromMostRecent($data);
+
+        if ($dto === null) {
+            $this->emitter->emit('text', ['content' => "I couldn't find an order matching that request."]);
+
+            return ToolResult::error('Order not found via GraphQL fallback.');
+        }
+
+        $payload = ['order_tracking' => $dto->toArray()];
+        $this->emitter->emit('order_tracking', $payload);
+
+        return ToolResult::success(
+            "Order {$dto->orderNumber} status: {$dto->status}.",
+            ['type' => 'order_tracking'] + $payload,
+        );
+    }
+
+    /**
+     * Customer Account API queries — minimal field set matching the MCP shape
+     * the OrderMapper used to consume. Two variants:
+     *   - most recent: no args needed
+     *   - by name: requires `name:` filter, used for explicit order lookups
+     */
+    private function customerOrderQuery(string $toolName): string
+    {
+        // Customer Account API: `Order.fulfillments` is `[Fulfillment!]!`
+        // (a flat list, NOT a Connection) so do NOT add `first:` / `edges`.
+        // Same for `Fulfillment.trackingInformation` — flat list of
+        // FulfillmentTrackingInfo objects.
+        $node = <<<'GRAPHQL'
+        id
+        name
+        number
+        processedAt
+        fulfillmentStatus
+        financialStatus
+        shippingAddress { city }
+        fulfillments {
+          estimatedDeliveryAt
+          trackingInformation { number url company }
+        }
+        GRAPHQL;
+
+        if ($toolName === ToolDefinitions::TOOL_GET_ORDER_STATUS) {
+            return <<<GRAPHQL
+            query OrderByName(\$query: String!) {
+              customer {
+                orders(first: 1, query: \$query) {
+                  edges { node { {$node} } }
+                }
+              }
+            }
+            GRAPHQL;
+        }
+
+        return <<<GRAPHQL
+        query MostRecentOrder {
+          customer {
+            orders(first: 1, sortKey: PROCESSED_AT, reverse: true) {
+              edges { node { {$node} } }
+            }
+          }
+        }
+        GRAPHQL;
+    }
+
+    /**
+     * @param  array<string, mixed>  $args
+     * @return array<string, mixed>
+     */
+    private function customerOrderVariables(string $toolName, array $args): array
+    {
+        if ($toolName !== ToolDefinitions::TOOL_GET_ORDER_STATUS) {
+            return [];
+        }
+
+        $orderId = (string) ($args['order_id'] ?? $args['order_number'] ?? $args['name'] ?? '');
+        $orderId = ltrim($orderId, '#');
+
+        return ['query' => $orderId === '' ? '' : "name:#{$orderId}"];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function extractOrderNodeFromGraph(array $data): array
+    {
+        $node = $data['customer']['orders']['edges'][0]['node'] ?? null;
+
+        return is_array($node) ? $node : [];
     }
 
     /**
