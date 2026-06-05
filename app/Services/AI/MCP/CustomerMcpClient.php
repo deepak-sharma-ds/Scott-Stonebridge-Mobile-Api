@@ -26,9 +26,14 @@ class CustomerMcpClient
     public function callTool(string $toolName, array $arguments, string $shopDomain, string $customerAccessToken): array
     {
         $endpoint = $this->resolveEndpoint($shopDomain);
+        // Shopify Customer Account API (incl. its MCP surface) expects the
+        // raw access token in the Authorization header — NOT prefixed with
+        // `Bearer `. Sending `Bearer <token>` causes a 401 + body
+        // `{"errors":[{"message":"Unauthorized"}]}` even when the token is
+        // valid. Strip the prefix defensively if a caller passed it in.
         $token = str_starts_with($customerAccessToken, 'Bearer ')
-            ? $customerAccessToken
-            : 'Bearer '.$customerAccessToken;
+            ? substr($customerAccessToken, 7)
+            : $customerAccessToken;
 
         return $this->client->callTool($endpoint, $toolName, $arguments, $token);
     }

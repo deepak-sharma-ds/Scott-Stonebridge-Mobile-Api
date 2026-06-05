@@ -290,7 +290,31 @@ class ToolExecutor
             return $this->emitAuthRequired($ctx);
         }
 
-        $result = $this->customer->callTool($toolName, $args, $ctx->shopDomain, $token);
+        try {
+            $result = $this->customer->callTool($toolName, $args, $ctx->shopDomain, $token);
+        } catch (AuthRequiredException $e) {
+            // Token is persisted + non-expired but Shopify Customer MCP still
+            // rejected it (e.g. endpoint not enabled on the Headless app, or
+            // a token-shape mismatch the API surface). Re-emitting
+            // `auth_required` here would loop forever: widget reopens popup
+            // → Shopify sees session live → silent re-auth → close → next
+            // tool_call same 401. Degrade gracefully instead so the user can
+            // still chat — they just won't see live order data from this
+            // tool.
+            Log::channel('ai')->warning('tool.customer_mcp_rejected_valid_token', [
+                'session_id' => $ctx->sessionId,
+                'shop_domain' => $ctx->shopDomain,
+                'tool' => $toolName,
+            ]);
+
+            $this->emitter->emit('text', [
+                'content' => "You're signed in, but I can't reach the live order service right now. "
+                    .'Please check your order history in your account, or try again in a few minutes.',
+            ]);
+
+            return ToolResult::error('Customer MCP rejected a valid token.');
+        }
+
         $dto = OrderMapper::fromOrderStatus($result);
         if ($dto === null) {
             $this->emitter->emit('text', ['content' => "I couldn't find an order matching that request."]);

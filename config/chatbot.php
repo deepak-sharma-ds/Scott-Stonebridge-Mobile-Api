@@ -201,24 +201,22 @@ return [
         // PKCE-only client.
         'client_secret' => env('SHOPIFY_CUSTOMER_CLIENT_SECRET'),
         'redirect_uri' => env('SHOPIFY_CUSTOMER_REDIRECT_URI', env('APP_URL').'/api/v1/ai/oauth/customer/callback'),
-        // `openid` is required by the auth server; the mcp-api scope is what
-        // grants the issued token access to the Customer Account MCP (orders).
-        // Without `customer-account-mcp-api:full`, sign-in succeeds but every
-        // MCP tool_call returns HTTP 401 ("token lacks required scope") and
-        // the widget falls into a re-auth loop.
-        //
-        // The Headless channel app MUST have this scope enabled in admin →
-        // Apps → Headless → Storefronts → API access → Customer Account API
-        // → enable Customer Account MCP. If the app is misconfigured, drop
-        // the scope via SHOPIFY_CUSTOMER_SCOPES env so sign-in still works
-        // (orders won't, but auth loop stops).
+        // `openid` is required by the auth server. `customer-account-api:full`
+        // grants the issued token access to the Customer Account API (orders,
+        // profile, addresses). Shopify Customer MCP uses the SAME token + same
+        // scope — there is no separate `customer-account-mcp-api:full` scope
+        // on a stock Headless app (Shopify rejects it at /authorize with
+        // "scope invalid, unknown, or malformed"). If the MCP endpoint
+        // returns 401 after sign-in, the cause is the access_token type /
+        // Headless app MCP enrollment, NOT a missing scope — investigate the
+        // token shape rather than re-adding a non-existent scope here.
         'scopes' => array_values(array_filter(array_map(
             'trim',
             preg_split(
                 '/[\s,]+/',
                 (string) env(
                     'SHOPIFY_CUSTOMER_SCOPES',
-                    'openid email customer-account-api:full customer-account-mcp-api:full',
+                    'openid email customer-account-api:full',
                 ),
             ) ?: [],
         ))),
