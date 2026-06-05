@@ -1,2 +1,0 @@
-data: {"type":"error","message":"AI provider error","code":"ai_service_unavailable"}
-
