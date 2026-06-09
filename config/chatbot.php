@@ -160,4 +160,72 @@ return [
         'system_template' => 'ai.prompts.system',
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Shopify MCP (Storefront + Customer Account) endpoints
+    |--------------------------------------------------------------------------
+    |
+    | `{shop}` is substituted with the active shop domain at call time. The
+    | UCP endpoint (Unified Catalog Protocol) hosts catalog discovery tools
+    | (search_catalog, get_product, lookup_catalog); the storefront endpoint
+    | hosts cart, policy + checkout tools. The customer discovery URL is the
+    | well-known OpenID configuration document for the Customer Account API.
+    */
+    'mcp' => [
+        'storefront_endpoint' => env('SHOPIFY_MCP_STOREFRONT', 'https://{shop}/api/mcp'),
+        // Catalog discovery tools (search_catalog, get_product, lookup_catalog)
+        // live on the SAME `/api/mcp` endpoint as the rest of the Storefront
+        // MCP tools. Kept as a separate config key so future Shopify topology
+        // changes (e.g. a dedicated UCP host) can be swapped via env only.
+        'ucp_endpoint' => env('SHOPIFY_MCP_UCP', 'https://{shop}/api/mcp'),
+        'customer_discovery' => '/.well-known/customer-account-api',
+        'timeout_ms' => (int) env('SHOPIFY_MCP_TIMEOUT_MS', 15000),
+        'retry_on_status' => [502, 503, 504],
+        'cache_ttl_seconds' => [
+            'search_catalog' => 120,
+            'get_product' => 300,
+            'lookup_catalog' => 300,
+            'search_shop_policies_and_faqs' => 900,
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Shopify Customer Account OAuth (PKCE) for the in-chat sign-in flow
+    |--------------------------------------------------------------------------
+    */
+    'oauth' => [
+        'client_id' => env('SHOPIFY_CUSTOMER_CLIENT_ID'),
+        // Confidential clients (token_endpoint_auth_methods = client_secret_basic)
+        // require the secret on the token exchange. Leave blank for a public
+        // PKCE-only client.
+        'client_secret' => env('SHOPIFY_CUSTOMER_CLIENT_SECRET'),
+        'redirect_uri' => env('SHOPIFY_CUSTOMER_REDIRECT_URI', env('APP_URL').'/api/v1/ai/oauth/customer/callback'),
+        // `openid` is required by the auth server. `customer-account-api:full`
+        // grants the issued token access to the Customer Account API (orders,
+        // profile, addresses). Shopify Customer MCP uses the SAME token + same
+        // scope — there is no separate `customer-account-mcp-api:full` scope
+        // on a stock Headless app (Shopify rejects it at /authorize with
+        // "scope invalid, unknown, or malformed"). If the MCP endpoint
+        // returns 401 after sign-in, the cause is the access_token type /
+        // Headless app MCP enrollment, NOT a missing scope — investigate the
+        // token shape rather than re-adding a non-existent scope here.
+        'scopes' => array_values(array_filter(array_map(
+            'trim',
+            preg_split(
+                '/[\s,]+/',
+                (string) env(
+                    'SHOPIFY_CUSTOMER_SCOPES',
+                    'openid email customer-account-api:full',
+                ),
+            ) ?: [],
+        ))),
+        // PKCE state TTL — must outlast the full OAuth round-trip including
+        // OTP email delivery + user-read time. 600s (10min) was too tight in
+        // practice; 1800s (30min) covers slow email delivery without giving a
+        // stolen state value a meaningfully larger replay window.
+        'pkce_session_ttl' => (int) env('SHOPIFY_OAUTH_PKCE_TTL', 1800),
+        'token_ttl_seconds' => (int) env('SHOPIFY_OAUTH_TOKEN_TTL', 3600),
+    ],
+
 ];

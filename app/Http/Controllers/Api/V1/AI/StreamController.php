@@ -10,6 +10,7 @@ use App\Exceptions\AI\AIException;
 use App\Http\Controllers\Base\BaseApiController;
 use App\Http\Requests\AI\StreamMessageRequest;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
@@ -27,6 +28,13 @@ class StreamController extends BaseApiController
 
     public function stream(StreamMessageRequest $request, string $session): JsonResponse|StreamedResponse
     {
+        // Defensive: route param is unconstrained; reject anything that
+        // isn't a UUID so the self-heal adoption path can't be tricked
+        // into creating rows keyed on garbage.
+        if (! Str::isUuid($session)) {
+            return $this->error('Invalid session id.', [], ['error_code' => 'invalid_session_id'], 422);
+        }
+
         $data = $request->validated();
         $dto = ChatRequestDTO::fromArray([
             'session_id' => $session,

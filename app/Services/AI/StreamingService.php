@@ -7,7 +7,6 @@ namespace App\Services\AI;
 use App\Contracts\Services\AI\AnalyticsServiceInterface;
 use App\Contracts\Services\AI\ConversationServiceInterface;
 use App\Contracts\Services\AI\IntentDetectionServiceInterface;
-use App\Contracts\Services\AI\ProductRecommendationServiceInterface;
 use App\Contracts\Services\AI\PromptBuilderServiceInterface;
 use App\Contracts\Services\AI\SafetyServiceInterface;
 use App\Contracts\Services\AI\ShopifyContextServiceInterface;
@@ -15,33 +14,45 @@ use App\Contracts\Services\AI\StreamingServiceInterface;
 use App\DTOs\Chat\AIResponseDTO;
 use App\DTOs\Chat\ChatRequestDTO;
 use App\DTOs\Chat\IntentDTO;
-use App\DTOs\Chat\ProductRecommendationDTO;
 use App\Exceptions\AI\AIException;
 use App\Models\AiConversation;
+use App\Services\AI\Streaming\ChunkEmitter;
+use App\Services\AI\Tools\ToolDefinitions;
+use App\Services\AI\Tools\ToolExecutor;
 use App\Services\Base\BaseService;
 use OpenAI\Laravel\Facades\OpenAI;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
 /**
- * Server-Sent Events streaming for chat responses.
+ * Server-Sent Events streaming with OpenAI function-calling.
  *
- * The controller hands us a validated ChatRequestDTO. We run the full pipeline
- * (safety → intent → context → prompt → OpenAI createStreamed) and emit each
- * delta as an SSE event. A heartbeat keeps proxies (nginx, Cloudflare) from
- * timing the connection out. When the stream completes we persist the full
- * assistant message and fire analytics events.
+ * Pipeline per turn:
+ *   1. safety check + intent detection (kept for analytics + sales triggers).
+ *   2. system prompt built via PromptBuilder (no PRODUCTS block — tools fetch
+ *      live data instead).
+ *   3. OpenAI createStreamed with the full MCP tools[] array.
+ *   4. Streaming loop accumulates text deltas → emits `type:text` chunks AND
+ *      collects tool_calls. When `finish_reason=tool_calls` is reached we
+ *      execute each tool via ToolExecutor (which emits its own typed chunk
+ *      AND returns a short messageForAi string), push role:tool messages
+ *      into the next OpenAI call, and re-stream. Capped at 4 loops.
+ *   5. Persist assistant message + analytics + emit `type:done`.
  */
 class StreamingService extends BaseService implements StreamingServiceInterface
 {
+    private const MAX_TOOL_LOOPS = 4;
+
     public function __construct(
         private readonly SafetyServiceInterface $safety,
         private readonly IntentDetectionServiceInterface $intent,
         private readonly ShopifyContextServiceInterface $contextResolver,
-        private readonly ProductRecommendationServiceInterface $recommendations,
         private readonly PromptBuilderServiceInterface $promptBuilder,
         private readonly ConversationServiceInterface $conversations,
         private readonly AnalyticsServiceInterface $analytics,
+        private readonly ChunkEmitter $emitter,
+        private readonly ToolDefinitions $toolDefinitions,
+        private readonly ToolExecutor $toolExecutor,
     ) {
         parent::__construct();
     }
@@ -49,22 +60,30 @@ class StreamingService extends BaseService implements StreamingServiceInterface
     public function stream(ChatRequestDTO $request): StreamedResponse
     {
         $conversation = $this->conversations->findBySession($request->sessionId);
-        if ($conversation === null || ! $conversation->isActive()) {
+        if ($conversation === null) {
+            // Self-heal: widget kept a stale session_id from a previous dev
+            // backend (URL swap, fresh DB). Adopt the id into a fresh row
+            // so the SSE turn proceeds without forcing the storefront to
+            // clear localStorage. An explicitly ended conversation still
+            // 404s below — that close was intentional.
+            $shopDomain = (string) ($request->context->shopDomain ?? config('shopify.store_domain'));
+            $conversation = $this->conversations->adoptSession(
+                sessionId: $request->sessionId,
+                shopDomain: $shopDomain,
+                pageType: $request->context->pageType,
+                locale: $request->context->locale,
+            );
+        }
+        if (! $conversation->isActive()) {
             throw new AIException('Conversation not found or already ended.', 404, 'conversation_not_found');
         }
 
-        // Run the synchronous pipeline OUTSIDE the streaming callback so any
-        // failure surfaces as a normal JSON error envelope rather than as a
-        // half-flushed SSE stream.
         $sanitized = $this->safety->sanitize($request->message);
         $this->safety->assertSafe($sanitized);
         $this->safety->assertWithinLimits($request->sessionId, $request->ipAddress);
 
         $intent = $this->intent->detect($sanitized, $request->context);
         $context = $this->contextResolver->resolve($request->context, $intent, $request->accessToken);
-        $products = $intent->name === IntentDTO::INTENT_RECOMMENDATION
-            ? $this->recommendations->search($sanitized, $request->context)
-            : [];
 
         $this->conversations->recordUserMessage($conversation, $sanitized, $intent, $request->context);
         $this->analytics->record(AnalyticsServiceInterface::EVENT_INTENT_DETECTED, $request->sessionId, [
@@ -79,19 +98,20 @@ class StreamingService extends BaseService implements StreamingServiceInterface
             intent: $intent,
             userMessage: $sanitized,
             resolvedContext: $context,
-            recommendations: $products,
+            recommendations: [],
         );
 
-        $sessionId = $request->sessionId;
+        $sessionCtx = new ChatSessionContext(
+            sessionId: $request->sessionId,
+            shopDomain: (string) ($request->context->shopDomain ?? $conversation->shop_domain),
+            cartId: $request->context->cart?->id,
+            locale: $request->context->locale ?? 'en',
+            pageType: $request->context->pageType,
+        );
 
-        $response = new StreamedResponse(function () use ($messages, $intent, $products, $conversation, $sessionId) {
-            // Keep the streaming loop running even if the client disconnects.
-            // Without this, a closed browser tab / curl --max-time mid-stream
-            // would SIGPIPE the PHP worker the moment we try to flush(), and
-            // the post-loop persistence (recordAssistantMessage) would never
-            // run — chat history would be missing that assistant turn.
+        $response = new StreamedResponse(function () use ($messages, $intent, $conversation, $sessionCtx) {
             ignore_user_abort(true);
-            $this->pipeOpenAi($messages, $intent, $products, $conversation, $sessionId);
+            $this->runToolLoop($messages, $intent, $conversation, $sessionCtx);
         });
 
         $response->headers->set('Content-Type', 'text/event-stream');
@@ -103,83 +123,114 @@ class StreamingService extends BaseService implements StreamingServiceInterface
     }
 
     /**
-     * @param  list<array{role: string, content: string}>  $messages
-     * @param  list<ProductRecommendationDTO>  $products
+     * @param  list<array<string, mixed>>  $messages
      */
-    private function pipeOpenAi(array $messages, IntentDTO $intent, array $products, AiConversation $conversation, string $sessionId): void
+    private function runToolLoop(array $messages, IntentDTO $intent, AiConversation $conversation, ChatSessionContext $ctx): void
     {
         $model = (string) config('chatbot.models.default');
         $maxOutput = (int) config('chatbot.tokens.output_budget', 600);
-        $start = microtime(true);
-        $buffer = '';
+        $tools = $this->toolDefinitions->all();
+        $startedAt = microtime(true);
+
+        $assistantText = '';
         $promptTokens = 0;
         $completionTokens = 0;
         $finishReason = null;
-
-        $this->emitInit($intent, $products);
-        $lastHeartbeat = microtime(true);
-
-        $streamAborted = false;
+        $aborted = false;
 
         try {
-            $stream = OpenAI::chat()->createStreamed([
-                'model' => $model,
-                'messages' => $messages,
-                'temperature' => 0.4,
-                'max_tokens' => $maxOutput,
-                'stream_options' => ['include_usage' => true],
-            ]);
+            for ($loop = 0; $loop < self::MAX_TOOL_LOOPS; $loop++) {
+                $payload = [
+                    'model' => $model,
+                    'messages' => $messages,
+                    'tools' => $tools,
+                    'temperature' => 0.4,
+                    'max_tokens' => $maxOutput,
+                    'stream_options' => ['include_usage' => true],
+                ];
 
-            foreach ($stream as $chunk) {
-                $choice = $chunk->choices[0] ?? null;
-                $delta = $choice?->delta?->content;
-                if ($delta !== null && $delta !== '') {
-                    $buffer .= $delta;
-                    $this->emit('delta', ['content' => $delta]);
+                $turnText = '';
+                $toolCalls = [];
+                $turnFinish = null;
+
+                $stream = OpenAI::chat()->createStreamed($payload);
+                foreach ($stream as $chunk) {
+                    $choice = $chunk->choices[0] ?? null;
+                    if ($choice !== null) {
+                        $delta = $choice->delta ?? null;
+                        $content = $delta?->content;
+                        if (is_string($content) && $content !== '') {
+                            $turnText .= $content;
+                            $this->emitter->emitText($content);
+                        }
+
+                        $tcDeltas = $delta?->toolCalls ?? null;
+                        if (is_array($tcDeltas)) {
+                            foreach ($tcDeltas as $tc) {
+                                $this->mergeToolCall($toolCalls, $tc);
+                            }
+                        }
+
+                        if (isset($choice->finishReason) && $choice->finishReason !== null) {
+                            $turnFinish = (string) $choice->finishReason;
+                        }
+                    }
+
+                    $usage = $chunk->usage ?? null;
+                    if ($usage !== null) {
+                        $promptTokens = (int) ($usage->promptTokens ?? $promptTokens);
+                        $completionTokens = (int) ($usage->completionTokens ?? $completionTokens);
+                    }
                 }
 
-                if ($choice && isset($choice->finishReason)) {
-                    $finishReason = $choice->finishReason;
+                $assistantText .= $turnText;
+                $finishReason = $turnFinish ?? $finishReason;
+
+                if ($turnFinish !== 'tool_calls' || $toolCalls === []) {
+                    break;
                 }
 
-                $usage = $chunk->usage ?? null;
-                if ($usage !== null) {
-                    $promptTokens = (int) ($usage->promptTokens ?? $promptTokens);
-                    $completionTokens = (int) ($usage->completionTokens ?? $completionTokens);
-                }
+                $messages[] = [
+                    'role' => 'assistant',
+                    'content' => $turnText !== '' ? $turnText : null,
+                    'tool_calls' => array_values($toolCalls),
+                ];
 
-                if (microtime(true) - $lastHeartbeat > 15) {
-                    echo ": keepalive\n\n";
-                    @ob_flush();
-                    flush();
-                    $lastHeartbeat = microtime(true);
+                foreach ($toolCalls as $tc) {
+                    $name = $tc['function']['name'] ?? '';
+                    if ($name === '') {
+                        continue;
+                    }
+                    $args = $this->decodeArguments($tc['function']['arguments'] ?? '');
+                    $result = $this->toolExecutor->execute($name, $args, $ctx);
+
+                    $messages[] = [
+                        'role' => 'tool',
+                        'tool_call_id' => $tc['id'] ?? '',
+                        'content' => $result->messageForAi,
+                    ];
                 }
             }
         } catch (Throwable $e) {
-            $streamAborted = true;
+            $aborted = true;
             $this->logErrorWithException('SSE stream aborted', $e, [
-                'session_id' => $sessionId,
-                'buffer_chars' => mb_strlen($buffer),
+                'session_id' => $ctx->sessionId,
+                'buffer_chars' => mb_strlen($assistantText),
             ]);
-            $this->emit('error', [
+            $this->emitter->emit('error', [
                 'message' => 'AI provider error',
                 'code' => 'ai_service_unavailable',
             ]);
-            $this->analytics->record(AnalyticsServiceInterface::EVENT_AI_ERROR, $sessionId, [
+            $this->analytics->record(AnalyticsServiceInterface::EVENT_AI_ERROR, $ctx->sessionId, [
                 'error' => $e->getMessage(),
             ]);
         }
 
-        // Persist whatever we managed to receive — even on abort. Without
-        // this, a partial OpenAI failure leaves the user's question in
-        // ai_messages with no assistant follow-up, breaking history and
-        // making the next turn confusing for the model. Tag aborted writes
-        // in metadata so the frontend / analytics can distinguish them.
-        if ($streamAborted && $buffer === '') {
+        if ($aborted && $assistantText === '') {
             return;
         }
 
-        $latency = (int) round((microtime(true) - $start) * 1000);
+        $latency = (int) round((microtime(true) - $startedAt) * 1000);
         $usage = [
             'prompt_tokens' => $promptTokens,
             'completion_tokens' => $completionTokens,
@@ -187,56 +238,82 @@ class StreamingService extends BaseService implements StreamingServiceInterface
         ];
 
         $assistant = new AIResponseDTO(
-            content: $buffer,
+            content: $assistantText,
             intent: $intent->name,
-            products: $products,
+            products: [],
             usage: $usage,
             latencyMs: $latency,
             model: $model,
-            finishReason: $streamAborted ? 'aborted' : $finishReason,
+            finishReason: $aborted ? 'aborted' : $finishReason,
         );
 
         $this->conversations->recordAssistantMessage($conversation, $assistant);
 
-        $this->analytics->record(AnalyticsServiceInterface::EVENT_MESSAGE_RECEIVED, $sessionId, [
+        $this->analytics->record(AnalyticsServiceInterface::EVENT_MESSAGE_RECEIVED, $ctx->sessionId, [
             'intent' => $intent->name,
             'usage' => $usage,
             'latency_ms' => $latency,
-            'product_count' => count($products),
-            'aborted' => $streamAborted,
+            'aborted' => $aborted,
         ]);
 
-        if (! $streamAborted) {
-            $this->emit('done', [
-                'usage' => $usage,
-                'latency_ms' => $latency,
-                'products' => array_map(fn ($p) => $p->toArray(), $products),
-            ]);
+        if (! $aborted) {
+            $this->emitter->emitDone();
         }
     }
 
     /**
-     * @param  list<ProductRecommendationDTO>  $products
+     * Accumulate streaming tool_call deltas keyed by `index`. Each chunk
+     * may carry partial id/name/arguments — concatenate as they arrive.
+     *
+     * @param  array<int, array<string, mixed>>  $toolCalls
      */
-    private function emitInit(IntentDTO $intent, array $products): void
+    private function mergeToolCall(array &$toolCalls, mixed $tc): void
     {
-        $this->emit('init', [
-            'intent' => $intent->name,
-            'product_count' => count($products),
-        ]);
-    }
-
-    /**
-     * @param  array<string, mixed>  $payload
-     */
-    private function emit(string $event, array $payload): void
-    {
-        $json = json_encode(array_merge(['event' => $event], $payload), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-        if ($json === false) {
+        $idx = is_object($tc) ? ($tc->index ?? null) : ($tc['index'] ?? null);
+        if (! is_int($idx)) {
             return;
         }
-        echo 'data: '.$json."\n\n";
-        @ob_flush();
-        flush();
+
+        $toolCalls[$idx] ??= ['id' => '', 'type' => 'function', 'function' => ['name' => '', 'arguments' => '']];
+
+        $id = is_object($tc) ? ($tc->id ?? null) : ($tc['id'] ?? null);
+        if (is_string($id) && $id !== '') {
+            $toolCalls[$idx]['id'] .= $id;
+        }
+
+        $type = is_object($tc) ? ($tc->type ?? null) : ($tc['type'] ?? null);
+        if (is_string($type) && $type !== '') {
+            $toolCalls[$idx]['type'] = $type;
+        }
+
+        $fn = is_object($tc) ? ($tc->function ?? null) : ($tc['function'] ?? null);
+        if ($fn === null) {
+            return;
+        }
+        $name = is_object($fn) ? ($fn->name ?? null) : ($fn['name'] ?? null);
+        if (is_string($name) && $name !== '') {
+            $toolCalls[$idx]['function']['name'] .= $name;
+        }
+        $args = is_object($fn) ? ($fn->arguments ?? null) : ($fn['arguments'] ?? null);
+        if (is_string($args) && $args !== '') {
+            $toolCalls[$idx]['function']['arguments'] .= $args;
+        }
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function decodeArguments(string $raw): array
+    {
+        if ($raw === '') {
+            return [];
+        }
+        try {
+            $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return [];
+        }
+
+        return is_array($decoded) ? $decoded : [];
     }
 }

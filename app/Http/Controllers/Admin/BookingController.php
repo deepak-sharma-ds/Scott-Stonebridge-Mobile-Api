@@ -2,44 +2,32 @@
 
 namespace App\Http\Controllers\Admin;
 
-use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
-use App\Models\User;
+use App\Models\AvailabilityDate;
+use App\Models\GoogleToken;
 use App\Models\ScheduledMeeting;
-use Spatie\Permission\Models\Role;
+use App\Models\TimeSlot;
+use Carbon\Carbon;
 use DB;
-use Hash;
-use Illuminate\Support\Arr;
-use Illuminate\View\View;
-use App\Mail\SendMail;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Password;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Session;
 use Google\Client;
 use Google\Service\Calendar;
 use Google_Client;
 use Google_Service_Calendar;
 use Google_Service_Calendar_Event;
 use Google_Service_Calendar_EventDateTime;
-use App\Models\AvailabilityDate;
-use App\Models\GoogleToken;
-use App\Models\TimeSlot;
-use \Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\Log;
 
 class BookingController extends Controller
 {
-
-
     public function __construct()
     {
         $this->middleware(function ($request, $next) {
-            if (!auth()->check() || !auth()->user()->hasRole('Admin')) {
+            if (! auth()->check() || ! auth()->user()->hasRole('Admin')) {
                 abort(403, 'Access denied');
             }
+
             return $next($request);
         });
     }
@@ -60,7 +48,7 @@ class BookingController extends Controller
                 $dates = explode(' to ', $request->date_range);
                 if (count($dates) == 2) {
                     $query->whereDate('datetime', '>=', $dates[0])
-                          ->whereDate('datetime', '<=', $dates[1]);
+                        ->whereDate('datetime', '<=', $dates[1]);
                 }
             }
 
@@ -72,6 +60,7 @@ class BookingController extends Controller
             return view('admin.booking_inquiries.index', compact('booking_inquiries'));
         } catch (\Exception $e) {
             report($e);
+
             return redirect()->route('admin.scheduled-meetings')
                 ->with('error', 'Something went wrong while fetching bookings.');
         }
@@ -80,6 +69,7 @@ class BookingController extends Controller
     public function view($id)
     {
         $booking = ScheduledMeeting::findOrFail($id);
+
         return view('admin.booking_inquiries.view', compact('booking'));
     }
 
@@ -98,7 +88,7 @@ class BookingController extends Controller
         $booking = ScheduledMeeting::findOrFail($data['booking_id']);
 
         $availability = AvailabilityDate::where('date', $data['availability_date'])->first();
-        if (!$availability) {
+        if (! $availability) {
             return back()->withErrors(['availability_date' => 'Selected date is not available.'])->withInput();
         }
 
@@ -121,12 +111,11 @@ class BookingController extends Controller
             $date = Carbon::parse($availability->date)->format('Y-m-d');
 
             $startDateTime = Carbon::createFromFormat('Y-m-d H:i:s', "$date {$timeSlot->start_time}");
-            $endDateTime   = Carbon::createFromFormat('Y-m-d H:i:s', "$date {$timeSlot->end_time}");
-
+            $endDateTime = Carbon::createFromFormat('Y-m-d H:i:s', "$date {$timeSlot->end_time}");
 
             if ($booking->status === 'needs_reschedule') {
                 // Cancel old event
-                if (!empty($booking->event_id)) {
+                if (! empty($booking->event_id) && ! isset($booking->event_id) && $booking->event_id !== '') {
                     try {
                         $log->info('Cancelling old calendar event for rescheduled booking', ['booking_id' => $booking->id, 'event_id' => $booking->event_id]);
                         $calendarService->events->delete('primary', $booking->event_id, ['sendUpdates' => 'all']);
@@ -153,11 +142,11 @@ class BookingController extends Controller
             //     $event = $calendarService->events->get('primary', $booking->event_id);
             //     $event->setStart(new Google_Service_Calendar_EventDateTime([
             //         'dateTime' => $startDateTime->toRfc3339String(),
-            //         'timeZone' => 'Asia/Kolkata'
+            //         'timeZone' => config('app.timezone', 'Europe/London')
             //     ]));
             //     $event->setEnd(new Google_Service_Calendar_EventDateTime([
             //         'dateTime' => $endDateTime->toRfc3339String(),
-            //         'timeZone' => 'Asia/Kolkata'
+            //         'timeZone' => config('app.timezone', 'Europe/London')
             //     ]));
 
             //     $calendarService->events->update('primary', $booking->event_id, $event, ['sendUpdates' => 'all']);
@@ -169,7 +158,7 @@ class BookingController extends Controller
             else {
                 $log->info('Rescheduling existing calendar event', [
                     'booking_id' => $booking->id,
-                    'event_id'   => $booking->event_id
+                    'event_id' => $booking->event_id,
                 ]);
 
                 try {
@@ -179,11 +168,11 @@ class BookingController extends Controller
                     // Update existing event
                     $event->setStart(new Google_Service_Calendar_EventDateTime([
                         'dateTime' => $startDateTime->toRfc3339String(),
-                        'timeZone' => 'Asia/Kolkata'
+                        'timeZone' => config('app.timezone', 'Europe/London'),
                     ]));
                     $event->setEnd(new Google_Service_Calendar_EventDateTime([
                         'dateTime' => $endDateTime->toRfc3339String(),
-                        'timeZone' => 'Asia/Kolkata'
+                        'timeZone' => config('app.timezone', 'Europe/London'),
                     ]));
 
                     $calendarService->events->update('primary', $booking->event_id, $event, ['sendUpdates' => 'all']);
@@ -193,7 +182,7 @@ class BookingController extends Controller
                     if ($e->getCode() == 404) {
                         $log->warning('Event missing — creating new', [
                             'booking_id' => $booking->id,
-                            'old_event_id' => $booking->event_id
+                            'old_event_id' => $booking->event_id,
                         ]);
 
                         // Create new event
@@ -214,7 +203,6 @@ class BookingController extends Controller
                 }
             }
 
-
             // Update booking record
             $booking->availability_date_id = $availability->id;
             $booking->time_slot_id = $timeSlot->id;
@@ -228,8 +216,9 @@ class BookingController extends Controller
             return redirect()->route('admin.scheduled-meetings')
                 ->with('success', 'Meeting rescheduled successfully!');
         } catch (\Exception $e) {
-            $log->error('Error rescheduling event: ' . $e->getMessage());
-            return back()->withErrors(['api_error' => 'Error rescheduling event: ' . $e->getMessage()]);
+            $log->error('Error rescheduling event: '.$e->getMessage());
+
+            return back()->withErrors(['api_error' => 'Error rescheduling event: '.$e->getMessage()]);
         }
     }
 
@@ -246,7 +235,7 @@ class BookingController extends Controller
          * ======================================================
          */
         $tokenRecord = GoogleToken::first();
-        if (!$tokenRecord) {
+        if (! $tokenRecord) {
             $log->warning('Google token not found in database');
             throw new \Exception('Google token not found');
         }
@@ -261,7 +250,7 @@ class BookingController extends Controller
          * 2. Initialize Google Client
          * ======================================================
          */
-        $client = new Google_Client();
+        $client = new Google_Client;
         $client->setClientId(config('google.client_id') ?: env('GOOGLE_CLIENT_ID'));
         $client->setClientSecret(config('google.client_secret') ?: env('GOOGLE_CLIENT_SECRET'));
         $client->setRedirectUri(config('google.redirect_uri'));
@@ -270,10 +259,10 @@ class BookingController extends Controller
 
         // Build token array for Google client
         $tokenArray = [
-            'access_token'  => $accessToken,
+            'access_token' => $accessToken,
             'refresh_token' => $refreshToken,
-            'created'       => $tokenRecord->created_at_timestamp,
-            'expires_in'    => null,
+            'created' => $tokenRecord->created_at_timestamp,
+            'expires_in' => null,
         ];
 
         $client->setAccessToken($tokenArray);
@@ -287,7 +276,7 @@ class BookingController extends Controller
          */
         if ($client->isAccessTokenExpired()) {
 
-            if (!$refreshToken) {
+            if (! $refreshToken) {
                 $log->error('Refresh token missing — admin must reauthenticate.');
                 throw new \Exception('Google Calendar authentication expired');
             }
@@ -303,14 +292,14 @@ class BookingController extends Controller
 
             // Update database record
             $tokenRecord->update([
-                'access_token'          => Crypt::encryptString($newToken['access_token']),
-                'refresh_token'         => isset($newToken['refresh_token'])
+                'access_token' => Crypt::encryptString($newToken['access_token']),
+                'refresh_token' => isset($newToken['refresh_token'])
                     ? Crypt::encryptString($newToken['refresh_token'])
                     : $tokenRecord->refresh_token,
-                'expires_at'            => \Carbon\Carbon::createFromTimestamp($expires),
-                'token_type'            => $newToken['token_type'] ?? $tokenRecord->token_type,
-                'scope'                 => $newToken['scope'] ?? $tokenRecord->scope,
-                'created_at_timestamp'  => $created,
+                'expires_at' => Carbon::createFromTimestamp($expires),
+                'token_type' => $newToken['token_type'] ?? $tokenRecord->token_type,
+                'scope' => $newToken['scope'] ?? $tokenRecord->scope,
+                'created_at_timestamp' => $created,
             ]);
 
             $log->info('Google token refreshed and updated in DB');
@@ -324,26 +313,24 @@ class BookingController extends Controller
         return new Google_Service_Calendar($client);
     }
 
-
     /**
      * Build Google Calendar Event
      */
     private function buildCalendarEvent(ScheduledMeeting $booking, Carbon $start, Carbon $end): Google_Service_Calendar_Event
     {
         Log::channel('appointment_slots')->info('Building calendar event for booking', ['booking_id' => $booking->id]);
+
         return new Google_Service_Calendar_Event([
-            'summary' => 'Meeting with ' . $booking->name,
-            'description' => "Booking rescheduled.\nPhone: " . $booking->phone,
-            'start' => ['dateTime' => $start->toRfc3339String(), 'timeZone' => 'Asia/Kolkata'],
-            'end' => ['dateTime' => $end->toRfc3339String(), 'timeZone' => 'Asia/Kolkata'],
+            'summary' => 'Meeting with '.$booking->name,
+            'description' => "Booking rescheduled.\nPhone: ".$booking->phone,
+            'start' => ['dateTime' => $start->toRfc3339String(), 'timeZone' => config('app.timezone', 'Europe/London')],
+            'end' => ['dateTime' => $end->toRfc3339String(), 'timeZone' => config('app.timezone', 'Europe/London')],
             'attendees' => [['email' => $booking->email]],
             'conferenceData' => [
-                'createRequest' => ['conferenceSolutionKey' => ['type' => 'hangoutsMeet'], 'requestId' => uniqid()]
+                'createRequest' => ['conferenceSolutionKey' => ['type' => 'hangoutsMeet'], 'requestId' => uniqid()],
             ],
         ]);
     }
-
-
 
     public function cancel(Request $request)
     {
@@ -352,9 +339,10 @@ class BookingController extends Controller
                 'booking_id' => 'required|exists:scheduled_meetings,id',
             ]);
             $booking = ScheduledMeeting::where('id', $data['booking_id'])->delete();
+
             return redirect()->route('admin.scheduled-meetings')->with('success', 'Meeting closed successfully!');
         } catch (\Exception $e) {
-            return back()->withErrors(['api_error' => 'Error canceling event: ' . $e->getMessage()]);
+            return back()->withErrors(['api_error' => 'Error canceling event: '.$e->getMessage()]);
         }
     }
 
@@ -362,8 +350,8 @@ class BookingController extends Controller
     {
         $date = $request->get('date');
         $availability = AvailabilityDate::where('date', $date)->first();
-        
-        if (!$availability) {
+
+        if (! $availability) {
             return response()->json(['success' => true, 'time_slots' => []]);
         }
 
@@ -388,7 +376,7 @@ class BookingController extends Controller
 
         return response()->json([
             'success' => true,
-            'time_slots' => $slotsFormatted
+            'time_slots' => $slotsFormatted,
         ]);
     }
 
@@ -400,12 +388,12 @@ class BookingController extends Controller
             $code = $request->query('code');
             $state = $request->query('state');
 
-            if (!$code) {
+            if (! $code) {
                 return response()->json(['error' => 'Authorization code missing'], 400);
             }
 
             // Initialize Google Client
-            $client = new \Google_Client();
+            $client = new Google_Client;
             $client->setClientId(config('google.client_id') ?: env('GOOGLE_CLIENT_ID'));
             $client->setClientSecret(config('google.client_secret') ?: env('GOOGLE_CLIENT_SECRET'));
             $client->setRedirectUri(config('google.redirect_uri'));
@@ -417,6 +405,7 @@ class BookingController extends Controller
                 $token = $client->fetchAccessTokenWithAuthCode($code);
             } catch (\Exception $e) {
                 Log::error('Admin OAuth Token Fetch Failed', ['exception' => $e->getMessage()]);
+
                 return response()->json(['error' => 'Failed to fetch admin token'], 500);
             }
 
@@ -425,30 +414,30 @@ class BookingController extends Controller
             }
 
             // Store token inside DB securely
-            $created  = $token['created'] ?? time();
+            $created = $token['created'] ?? time();
             $expiresIn = $token['expires_in'] ?? 3600;
-            $expiresAt = \Carbon\Carbon::createFromTimestamp($created + $expiresIn);
+            $expiresAt = Carbon::createFromTimestamp($created + $expiresIn);
 
-            \App\Models\GoogleToken::updateOrCreate(
+            GoogleToken::updateOrCreate(
                 ['id' => 1],
                 [
-                    'access_token'          => Crypt::encryptString($token['access_token']),
-                    'refresh_token'         => isset($token['refresh_token'])
+                    'access_token' => Crypt::encryptString($token['access_token']),
+                    'refresh_token' => isset($token['refresh_token'])
                         ? Crypt::encryptString($token['refresh_token'])
                         : null,
-                    'expires_at'            => $expiresAt,
-                    'token_type'            => $token['token_type'] ?? null,
-                    'scope'                 => $token['scope'] ?? null,
-                    'created_at_timestamp'  => $created,
+                    'expires_at' => $expiresAt,
+                    'token_type' => $token['token_type'] ?? null,
+                    'scope' => $token['scope'] ?? null,
+                    'created_at_timestamp' => $created,
                 ]
             );
 
             return response()->json([
                 'message' => 'Admin Google Calendar token stored successfully',
-                'token_info' => $token
+                'token_info' => $token,
             ]);
         } catch (\Throwable $th) {
-            //throw $th;
+            // throw $th;
             dd($th);
         }
     }

@@ -1,7 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\V1\AI\ChatController as AIChatController;
-use App\Http\Controllers\Api\V1\AI\OrderTrackingController as AIOrderTrackingController;
+use App\Http\Controllers\Api\V1\AI\CustomerOAuthController as AICustomerOAuthController;
 use App\Http\Controllers\Api\V1\AI\StreamController as AIStreamController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CartController;
@@ -326,15 +326,24 @@ Route::prefix('v1')->middleware([
     });
 
     /**
-     * AI Sales Agent — Order tracking (in-chat "Where is my order?" flow)
+     * AI Sales Agent — Shopify Customer Account OAuth bridge (Phase 3).
      *
-     * GET /api/v1/ai/orders/track - Returns order status by (order_number, email).
-     *                               Rate-limited 10/min/session via ai-order-track.
+     * GET /api/v1/ai/oauth/customer/start    - Redirect to Shopify auth (PKCE).
+     * GET /api/v1/ai/oauth/customer/callback - Exchange code for token, persist.
+     * GET /api/v1/ai/oauth/customer/status   - Check whether the chat session is
+     *                                          authenticated against Customer
+     *                                          Account API.
      */
-    Route::prefix('ai/orders')->name('api.v1.ai.orders.')->group(function () {
-        Route::get('/track', [AIOrderTrackingController::class, 'show'])
-            ->middleware('throttle:ai-order-track')
-            ->name('track');
+    Route::prefix('ai/oauth/customer')->name('api.v1.ai.oauth.customer.')->group(function () {
+        Route::get('/start', [AICustomerOAuthController::class, 'start'])
+            ->middleware('throttle:ai-oauth-start')
+            ->name('start');
+
+        Route::get('/callback', [AICustomerOAuthController::class, 'callback'])
+            ->name('callback');
+
+        Route::get('/status', [AICustomerOAuthController::class, 'status'])
+            ->name('status');
     });
 
     // ============================================

@@ -52,6 +52,47 @@ class ConversationService extends BaseService implements ConversationServiceInte
         return AiConversation::where('session_id', $sessionId)->first();
     }
 
+    /**
+     * Atomically adopt or fetch a conversation by the caller-supplied
+     * session_id. Used by the self-heal path when a widget keeps sending a
+     * stale id (e.g. after a dev backend URL swap). Re-using the same id
+     * keeps the front-end's localStorage stable, so the user never sees
+     * "Conversation not found".
+     *
+     * @param  array<string, mixed>  $metadata
+     */
+    public function adoptSession(
+        string $sessionId,
+        string $shopDomain,
+        ?string $shopifyCustomerId = null,
+        ?string $pageType = null,
+        ?string $locale = null,
+        array $metadata = [],
+    ): AiConversation {
+        /** @var AiConversation $conversation */
+        $conversation = AiConversation::firstOrCreate(
+            ['session_id' => $sessionId],
+            [
+                'shop_domain' => $shopDomain,
+                'shopify_customer_id' => $shopifyCustomerId,
+                'page_type' => $pageType,
+                'locale' => $locale,
+                'status' => AiConversation::STATUS_ACTIVE,
+                'metadata' => $metadata !== [] ? $metadata + ['adopted' => true] : ['adopted' => true],
+                'started_at' => now(),
+            ],
+        );
+
+        if ($conversation->wasRecentlyCreated) {
+            $this->logInfo('AI conversation adopted (self-heal)', [
+                'session_id' => $conversation->session_id,
+                'shop_domain' => $shopDomain,
+            ], 'ai');
+        }
+
+        return $conversation;
+    }
+
     public function recordUserMessage(
         AiConversation $conversation,
         string $message,

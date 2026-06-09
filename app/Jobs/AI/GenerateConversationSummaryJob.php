@@ -47,7 +47,7 @@ class GenerateConversationSummaryJob implements ShouldQueue
             ->orderBy('id')
             ->limit(40)
             ->get(['role', 'message'])
-            ->map(fn (AiMessage $m): string => strtoupper($m->role).': '.$m->message)
+            ->map(fn(AiMessage $m): string => strtoupper($m->role) . ': ' . $m->message)
             ->implode("\n");
 
         if ($messages === '') {
@@ -60,7 +60,22 @@ class GenerateConversationSummaryJob implements ShouldQueue
                 'temperature' => 0.2,
                 'max_tokens' => 200,
                 'messages' => [
-                    ['role' => 'system', 'content' => 'Summarize this Shopify chat in <=80 words. Return plain text, no preamble.'],
+                    // ['role' => 'system', 'content' => 'Summarize this Shopify chat in <=80 words. Return plain text, no preamble.'],
+                    [
+                        'role' => 'system',
+                        'content' => 'You are summarizing a Shopify customer support conversation.
+
+                            Extract:
+                            - Customer intent
+                            - Products mentioned
+                            - Important questions
+                            - Problems encountered
+                            - Final outcome
+
+                            Write a concise summary under 80 words.
+
+                            Return plain text only.'
+                    ],
                     ['role' => 'user', 'content' => $messages],
                 ],
             ]);

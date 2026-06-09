@@ -20,6 +20,20 @@ interface ConversationServiceInterface
      */
     public function start(string $shopDomain, ?string $shopifyCustomerId = null, ?string $pageType = null, ?string $locale = null, array $metadata = []): AiConversation;
 
+    /**
+     * Lazily create a conversation using the caller-supplied session_id.
+     *
+     * Used by the stream + message endpoints to self-heal when the widget
+     * sends a session_id that the backend doesn't know — typically because
+     * the dev backend URL was swapped and the storefront kept its cached
+     * id in localStorage. Re-using the supplied id keeps the widget's
+     * client-side state stable; subsequent turns find the conversation
+     * normally.
+     *
+     * @param  array<string, mixed>  $metadata
+     */
+    public function adoptSession(string $sessionId, string $shopDomain, ?string $shopifyCustomerId = null, ?string $pageType = null, ?string $locale = null, array $metadata = []): AiConversation;
+
     public function findBySession(string $sessionId): ?AiConversation;
 
     public function recordUserMessage(AiConversation $conversation, string $message, IntentDTO $intent, ChatContextDTO $context): AiMessage;
