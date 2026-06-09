@@ -211,8 +211,8 @@
                 </h5>
             </div>
             <button @click="closePanel()"
-                    style="border:none;background:rgba(255,255,255,0.15);
-                           color:#fff;width:32px;height:32px;border-radius:8px;
+                    style="border:none;background:rgba(255,255,255,1);
+                           color:#000;width:32px;height:32px;border-radius:8px;
                            cursor:pointer;display:flex;align-items:center;justify-content:center;
                            transition:background 0.15s ease;"
                     onmouseover="this.style.background='rgba(255,255,255,0.25)'"
@@ -282,9 +282,9 @@
                     <polyline points="3 6 5 6 21 6"></polyline>
                     <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
                 </svg>
-                Delete Date
+                Clear All Slots
             </button>
-            <button @click="closePanel()" class="btn btn-secondary">Close</button>
+            {{-- <button @click="closePanel()" class="btn btn-secondary">Close</button> --}}
         </div>
 
     </aside>

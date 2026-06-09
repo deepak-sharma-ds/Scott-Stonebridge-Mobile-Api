@@ -23,7 +23,12 @@ class SendMessageRequest extends BaseApiRequest
         $maxLength = (int) config('chatbot.message.max_length', 2000);
 
         return [
-            'session_id' => ['required', 'string', 'uuid', 'exists:ai_conversations,session_id'],
+            // The `exists:` rule used to gate this — but it caused a hard 422
+            // for widgets that kept a stale session_id in localStorage after
+            // the dev backend URL was swapped. The service layer now self-heals
+            // unknown ids via ConversationService::adoptSession, so we keep
+            // shape validation only here.
+            'session_id' => ['required', 'string', 'uuid'],
             'message' => ['required', 'string', 'min:1', 'max:'.$maxLength],
             'context' => ['sometimes', 'array'],
             'context.page_type' => ['sometimes', 'nullable', 'string', 'in:home,product,collection,cart,search,account,blog,page,unknown'],

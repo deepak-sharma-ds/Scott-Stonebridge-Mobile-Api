@@ -270,7 +270,20 @@ class ChatbotService extends BaseService implements ChatbotServiceInterface
     public function handleMessage(ChatRequestDTO $request): AIResponseDTO
     {
         $conversation = $this->conversations->findBySession($request->sessionId);
-        if ($conversation === null || ! $conversation->isActive()) {
+        if ($conversation === null) {
+            // Self-heal: widget kept a stale session_id from a previous dev
+            // backend (e.g. URL swap). Adopt the id into a fresh row so the
+            // turn proceeds without forcing the storefront to clear local
+            // state. An explicitly ended conversation still 404s below —
+            // that close was intentional.
+            $conversation = $this->conversations->adoptSession(
+                sessionId: $request->sessionId,
+                shopDomain: $this->resolveShopDomainForAdoption($request),
+                pageType: $request->context->pageType,
+                locale: $request->context->locale,
+            );
+        }
+        if (! $conversation->isActive()) {
             throw new AIException('Conversation not found or already ended.', 404, 'conversation_not_found');
         }
 
@@ -317,6 +330,21 @@ class ChatbotService extends BaseService implements ChatbotServiceInterface
         }
 
         return $response;
+    }
+
+    /**
+     * Pick a shop_domain for the adopt-session self-heal path. Prefer the
+     * context the widget sent (so multi-shop tenancy stays correct), then
+     * fall back to the configured default Shopify store.
+     */
+    private function resolveShopDomainForAdoption(ChatRequestDTO $request): string
+    {
+        $contextDomain = $request->context->shopDomain;
+        if (is_string($contextDomain) && trim($contextDomain) !== '') {
+            return trim($contextDomain);
+        }
+
+        return (string) config('shopify.store_domain');
     }
 
     public function endSession(string $sessionId): AiConversation

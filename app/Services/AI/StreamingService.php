@@ -60,7 +60,21 @@ class StreamingService extends BaseService implements StreamingServiceInterface
     public function stream(ChatRequestDTO $request): StreamedResponse
     {
         $conversation = $this->conversations->findBySession($request->sessionId);
-        if ($conversation === null || ! $conversation->isActive()) {
+        if ($conversation === null) {
+            // Self-heal: widget kept a stale session_id from a previous dev
+            // backend (URL swap, fresh DB). Adopt the id into a fresh row
+            // so the SSE turn proceeds without forcing the storefront to
+            // clear localStorage. An explicitly ended conversation still
+            // 404s below — that close was intentional.
+            $shopDomain = (string) ($request->context->shopDomain ?? config('shopify.store_domain'));
+            $conversation = $this->conversations->adoptSession(
+                sessionId: $request->sessionId,
+                shopDomain: $shopDomain,
+                pageType: $request->context->pageType,
+                locale: $request->context->locale,
+            );
+        }
+        if (! $conversation->isActive()) {
             throw new AIException('Conversation not found or already ended.', 404, 'conversation_not_found');
         }
 
