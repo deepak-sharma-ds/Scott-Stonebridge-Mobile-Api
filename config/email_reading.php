@@ -56,4 +56,18 @@ return [
 
     'default_view' => env('READINGS_DEFAULT_VIEW', 'mail.email-reading'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Testing allowlist (TEMPORARY)
+    |--------------------------------------------------------------------------
+    | When non-empty, the reading webhook will only process orders whose
+    | customer email is in this list. All other orders are logged and
+    | skipped. Clear READINGS_TEST_EMAILS (or set empty) to disable the
+    | filter and resume processing every order.
+    */
+    'test_emails' => array_values(array_filter(array_map(
+        fn ($e) => strtolower(trim((string) $e)),
+        explode(',', (string) env('READINGS_TEST_EMAILS', ''))
+    ))),
+
 ];

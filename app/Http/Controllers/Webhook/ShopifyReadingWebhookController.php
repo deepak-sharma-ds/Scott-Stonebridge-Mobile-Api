@@ -35,6 +35,26 @@ class ShopifyReadingWebhookController extends Controller
             return response()->json(['message' => 'No order id'], 200);
         }
 
+        $allowlist = (array) config('email_reading.test_emails', []);
+        if (! empty($allowlist)) {
+            $incomingEmail = strtolower(trim((string) (
+                $order['email']
+                ?? $order['contact_email']
+                ?? ($order['customer']['email'] ?? '')
+            )));
+
+            if ($incomingEmail === '' || ! in_array($incomingEmail, $allowlist, true)) {
+                Log::channel('shopify_webhooks')->info('Reading webhook skipped: email not in test allowlist', [
+                    'order_id' => $orderId,
+                    'email' => $incomingEmail,
+                ]);
+
+                return response()->json([
+                    'message' => 'Skipped: email not in test allowlist',
+                ], 200);
+            }
+        }
+
         if ($webhookId) {
             $existing = ShopifyWebhookEvent::where('shopify_webhook_id', $webhookId)->first();
             if ($existing) {
