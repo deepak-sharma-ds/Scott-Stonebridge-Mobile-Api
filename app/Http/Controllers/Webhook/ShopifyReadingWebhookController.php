@@ -182,14 +182,19 @@ class ShopifyReadingWebhookController extends Controller
 
     /**
      * Convert Shopify line-item properties (array of {name,value}) into a
-     * key/value snapshot. Question slot keys map by sluggified property name
-     * (e.g. "Future Q1" -> "future_q1") plus a numeric "q1","q2",... fallback
-     * so prompt_template authors can pick whichever style they prefer.
+     * key/value snapshot. Each property contributes:
+     *   - a normalised key derived from its name (e.g. "You & Me Details"
+     *     becomes "you_me_details"),
+     *   - a positional alias (`q1`, `q2`, ...) so prompt templates that
+     *     prefer numeric placeholders still resolve.
+     *
+     * Also stamps the verbatim property name under `_raw` for audit/debug.
      */
     private function mapProperties(array $properties): array
     {
-        $out = [];
+        $out = ['_raw' => []];
         $idx = 1;
+
         foreach ($properties as $prop) {
             $name = (string) ($prop['name'] ?? '');
             $value = (string) ($prop['value'] ?? '');
@@ -197,12 +202,12 @@ class ShopifyReadingWebhookController extends Controller
                 continue;
             }
 
-            $key = strtolower(preg_replace('/[^a-z0-9]+/i', '_', trim($name)));
-            $key = trim($key, '_');
+            $key = EmailReadingDelivery::normalizeKey($name);
             if ($key !== '') {
                 $out[$key] = $value;
             }
             $out['q'.$idx] = $value;
+            $out['_raw'][$name] = $value;
             $idx++;
         }
 

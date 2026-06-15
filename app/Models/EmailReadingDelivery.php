@@ -57,4 +57,21 @@ class EmailReadingDelivery extends Model
             'error_message' => $message,
         ])->save();
     }
+
+    /**
+     * Single source of truth for converting Shopify property names and
+     * schema keys/labels into the canonical lookup key used inside the
+     * delivery's `questions` array. Identical input must always produce
+     * identical output — both the webhook controller (when mapping
+     * incoming properties) and the processing job (when resolving schema
+     * slots) call this so they cannot drift.
+     */
+    public static function normalizeKey(?string $value): string
+    {
+        $value = (string) $value;
+        $value = strtolower(trim($value));
+        $value = (string) preg_replace('/[^a-z0-9]+/i', '_', $value);
+
+        return trim($value, '_');
+    }
 }

@@ -86,26 +86,58 @@ class ProcessEmailReadingOrderJob implements ShouldQueue
     }
 
     /**
+     * Returns the labels of any required schema slots that have no value in
+     * the captured `questions` snapshot.
+     *
+     * A slot is considered present when ANY of these lookups resolves to a
+     * non-empty string:
+     *   1. normalised `key` from the schema row
+     *   2. normalised `label` from the schema row (covers cases where the
+     *      Shopify property name matches the customer-facing label rather
+     *      than the internal key)
+     *   3. positional alias `q{n}` based on the slot's order in the schema
+     *
+     * This mirrors how `ShopifyReadingWebhookController::mapProperties()`
+     * writes the questions snapshot, so any reasonable property naming on
+     * the Shopify side resolves without code changes.
+     *
      * @return array<int,string>
      */
     private function missingRequiredQuestions(EmailReadingDelivery $delivery): array
     {
-        $schema = $delivery->product?->questions_schema ?? [];
+        $schema = (array) ($delivery->product?->questions_schema ?? []);
         $questions = (array) $delivery->questions;
         $missing = [];
+        $position = 0;
 
         foreach ($schema as $slot) {
-            $required = (bool) ($slot['required'] ?? false);
-            if (! $required) {
+            $position++;
+            if (! (bool) ($slot['required'] ?? false)) {
                 continue;
             }
-            $key = (string) ($slot['key'] ?? '');
-            if ($key === '') {
-                continue;
+
+            $label = (string) ($slot['label'] ?? '');
+            $keyRaw = (string) ($slot['key'] ?? '');
+            $candidates = [
+                EmailReadingDelivery::normalizeKey($keyRaw),
+                EmailReadingDelivery::normalizeKey($label),
+                'q'.$position,
+            ];
+
+            $resolved = false;
+            foreach ($candidates as $candidate) {
+                if ($candidate === '') {
+                    continue;
+                }
+                $value = trim((string) ($questions[$candidate] ?? ''));
+                if ($value !== '') {
+                    $resolved = true;
+                    break;
+                }
             }
-            $value = trim((string) ($questions[$key] ?? ''));
-            if ($value === '') {
-                $missing[] = (string) ($slot['label'] ?? $key);
+
+            if (! $resolved) {
+                $missing[] = $label !== '' ? $label : $keyRaw;
             }
         }
 
