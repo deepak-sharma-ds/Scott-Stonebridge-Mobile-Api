@@ -189,7 +189,15 @@ class ToolExecutor
             $args = $this->resolveCartLineRefs($args, $ctx);
         }
 
-        $result = $this->withCache($toolName, $args, $ctx->shopDomain, fn (): array => $this->storefront->callTool($toolName, $args, $ctx->shopDomain));
+        $isCartTool = in_array($toolName, [ToolDefinitions::TOOL_GET_CART, ToolDefinitions::TOOL_UPDATE_CART], true);
+        $result = $this->withCache(
+            $toolName,
+            $args,
+            $ctx->shopDomain,
+            fn (): array => $isCartTool
+                ? $this->callCartToolWithRecovery($toolName, $args, $ctx)
+                : $this->storefront->callTool($toolName, $args, $ctx->shopDomain),
+        );
 
         return match ($toolName) {
             ToolDefinitions::TOOL_GET_PRODUCT_DETAILS => $this->handleProductDetail($result),
@@ -982,6 +990,73 @@ class ToolExecutor
     }
 
     /**
+     * Call a Storefront cart tool, self-healing when the cart_id we injected
+     * (cached from a previous turn, or echoed by the model) is dead at Shopify.
+     *
+     * Shopify carts expire / get consumed at checkout, so a stale cached GID
+     * makes EVERY add fail with "cart not found" — and because the cache was
+     * never cleared, the session stayed wedged ("I don't have a cart ID … technical
+     * issue"). On a cart-specific error we forget the cached GID and, for an add,
+     * retry once with cart_id stripped so Shopify mints a fresh cart.
+     *
+     * @param  array<string, mixed>  $args
+     * @return array<string, mixed>
+     */
+    private function callCartToolWithRecovery(string $toolName, array $args, ChatSessionContext $ctx): array
+    {
+        try {
+            return $this->storefront->callTool($toolName, $args, $ctx->shopDomain);
+        } catch (McpToolException $e) {
+            if (! $this->isStaleCartError($e->getMessage())) {
+                throw $e;
+            }
+
+            // The cart_id we carried is dead — never reuse it again.
+            $this->forgetSessionCartId($ctx->sessionId);
+
+            $hasAdd = isset($args['add_items']) && is_array($args['add_items']) && $args['add_items'] !== [];
+            if ($toolName === ToolDefinitions::TOOL_UPDATE_CART && $hasAdd) {
+                Log::channel('ai')->info('cart.stale_id_recovered', [
+                    'session_id' => $ctx->sessionId,
+                    'shop_domain' => $ctx->shopDomain,
+                ]);
+
+                // Drop the dead cart_id + any line ops that referenced its now
+                // gone lines, then re-add on a fresh cart Shopify mints for us.
+                unset($args['cart_id'], $args['update_items'], $args['remove_line_ids']);
+
+                return $this->storefront->callTool($toolName, $args, $ctx->shopDomain);
+            }
+
+            // get_cart / quantity-change / removal on a dead cart can't be
+            // rescued without the cart — surface so the model re-syncs cleanly.
+            throw $e;
+        }
+    }
+
+    /**
+     * Heuristic: does this MCP error mean the cart_id is gone / invalid (vs an
+     * unrelated failure we must not swallow)? Requires a cart reference plus a
+     * "not found / invalid" signal so we don't nuke the cache on every error.
+     */
+    private function isStaleCartError(string $message): bool
+    {
+        $m = strtolower($message);
+        if (! str_contains($m, 'cart')) {
+            return false;
+        }
+
+        foreach (['not found', 'no longer', 'does not exist', "doesn't exist", 'invalid', 'expired', 'could not find', "couldn't find", 'not exist', 'unable to find'] as $needle) {
+            if (str_contains($m, $needle)) {
+                return true;
+            }
+        }
+
+        // Shopify rejects a malformed/foreign Cart GID with this phrasing.
+        return str_contains($m, 'invalid global id') || str_contains($m, 'invalid id');
+    }
+
+    /**
      * Cache the active Shopify Storefront Cart GID for the chat session so
      * future tool calls in the same session can reuse it without relying on
      * the LLM to echo it back from the previous turn's message.
@@ -1361,6 +1436,22 @@ class ToolExecutor
         return $refreshed?->customer_access_token;
     }
 
+    /**
+     * Shopify Customer Account refresh tokens are SINGLE-USE and rotate on every
+     * exchange. Two turns hitting the expired row at once would both present the
+     * same refresh_token — Shopify honours the first, rotates it, and rejects the
+     * second with `invalid_grant`, which previously left the row holding a dead
+     * token forever (silent "please sign in" loop, since /status still reported
+     * the 13-day refresh window as authenticated). We therefore:
+     *   1. serialise the exchange behind a per-session lock + re-read inside it,
+     *      so concurrent turns reuse the freshly-rotated token instead of
+     *      double-spending the refresh_token;
+     *   2. on a definitive `invalid_grant` (token truly dead), invalidate the
+     *      session so /status flips to authenticated:false and the widget
+     *      re-opens the OAuth popup — a clean re-sign-in instead of a loop.
+     * Transient (network / 5xx) failures leave the row intact so a later turn
+     * can retry the refresh.
+     */
     private function refreshCustomerToken(AiCustomerSession $row, string $shopDomain): ?AiCustomerSession
     {
         $refreshToken = $row->refresh_token;
@@ -1383,71 +1474,159 @@ class ToolExecutor
             return null;
         }
 
+        $lock = Cache::lock('ai:oauth:refresh:'.$row->getKey(), 15);
+
+        if (! $lock->get()) {
+            // Another turn is mid-refresh. Don't double-spend the single-use
+            // refresh_token — re-read the row and reuse the rotated token if it
+            // landed; otherwise let this turn fall through to auth_required.
+            $fresh = AiCustomerSession::query()->find($row->getKey());
+
+            return ($fresh !== null && ! $fresh->isExpired()) ? $fresh : null;
+        }
+
         try {
-            $config = $this->discoverOidcConfig($shopDomain);
-        } catch (Throwable $e) {
-            Log::channel('ai')->warning('oauth.refresh_discovery_failed', [
+            // Re-read inside the lock: a sibling turn may have already rotated
+            // the token while we were waiting to acquire it.
+            $row->refresh();
+            if (! $row->isExpired()) {
+                return $row;
+            }
+
+            $refreshToken = (string) $row->refresh_token;
+            if ($refreshToken === '') {
+                return null;
+            }
+
+            try {
+                $config = $this->discoverOidcConfig($shopDomain);
+            } catch (Throwable $e) {
+                Log::channel('ai')->warning('oauth.refresh_discovery_failed', [
+                    'session_id' => $row->session_id,
+                    'shop' => $shopDomain,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return null;
+            }
+
+            $clientId = (string) config('chatbot.oauth.client_id');
+            $clientSecret = (string) config('chatbot.oauth.client_secret');
+
+            $request = Http::asForm();
+            if ($clientSecret !== '') {
+                $request = $request->withBasicAuth($clientId, $clientSecret);
+            }
+
+            try {
+                $response = $request->post($config['token_endpoint'], [
+                    'grant_type' => 'refresh_token',
+                    'client_id' => $clientId,
+                    'refresh_token' => $refreshToken,
+                ]);
+            } catch (Throwable $e) {
+                // Network-level failure (timeout, DNS). Transient — keep the row.
+                Log::channel('ai')->warning('oauth.refresh_transport_error', [
+                    'session_id' => $row->session_id,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return null;
+            }
+
+            if (! $response->successful()) {
+                $error = (string) $response->json('error');
+                Log::channel('ai')->warning('oauth.refresh_failed', [
+                    'session_id' => $row->session_id,
+                    'http_status' => $response->status(),
+                    'error' => $error,
+                    'error_description' => $response->json('error_description'),
+                ]);
+
+                // Token is definitively dead (rejected, not a transient blip).
+                // Drop the session so the widget re-prompts a real sign-in
+                // instead of looping on a refresh that can never succeed.
+                if ($this->isDeadGrant($response->status(), $error)) {
+                    $this->invalidateCustomerSession($row, $error);
+                }
+
+                return null;
+            }
+
+            $payload = (array) $response->json();
+            $accessToken = (string) ($payload['access_token'] ?? '');
+            if ($accessToken === '') {
+                return null;
+            }
+
+            $expiresIn = (int) ($payload['expires_in'] ?? config('chatbot.oauth.token_ttl_seconds', 3600));
+            $newRefresh = (string) ($payload['refresh_token'] ?? '');
+
+            // Shopify rotates refresh_tokens on each use — persist whatever was
+            // returned so the next refresh has a valid token to present.
+            $row->customer_access_token = $accessToken;
+            $row->expires_at = now()->addSeconds($expiresIn);
+            if ($newRefresh !== '') {
+                $row->refresh_token = $newRefresh;
+                $refreshExpiresIn = (int) ($payload['refresh_token_expires_in']
+                    ?? config('chatbot.oauth.refresh_token_ttl_seconds', 13 * 24 * 3600));
+                $row->refresh_token_expires_at = now()->addSeconds($refreshExpiresIn);
+            }
+            $row->save();
+
+            Log::channel('ai')->info('oauth.token_refreshed', [
                 'session_id' => $row->session_id,
-                'shop' => $shopDomain,
+                'expires_in' => $expiresIn,
+                'rotated_refresh' => $newRefresh !== '',
+            ]);
+
+            return $row;
+        } finally {
+            $lock->release();
+        }
+    }
+
+    /**
+     * A refresh response that means the stored refresh_token can never succeed
+     * again (vs a transient 5xx / network blip worth retrying later).
+     */
+    private function isDeadGrant(int $httpStatus, string $error): bool
+    {
+        if (in_array($error, ['invalid_grant', 'invalid_token', 'unauthorized_client', 'invalid_request'], true)) {
+            return true;
+        }
+
+        // Any other 400/401 from the token endpoint is a rejected grant too.
+        return in_array($httpStatus, [400, 401], true);
+    }
+
+    /**
+     * Clear the persisted token so the OAuth /status endpoint reports
+     * authenticated:false and the widget re-opens the sign-in popup. The
+     * AiConversation row is untouched (the chat thread survives a re-auth).
+     */
+    private function invalidateCustomerSession(AiCustomerSession $row, string $reason): void
+    {
+        try {
+            $row->forceFill([
+                'customer_access_token' => '',
+                'refresh_token' => null,
+                'refresh_token_expires_at' => null,
+                'expires_at' => now()->subSecond(),
+            ])->save();
+        } catch (Throwable $e) {
+            Log::channel('ai')->warning('oauth.invalidate_failed', [
+                'session_id' => $row->session_id,
                 'error' => $e->getMessage(),
             ]);
 
-            return null;
+            return;
         }
 
-        $clientId = (string) config('chatbot.oauth.client_id');
-        $clientSecret = (string) config('chatbot.oauth.client_secret');
-
-        $request = Http::asForm();
-        if ($clientSecret !== '') {
-            $request = $request->withBasicAuth($clientId, $clientSecret);
-        }
-
-        $response = $request->post($config['token_endpoint'], [
-            'grant_type' => 'refresh_token',
-            'client_id' => $clientId,
-            'refresh_token' => $refreshToken,
-        ]);
-
-        if (! $response->successful()) {
-            Log::channel('ai')->warning('oauth.refresh_failed', [
-                'session_id' => $row->session_id,
-                'http_status' => $response->status(),
-                'error' => $response->json('error'),
-                'error_description' => $response->json('error_description'),
-            ]);
-
-            return null;
-        }
-
-        $payload = (array) $response->json();
-        $accessToken = (string) ($payload['access_token'] ?? '');
-        if ($accessToken === '') {
-            return null;
-        }
-
-        $expiresIn = (int) ($payload['expires_in'] ?? config('chatbot.oauth.token_ttl_seconds', 3600));
-        $newRefresh = (string) ($payload['refresh_token'] ?? '');
-
-        // Shopify rotates refresh_tokens on each use — persist whatever was
-        // returned so the next refresh has a valid token to present.
-        $row->customer_access_token = $accessToken;
-        $row->expires_at = now()->addSeconds($expiresIn);
-        if ($newRefresh !== '') {
-            $row->refresh_token = $newRefresh;
-            $refreshExpiresIn = (int) ($payload['refresh_token_expires_in']
-                ?? config('chatbot.oauth.refresh_token_ttl_seconds', 13 * 24 * 3600));
-            $row->refresh_token_expires_at = now()->addSeconds($refreshExpiresIn);
-        }
-        $row->save();
-
-        Log::channel('ai')->info('oauth.token_refreshed', [
+        Log::channel('ai')->info('oauth.session_invalidated', [
             'session_id' => $row->session_id,
-            'expires_in' => $expiresIn,
-            'rotated_refresh' => $newRefresh !== '',
+            'reason' => $reason,
         ]);
-
-        return $row;
     }
 
     /**
