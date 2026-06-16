@@ -848,33 +848,18 @@ class ToolExecutor
             return $args;
         }
 
-        // Skip the cart read when every ref is already a CartLine GID.
-        $needsResolve = false;
-        if ($hasRemove) {
-            foreach ($args['remove_line_ids'] as $ref) {
-                if (! self::isCartLineGid((string) $ref)) {
-                    $needsResolve = true;
-                    break;
-                }
-            }
-        }
-        if (! $needsResolve && $hasUpdate) {
-            foreach ($args['update_items'] as $row) {
-                if (is_array($row) && ! self::isCartLineGid((string) ($row['id'] ?? ''))) {
-                    $needsResolve = true;
-                    break;
-                }
-            }
-        }
-        if (! $needsResolve) {
-            return $args;
-        }
-
         $cartId = (string) ($args['cart_id'] ?? $ctx->cartId ?? '');
         if (! str_starts_with($cartId, 'gid://shopify/Cart/')) {
             return $args;
         }
 
+        // ALWAYS re-read the live cart — even when the ref already LOOKS like a
+        // CartLine GID. Shopify re-keys cart lines on every mutation, so a line
+        // id the model echoed from an earlier cart_state is frequently STALE
+        // after an intervening add/remove. Forwarding a stale line id makes
+        // update_cart fail with "Invalid global id" (surfaced to the user as
+        // "I had trouble updating the quantity"). Validating every ref against
+        // the current cart is the only reliable option.
         try {
             $cart = $this->storefront->callTool(ToolDefinitions::TOOL_GET_CART, ['cart_id' => $cartId], $ctx->shopDomain);
         } catch (Throwable $e) {
@@ -883,37 +868,39 @@ class ToolExecutor
             return $args;
         }
 
-        $map = $this->buildVariantToLineMap($cart);
-        if ($map === []) {
+        $dto = CartMapper::fromCart($cart);
+        if ($dto === null || $dto->items === []) {
             return $args;
         }
 
+        $map = $this->buildVariantToLineMap($cart);
+
+        // Set of CartLine GIDs that exist in the cart RIGHT NOW, plus the lone
+        // line id when the cart holds exactly one item (lets us re-point a
+        // stale/ambiguous ref — the user can only mean that single line).
+        $validLineIds = [];
+        foreach ($dto->items as $line) {
+            $lineId = (string) ($line['id'] ?? '');
+            if ($lineId !== '') {
+                $validLineIds[$lineId] = true;
+            }
+        }
+        $onlyLineId = count($dto->items) === 1 ? ((string) ($dto->items[0]['id'] ?? '') ?: null) : null;
+
         if ($hasRemove) {
-            $args['remove_line_ids'] = array_values(array_map(
-                fn ($ref): string => self::mapToLineId((string) $ref, $map),
+            $args['remove_line_ids'] = array_values(array_filter(array_map(
+                fn ($ref): string => $this->resolveLineRef((string) $ref, $map, $validLineIds, $onlyLineId),
                 $args['remove_line_ids'],
-            ));
+            ), static fn (string $ref): bool => self::isCartLineGid($ref)));
         }
         if ($hasUpdate) {
             foreach ($args['update_items'] as $idx => $row) {
                 if (is_array($row) && isset($row['id'])) {
-                    $args['update_items'][$idx]['id'] = self::mapToLineId((string) $row['id'], $map);
+                    $args['update_items'][$idx]['id'] = $this->resolveLineRef((string) $row['id'], $map, $validLineIds, $onlyLineId);
                 }
             }
-        }
-
-        // Drop refs that still failed to resolve into a real CartLine GID.
-        // Sending an unresolved ref straight through guarantees a Shopify
-        // "Invalid global id" rejection that the model can't recover from
-        // — better to silently filter so the rest of the mutation runs and
-        // the next get_cart re-syncs the model's view.
-        if ($hasRemove) {
-            $args['remove_line_ids'] = array_values(array_filter(
-                $args['remove_line_ids'],
-                static fn ($ref): bool => self::isCartLineGid((string) $ref),
-            ));
-        }
-        if ($hasUpdate) {
+            // Drop rows that still didn't resolve to a CURRENT line — sending
+            // one guarantees a Shopify rejection the model can't recover from.
             $args['update_items'] = array_values(array_filter(
                 $args['update_items'],
                 static fn ($row): bool => is_array($row) && self::isCartLineGid((string) ($row['id'] ?? '')),
@@ -921,6 +908,36 @@ class ToolExecutor
         }
 
         return $args;
+    }
+
+    /**
+     * Resolve a single line ref (CartLine GID, variant GID, or bare numeric)
+     * to a CartLine GID that EXISTS in the current cart. Returns '' when it
+     * cannot be resolved so the caller drops it.
+     *
+     * @param  array<string, string>  $map  variant id → current line id
+     * @param  array<string, bool>  $validLineIds  current line ids
+     */
+    private function resolveLineRef(string $ref, array $map, array $validLineIds, ?string $onlyLineId): string
+    {
+        // Already a line that exists in the cart right now.
+        if (self::isCartLineGid($ref) && isset($validLineIds[$ref])) {
+            return $ref;
+        }
+
+        // Variant GID / bare numeric → current line.
+        $mapped = self::mapToLineId($ref, $map);
+        if (self::isCartLineGid($mapped) && isset($validLineIds[$mapped])) {
+            return $mapped;
+        }
+
+        // Stale line id or unresolved, but the cart holds a single line — the
+        // user can only mean that one, so re-point the op onto it.
+        if ($onlyLineId !== null) {
+            return $onlyLineId;
+        }
+
+        return '';
     }
 
     /**
