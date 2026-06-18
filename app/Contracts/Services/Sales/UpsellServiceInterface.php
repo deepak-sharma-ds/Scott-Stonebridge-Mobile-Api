@@ -31,11 +31,4 @@ interface UpsellServiceInterface
      * @return list<UpsellSuggestionDTO>
      */
     public function getCrossSells(string $productId, string $shopDomain, ?string $currency = null): array;
-
-    /**
-     * Difference between the merchant's free-shipping threshold and the
-     * current cart total. Returns null when the threshold is not set or
-     * already met.
-     */
-    public function getFreeShippingGap(float $cartTotal, string $shopDomain): ?float;
 }

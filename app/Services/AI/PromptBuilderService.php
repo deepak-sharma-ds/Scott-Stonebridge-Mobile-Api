@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\View;
  * pages, or the raw Shopify GraphQL responses.
  *
  * Phase 2 additions:
- *   - injectUpsellContext() — products + free-shipping gap for sales intents
+ *   - injectUpsellContext() — complementary products for sales intents
  *   - injectStoreKnowledge() — STUB until Step 7/8 wires StoreKnowledgeService
  *   - injectLocaleRule() — language rule appended as final block
  *   - token-budget guard logs a warning when the system prompt exceeds
@@ -110,14 +110,7 @@ class PromptBuilderService extends BaseService implements PromptBuilderServiceIn
             return '';
         }
 
-        $cartTotal = (float) ($context->cart?->totalPrice ?? 0.0);
-        $threshold = (float) config('sales.upsell.default_free_shipping_threshold', 0);
-        $shopDomain = (string) ($context->shopDomain ?? config('shopify.store_domain'));
-        $gap = $threshold > 0 ? $this->upsell->getFreeShippingGap($cartTotal, $shopDomain) : null;
-        $visibility = (float) config('sales.upsell.free_ship_gap_visibility', 0.2);
-        $mentionGap = $gap !== null && $threshold > 0 && ($gap / $threshold) <= $visibility;
-
-        if ($upsells === [] && $gap === null) {
+        if ($upsells === []) {
             return '';
         }
 
@@ -133,29 +126,13 @@ class PromptBuilderService extends BaseService implements PromptBuilderServiceIn
         }
 
         $lines = ['UPSELL CONTEXT:'];
-        if ($productLines !== []) {
-            $lines[] = 'Customers frequently pair these products with items in the current cart:';
-            $lines = array_merge($lines, $productLines);
-        }
-        if ($threshold > 0) {
-            $lines[] = sprintf('Free shipping threshold: %.2f', $threshold);
-            $lines[] = sprintf('Current cart total: %.2f', $cartTotal);
-            if ($gap !== null) {
-                $lines[] = sprintf('Gap to free shipping: %.2f', $gap);
-            }
-        }
+        $lines[] = 'Customers frequently pair these products with items in the current cart:';
+        $lines = array_merge($lines, $productLines);
 
         $lines[] = '';
         $lines[] = 'Rules:';
-        if ($productLines !== []) {
-            $lines[] = '- Suggest at most 2 of the above products naturally in your reply.';
-            $lines[] = '- Never suggest products outside this list.';
-        }
-        if ($threshold > 0 && $gap !== null) {
-            $lines[] = $mentionGap
-                ? '- The customer is within 20% of free shipping — gently mention how close they are.'
-                : '- Do NOT mention the free shipping gap (customer is not close enough).';
-        }
+        $lines[] = '- Suggest at most 2 of the above products naturally in your reply.';
+        $lines[] = '- Never suggest products outside this list.';
 
         return implode("\n", $lines);
     }
@@ -218,8 +195,7 @@ class PromptBuilderService extends BaseService implements PromptBuilderServiceIn
 
     /**
      * Pull upsells from Shopify when the detected intent calls for them.
-     * Cart items must be present — empty cart on cart_help still benefits
-     * from the threshold-only context block.
+     * Cart items must be present; an empty cart yields no suggestions.
      *
      * @return list<UpsellSuggestionDTO>
      */

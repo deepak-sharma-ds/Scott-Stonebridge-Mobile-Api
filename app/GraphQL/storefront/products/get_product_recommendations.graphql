@@ -1,8 +1,9 @@
 query getProductRecommendations(
   $productId: ID!
   $country: CountryCode
+  $intent: ProductRecommendationIntent
 ) @inContext(country: $country) {
-  productRecommendations(productId: $productId, intent: COMPLEMENTARY) {
+  productRecommendations(productId: $productId, intent: $intent) {
     id
     title
     handle

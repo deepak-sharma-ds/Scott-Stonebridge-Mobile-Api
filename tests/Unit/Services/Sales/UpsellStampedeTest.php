@@ -23,7 +23,6 @@ class UpsellStampedeTest extends TestCase
     {
         parent::setUp();
         Cache::flush();
-        config(['sales.upsell.default_free_shipping_threshold' => 50.00]);
         config(['sales.upsell.max_results' => 3]);
         config(['sales.upsell.cache_ttl' => 600]);
     }
