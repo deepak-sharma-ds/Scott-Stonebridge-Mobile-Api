@@ -656,14 +656,9 @@ class ToolExecutor
         );
 
         $suggestions = $this->upsell->getUpsells($cartItems, $ctx->shopDomain, $cart->currency);
-        $cartTotalMajor = $cart->subtotalMinorUnits !== null ? $cart->subtotalMinorUnits / 100 : 0.0;
-        $gap = $this->upsell->getFreeShippingGap($cartTotalMajor, $ctx->shopDomain);
-        $threshold = (float) config('sales.upsell.free_shipping_threshold', config('chatbot.default_free_ship_threshold', 50.00));
 
         $payload = [
             'upsells' => array_map(static fn ($dto) => $dto->toArray(), $suggestions),
-            'free_shipping_gap' => $gap,
-            'threshold' => $threshold,
         ];
         $this->emitter->emit('upsell_offer', $payload);
 

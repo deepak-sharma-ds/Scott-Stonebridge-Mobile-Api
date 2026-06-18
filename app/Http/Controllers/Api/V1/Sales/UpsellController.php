@@ -16,9 +16,8 @@ use Throwable;
  *
  *   POST /api/v1/ai/upsell/suggestions
  *
- * Always returns 200 with a populated structure. If Shopify is degraded the
- * upsells array is empty but the free-shipping gap is still returned (it
- * only needs the cart total + threshold).
+ * Always returns 200. Surfaces an upsell / cross-sell product grid only.
+ * If Shopify is degraded the upsells array is simply empty.
  */
 class UpsellController extends BaseApiController
 {
@@ -31,7 +30,6 @@ class UpsellController extends BaseApiController
         $data = $request->validated();
         $shopDomain = (string) $data['shop_domain'];
         $cartItems = (array) ($data['cart_items'] ?? []);
-        $cartTotal = (float) ($data['cart_total'] ?? 0.0);
         $currency = $data['currency'] ?? null;
 
         try {
@@ -41,20 +39,8 @@ class UpsellController extends BaseApiController
             $upsells = [];
         }
 
-        $gap = null;
-        try {
-            $gap = $this->upsell->getFreeShippingGap($cartTotal, $shopDomain);
-        } catch (Throwable $e) {
-            report($e);
-        }
-
-        $threshold = (float) config('sales.upsell.default_free_shipping_threshold', 0);
-
         return $this->success('Upsell suggestions resolved.', [
             'upsells' => UpsellSuggestionResource::collection($upsells),
-            'free_shipping_gap' => $gap,
-            'threshold' => $threshold > 0 ? $threshold : null,
-            'cart_total' => $cartTotal,
         ]);
     }
 }

@@ -85,28 +85,14 @@ class IntentDetectionService extends BaseService implements IntentDetectionServi
     }
 
     /**
-     * Promote cart_help -> upsell_opportunity when the cart total is below
-     * the free-shipping threshold. Promote product_support ->
-     * cross_sell_opportunity when a cart exists and does not contain the
-     * viewed product (proxy for "shopping for something else").
+     * Promote product_support -> cross_sell_opportunity when a cart exists
+     * and does not contain the viewed product (proxy for "shopping for
+     * something else").
      *
      * Returns the input unchanged when no prior fires.
      */
     private function applySalesContextPriors(IntentDTO $detected, ChatContextDTO $context): IntentDTO
     {
-        if ($detected->name === IntentDTO::INTENT_CART_HELP) {
-            $threshold = (float) config('sales.upsell.default_free_shipping_threshold', 0);
-            $cartTotal = (float) ($context->cart?->totalPrice ?? 0);
-            if ($threshold > 0 && $cartTotal > 0 && $cartTotal < $threshold) {
-                return new IntentDTO(
-                    name: IntentDTO::INTENT_UPSELL_OPPORTUNITY,
-                    confidence: 0.8,
-                    keywords: $detected->keywords,
-                    detectedBy: $detected->detectedBy,
-                );
-            }
-        }
-
         if ($detected->name === IntentDTO::INTENT_PRODUCT_SUPPORT
             && $context->cart !== null
             && ! $context->cart->isEmpty()

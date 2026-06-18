@@ -76,18 +76,20 @@ return [
     |--------------------------------------------------------------------------
     */
     'upsell' => [
-        // Fallback free-shipping threshold when shop_settings has no value.
-        // Stored as a major-unit float (e.g. 50.00 = £50.00 / $50.00).
-        'default_free_shipping_threshold' => (float) env('CHATBOT_DEFAULT_FREE_SHIP_THRESHOLD', 50.00),
-
         // Maximum upsell suggestions returned per request (post-dedupe).
         'max_results' => (int) env('SALES_UPSELL_MAX_RESULTS', 3),
 
         // Cache TTL (seconds) for productRecommendations per product ID.
         'cache_ttl' => (int) env('SALES_UPSELL_CACHE_TTL', 600),
 
-        // Only mention free-shipping gap when within this fraction of threshold.
-        'free_ship_gap_visibility' => (float) env('SALES_FREE_SHIP_GAP_VISIBILITY', 0.20),
+        // Ordered Shopify ProductRecommendationIntent values to try; first
+        // non-empty result wins. COMPLEMENTARY is merchant-curated (best
+        // cross-sell pairings) but empty until set up in Search & Discovery;
+        // RELATED is Shopify's always-on algorithmic fallback.
+        'recommendation_intents' => array_values(array_filter(array_map(
+            'trim',
+            explode(',', (string) env('SALES_UPSELL_INTENTS', 'COMPLEMENTARY,RELATED')),
+        ))),
     ],
 
     /*
@@ -218,6 +220,13 @@ return [
             'trigger_dismissed',
             'escalation_triggered',
             'chat_closed',
+
+            'cart_updated',
+            'order_tracked',
+            'product_detail_viewed',
+            'auth_completed',
+            'auth_required_shown',
+            'policy_viewed',
         ],
 
         'conversion_types' => ['direct', 'assisted', 'abandoned'],

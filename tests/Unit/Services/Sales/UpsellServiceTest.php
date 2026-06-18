@@ -29,7 +29,6 @@ class UpsellServiceTest extends TestCase
         $this->shopify = new MockShopifyClient;
         $this->service = new UpsellService($this->shopify);
 
-        config(['sales.upsell.default_free_shipping_threshold' => 50.00]);
         config(['sales.upsell.max_results' => 3]);
     }
 
@@ -52,22 +51,6 @@ class UpsellServiceTest extends TestCase
         );
 
         $this->assertSame([], $result);
-    }
-
-    public function test_get_free_shipping_gap_returns_null_when_threshold_met(): void
-    {
-        $this->assertNull($this->service->getFreeShippingGap(80.00, 'demo.myshopify.com'));
-    }
-
-    public function test_get_free_shipping_gap_returns_difference(): void
-    {
-        $this->assertSame(20.00, $this->service->getFreeShippingGap(30.00, 'demo.myshopify.com'));
-    }
-
-    public function test_get_free_shipping_gap_returns_null_when_threshold_unset(): void
-    {
-        config(['sales.upsell.default_free_shipping_threshold' => 0]);
-        $this->assertNull($this->service->getFreeShippingGap(10.00, 'demo.myshopify.com'));
     }
 
     public function test_get_cross_sells_excludes_anchor_product(): void

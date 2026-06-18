@@ -15,11 +15,10 @@ use Tests\TestCase;
  * Phase C — POST /api/v1/ai/upsell/suggestions coverage.
  *
  * Storefront is fully mocked. The endpoint must:
- *   - return upsells + free-shipping gap on happy path
+ *   - return an upsell / cross-sell product grid on happy path
  *   - dedupe against cart product IDs
  *   - cap at config('sales.upsell.max_results')
  *   - never crash when Shopify is empty / cart is empty
- *   - return gap=null when threshold already met
  */
 class UpsellSuggestionsTest extends TestCase
 {
@@ -36,11 +35,10 @@ class UpsellSuggestionsTest extends TestCase
         $this->shopify = new MockShopifyClient;
         $this->app->instance(StorefrontApiClientInterface::class, $this->shopify);
 
-        config(['sales.upsell.default_free_shipping_threshold' => 50.00]);
         config(['sales.upsell.max_results' => 3]);
     }
 
-    public function test_returns_upsells_and_free_shipping_gap_on_happy_path(): void
+    public function test_returns_upsell_product_grid_on_happy_path(): void
     {
         $this->shopify->mockResponse('storefront/products/get_product_recommendations', [
             'data' => [
@@ -92,9 +90,8 @@ class UpsellSuggestionsTest extends TestCase
         $response->assertJsonPath('data.upsells.0.price', '19.99');
         $response->assertJsonPath('data.upsells.0.currency', 'GBP');
         $response->assertJsonPath('data.upsells.0.available', true);
-        $response->assertJsonPath('data.free_shipping_gap', 12);
-        $response->assertJsonPath('data.threshold', 50);
-        $response->assertJsonPath('data.cart_total', 38);
+        $response->assertJsonMissingPath('data.free_shipping_gap');
+        $response->assertJsonMissingPath('data.threshold');
     }
 
     public function test_dedupes_upsells_against_cart_product_ids(): void
@@ -211,32 +208,18 @@ class UpsellSuggestionsTest extends TestCase
         $response->assertJsonCount(0, 'data.upsells');
     }
 
-    public function test_returns_empty_upsells_for_empty_cart_but_still_returns_threshold(): void
+    public function test_returns_empty_upsells_for_empty_cart(): void
     {
         $response = $this->postJson('/api/v1/ai/upsell/suggestions', [
             'session_id' => 'sess-up-5',
             'shop_domain' => 'demo.myshopify.com',
             'cart_items' => [],
-            'cart_total' => 0,
         ]);
 
         $response->assertOk();
         $response->assertJsonCount(0, 'data.upsells');
-        $response->assertJsonPath('data.threshold', 50);
-        $response->assertJsonPath('data.free_shipping_gap', 50);
-    }
-
-    public function test_gap_is_null_when_cart_meets_threshold(): void
-    {
-        $response = $this->postJson('/api/v1/ai/upsell/suggestions', [
-            'session_id' => 'sess-up-6',
-            'shop_domain' => 'demo.myshopify.com',
-            'cart_items' => [],
-            'cart_total' => 75.00,
-        ]);
-
-        $response->assertOk();
-        $response->assertJsonPath('data.free_shipping_gap', null);
+        $response->assertJsonMissingPath('data.free_shipping_gap');
+        $response->assertJsonMissingPath('data.threshold');
     }
 
     public function test_rejects_missing_required_fields(): void
