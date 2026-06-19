@@ -66,9 +66,15 @@ class ProcessEmailReadingOrderJob implements ShouldQueue
             throw $e;
         }
 
-        SendEmailReadingJob::dispatch($delivery->id)
+        $send = SendEmailReadingJob::dispatch($delivery->id)
             ->onConnection(config('email_reading.queue.connection'))
             ->onQueue(config('email_reading.queue.mail'));
+
+        // Hold the send until the per-order scheduled time (random 3-7 days,
+        // persisted at row creation). Null/past schedule => send immediately.
+        if ($delivery->scheduled_at && $delivery->scheduled_at->isFuture()) {
+            $send->delay($delivery->scheduled_at);
+        }
     }
 
     public function failed(Throwable $e): void

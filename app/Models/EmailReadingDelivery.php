@@ -30,6 +30,7 @@ class EmailReadingDelivery extends Model
         'error_message',
         'attempts',
         'sent_at',
+        'scheduled_at',
     ];
 
     protected function casts(): array
@@ -42,6 +43,7 @@ class EmailReadingDelivery extends Model
             'completion_tokens' => 'integer',
             'attempts' => 'integer',
             'sent_at' => 'datetime',
+            'scheduled_at' => 'datetime',
         ];
     }
 

@@ -58,6 +58,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Scheduled send
+    |--------------------------------------------------------------------------
+    | The reading is GENERATED immediately on order, but the customer email is
+    | held and sent at a random time between `min_days` and `max_days` after
+    | ordering. One timestamp is computed per order (shared across that order's
+    | reading line items) and persisted on the delivery row, so retries and
+    | duplicate webhooks never re-randomize the send time.
+    |
+    | Set `enabled` false (or min/max both 0) to send immediately — exactly the
+    | pre-scheduling behavior.
+    */
+    'schedule' => [
+        'enabled' => (bool) env('READINGS_SCHEDULE_ENABLED', true),
+        'min_days' => (int) env('READINGS_SCHEDULE_MIN_DAYS', 3),
+        'max_days' => (int) env('READINGS_SCHEDULE_MAX_DAYS', 7),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Testing allowlist (TEMPORARY)
     |--------------------------------------------------------------------------
     | When non-empty, the reading webhook will only process orders whose

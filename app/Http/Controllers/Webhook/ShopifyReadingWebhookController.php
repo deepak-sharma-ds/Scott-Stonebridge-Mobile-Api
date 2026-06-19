@@ -129,6 +129,8 @@ class ShopifyReadingWebhookController extends Controller
             return response()->json(['message' => 'No reading products in order'], 200);
         }
 
+        $scheduledAt = $this->resolveScheduledAtForOrder($orderId);
+
         $dispatched = 0;
 
         foreach ($lineItems as $line) {
@@ -156,6 +158,7 @@ class ShopifyReadingWebhookController extends Controller
                     'customer_name' => $customerName ?: null,
                     'questions' => $questions,
                     'status' => EmailReadingDelivery::STATUS_PENDING,
+                    'scheduled_at' => $scheduledAt,
                 ]
             );
 
@@ -172,12 +175,45 @@ class ShopifyReadingWebhookController extends Controller
             'order_id' => $orderId,
             'matched_products' => $matched->count(),
             'dispatched' => $dispatched,
+            'scheduled_at' => $scheduledAt?->toIso8601String(),
         ]);
 
         return response()->json([
             'message' => 'OK',
             'dispatched' => $dispatched,
         ], 200);
+    }
+
+    /**
+     * Resolve the send time for an order's reading emails.
+     *
+     * Returns null when scheduling is disabled (callers then dispatch the
+     * send immediately, preserving the pre-scheduling behavior). Otherwise a
+     * single random timestamp between `min_days` and `max_days` from now is
+     * returned per order: an existing `scheduled_at` already stored for the
+     * same order is reused so a replayed/duplicate webhook cannot re-randomize
+     * the time, and every reading line item in the order sends together.
+     */
+    private function resolveScheduledAtForOrder(int $orderId): ?Carbon
+    {
+        if (! (bool) config('email_reading.schedule.enabled', true)) {
+            return null;
+        }
+
+        $existing = EmailReadingDelivery::where('shopify_order_id', $orderId)
+            ->whereNotNull('scheduled_at')
+            ->value('scheduled_at');
+
+        if ($existing) {
+            return Carbon::parse($existing);
+        }
+
+        $min = max(0, (int) config('email_reading.schedule.min_days', 3));
+        $max = max($min, (int) config('email_reading.schedule.max_days', 7));
+
+        $offsetSeconds = random_int($min * 86400, $max * 86400);
+
+        return Carbon::now()->addSeconds($offsetSeconds);
     }
 
     /**
