@@ -174,6 +174,7 @@ class CartService extends BaseService implements CartServiceInterface
                 $lineItem = [
                     'merchandiseId' => $line['merchandise_id'],
                     'quantity' => (int) $line['quantity'], // Ensure quantity is an integer
+                    'attributes' => $line['attributes'] ?? [], // Optional attributes
                 ];
 
                 // Only add attributes if they exist and are not empty
