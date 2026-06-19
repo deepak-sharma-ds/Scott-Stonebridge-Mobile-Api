@@ -228,7 +228,7 @@ final class ToolDefinitions
                 ],
             ),
             $this->fn(self::TOOL_SUGGEST_UPSELL,
-                'Use immediately after a successful add-to-cart, or when the cart total is under the free-shipping threshold, to surface complementary products and the gap to free shipping.',
+                'Use immediately after a successful add-to-cart, or when the customer is browsing the cart, to surface complementary products (upsell / cross-sell).',
                 [
                     'type' => 'object',
                     'properties' => [

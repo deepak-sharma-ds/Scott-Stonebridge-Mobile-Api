@@ -15,7 +15,6 @@ use Tests\TestCase;
 /**
  * Phase C — context-prior rules added in Step 6.
  *
- * cart_help -> upsell_opportunity when cart_total < free_shipping_threshold.
  * product_support -> cross_sell_opportunity when cart has items AND viewed
  *                    product not in cart.
  */
@@ -31,56 +30,18 @@ class IntentDetectionUpsellRulesTest extends TestCase
         $this->service = new IntentDetectionService;
 
         config([
-            'sales.upsell.default_free_shipping_threshold' => 50.00,
             'chatbot.intent.confidence_threshold' => 0.65,
         ]);
     }
 
-    public function test_cart_help_promotes_to_upsell_when_below_threshold(): void
+    public function test_cart_help_is_not_promoted_by_any_free_shipping_rule(): void
     {
+        // Free-shipping-driven promotion has been removed — cart_help must
+        // stay cart_help regardless of cart total.
         $ctx = new ChatContextDTO(
             pageType: 'cart',
             product: null,
             cart: new CartContextDTO(id: 'c1', itemCount: 1, totalPrice: '30.00', currency: 'GBP', items: []),
-            customer: null,
-            recentlyViewed: [],
-            shopDomain: 'demo.myshopify.com',
-            currency: 'GBP',
-            locale: 'en',
-        );
-
-        $result = $this->service->detect('checkout', $ctx);
-
-        $this->assertSame(IntentDTO::INTENT_UPSELL_OPPORTUNITY, $result->name);
-        $this->assertSame(0.8, $result->confidence);
-    }
-
-    public function test_cart_help_stays_when_above_threshold(): void
-    {
-        $ctx = new ChatContextDTO(
-            pageType: 'cart',
-            product: null,
-            cart: new CartContextDTO(id: 'c1', itemCount: 3, totalPrice: '80.00', currency: 'GBP', items: []),
-            customer: null,
-            recentlyViewed: [],
-            shopDomain: 'demo.myshopify.com',
-            currency: 'GBP',
-            locale: 'en',
-        );
-
-        $result = $this->service->detect('checkout', $ctx);
-
-        $this->assertSame(IntentDTO::INTENT_CART_HELP, $result->name);
-    }
-
-    public function test_cart_help_stays_when_no_threshold_configured(): void
-    {
-        config(['sales.upsell.default_free_shipping_threshold' => 0]);
-
-        $ctx = new ChatContextDTO(
-            pageType: 'cart',
-            product: null,
-            cart: new CartContextDTO(id: 'c1', itemCount: 1, totalPrice: '10.00', currency: 'GBP', items: []),
             customer: null,
             recentlyViewed: [],
             shopDomain: 'demo.myshopify.com',

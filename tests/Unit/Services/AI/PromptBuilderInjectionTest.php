@@ -19,7 +19,7 @@ use Tests\TestCase;
 /**
  * Phase C — PromptBuilderService injection methods (Step 6).
  *
- *   injectUpsellContext  — block content + visibility threshold rules
+ *   injectUpsellContext  — complementary-product block content
  *   injectStoreKnowledge — stubbed until Step 7/8 (empty string today)
  *   injectLocaleRule     — final LANGUAGE RULE block
  */
@@ -38,8 +38,6 @@ class PromptBuilderInjectionTest extends TestCase
         parent::setUp();
 
         config([
-            'sales.upsell.default_free_shipping_threshold' => 50.00,
-            'sales.upsell.free_ship_gap_visibility' => 0.20,
             'sales.locale.fallback' => 'en',
         ]);
 
@@ -64,10 +62,8 @@ class PromptBuilderInjectionTest extends TestCase
         $this->assertSame('', $this->builder->injectUpsellContext($intent, $ctx, []));
     }
 
-    public function test_inject_upsell_context_renders_products_and_threshold(): void
+    public function test_inject_upsell_context_renders_products(): void
     {
-        $this->upsell->shouldReceive('getFreeShippingGap')->andReturn(8.00);
-
         $intent = new IntentDTO(IntentDTO::INTENT_UPSELL_OPPORTUNITY, 0.8, [], 'regex');
         $ctx = $this->context(cartTotal: '42.00');
         $upsells = [
@@ -89,30 +85,13 @@ class PromptBuilderInjectionTest extends TestCase
         $this->assertStringContainsString('UPSELL CONTEXT:', $block);
         $this->assertStringContainsString('Wireless Charger', $block);
         $this->assertStringContainsString('handle: wireless-charger', $block);
-        $this->assertStringContainsString('Free shipping threshold: 50.00', $block);
-        $this->assertStringContainsString('Gap to free shipping: 8.00', $block);
-        // 8/50 = 0.16 <= 0.20 visibility -> mention.
-        $this->assertStringContainsString('within 20% of free shipping', $block);
         $this->assertStringContainsString('Suggest at most 2 of the above products', $block);
+        // No free-shipping / threshold language must leak into the block.
+        $this->assertStringNotContainsString('free shipping', strtolower($block));
     }
 
-    public function test_inject_upsell_context_hides_gap_outside_visibility_window(): void
+    public function test_inject_upsell_context_returns_empty_when_no_products(): void
     {
-        $this->upsell->shouldReceive('getFreeShippingGap')->andReturn(40.00);
-
-        $intent = new IntentDTO(IntentDTO::INTENT_CART_HELP, 0.8, [], 'regex');
-        $ctx = $this->context(cartTotal: '10.00');
-
-        $block = $this->builder->injectUpsellContext($intent, $ctx, []);
-
-        $this->assertStringContainsString('Gap to free shipping: 40.00', $block);
-        $this->assertStringContainsString('Do NOT mention the free shipping gap', $block);
-    }
-
-    public function test_inject_upsell_context_returns_empty_when_no_products_no_threshold(): void
-    {
-        config(['sales.upsell.default_free_shipping_threshold' => 0]);
-
         $intent = new IntentDTO(IntentDTO::INTENT_UPSELL_OPPORTUNITY, 0.8, [], 'regex');
         $ctx = $this->context(cartTotal: '0');
 

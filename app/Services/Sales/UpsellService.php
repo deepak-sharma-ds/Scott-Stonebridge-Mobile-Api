@@ -7,7 +7,6 @@ namespace App\Services\Sales;
 use App\Contracts\Services\Sales\UpsellServiceInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\Sales\UpsellSuggestionDTO;
-use App\Models\ShopSetting;
 use App\Services\Base\BaseService;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
@@ -20,9 +19,7 @@ use Throwable;
  * hits Shopify N times on first request, then 0 for subsequent views
  * during the cache window.
  *
- * Free-shipping threshold currently reads from
- * config('sales.upsell.default_free_shipping_threshold'). Step 10 wires
- * this to shop_settings.free_shipping_threshold (per-shop override).
+ * Surfaces a product grid only — no free-shipping / threshold logic.
  */
 class UpsellService extends BaseService implements UpsellServiceInterface
 {
@@ -127,46 +124,6 @@ class UpsellService extends BaseService implements UpsellServiceInterface
         return $out;
     }
 
-    public function getFreeShippingGap(float $cartTotal, string $shopDomain): ?float
-    {
-        $threshold = $this->freeShippingThreshold($shopDomain);
-        if ($threshold === null || $threshold <= 0.0) {
-            return null;
-        }
-
-        $gap = $threshold - $cartTotal;
-
-        return $gap > 0.0 ? round($gap, 2) : null;
-    }
-
-    /**
-     * The merchant's free-shipping threshold for a shop. Looks up
-     * shop_settings.free_shipping_threshold first; falls back to
-     * config('sales.upsell.default_free_shipping_threshold').
-     */
-    protected function freeShippingThreshold(string $shopDomain): ?float
-    {
-        if ($shopDomain !== '') {
-            try {
-                $perShop = ShopSetting::query()
-                    ->where('shop_domain', $shopDomain)
-                    ->value('free_shipping_threshold');
-                if ($perShop !== null) {
-                    return (float) $perShop;
-                }
-            } catch (Throwable $e) {
-                $this->logWarning('ShopSetting threshold lookup failed', [
-                    'shop' => $shopDomain,
-                    'error' => $e->getMessage(),
-                ], 'ai');
-            }
-        }
-
-        $default = config('sales.upsell.default_free_shipping_threshold');
-
-        return $default === null ? null : (float) $default;
-    }
-
     /**
      * @return array<int, array<string, mixed>>
      */
@@ -219,14 +176,48 @@ class UpsellService extends BaseService implements UpsellServiceInterface
         // so cart payloads that carry raw product numerics still resolve.
         $productId = $this->toProductGid($productId);
 
-        $response = $this->storefront->query('storefront/products/get_product_recommendations', [
-            'productId' => $productId,
-            'country' => $country,
-        ]);
+        // Try each configured intent in order, first non-empty wins.
+        // COMPLEMENTARY surfaces merchant-curated pairings (best cross-sell)
+        // but is empty until the merchant sets them up in Search & Discovery;
+        // RELATED is Shopify's always-on algorithmic fallback so the grid
+        // still populates on stores with no curated complements.
+        $intents = $this->recommendationIntents();
 
-        $nodes = $response['data']['productRecommendations'] ?? [];
+        foreach ($intents as $intent) {
+            $response = $this->storefront->query('storefront/products/get_product_recommendations', [
+                'productId' => $productId,
+                'country' => $country,
+                'intent' => $intent,
+            ]);
 
-        return is_array($nodes) ? array_values($nodes) : [];
+            $nodes = $response['data']['productRecommendations'] ?? [];
+            $nodes = is_array($nodes) ? array_values($nodes) : [];
+
+            if ($nodes !== []) {
+                return $nodes;
+            }
+        }
+
+        return [];
+    }
+
+    /**
+     * Ordered list of Shopify ProductRecommendationIntent values to try.
+     *
+     * @return list<string>
+     */
+    private function recommendationIntents(): array
+    {
+        $configured = config('sales.upsell.recommendation_intents', ['COMPLEMENTARY', 'RELATED']);
+        $intents = [];
+        foreach ((array) $configured as $intent) {
+            $intent = strtoupper(trim((string) $intent));
+            if ($intent !== '') {
+                $intents[] = $intent;
+            }
+        }
+
+        return $intents === [] ? ['RELATED'] : $intents;
     }
 
     /**
