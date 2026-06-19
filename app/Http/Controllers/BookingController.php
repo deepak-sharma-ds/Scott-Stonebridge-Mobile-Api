@@ -8,7 +8,7 @@ use App\Services\BookingService;
 use App\Models\AvailabilityDate;
 use App\Models\TimeSlot;
 use \Carbon\Carbon;
-
+use Illuminate\Support\Facades\Validator;
 
 class BookingController extends Controller
 {
@@ -44,6 +44,18 @@ class BookingController extends Controller
 
     public function getTimeSlots(Request $request)
     {
+        $validator = Validator::make($request->all(), [
+            'date' => ['required', 'date_format:Y-m-d'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation failed',
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
         $date = $request->get('date');
         $availability = AvailabilityDate::where('date', $date)->first();
         if (!$availability) {
