@@ -77,6 +77,36 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Same-day expedite (orders/updated)
+    |--------------------------------------------------------------------------
+    | When a customer buys the "same day" upgrade on an existing order, Shopify
+    | fires an orders/updated webhook carrying the upgrade as a SHIPPING LINE
+    | (not a product). On detecting a matching shipping line, the order's
+    | reading send is pulled forward from the 3-7 day window to a random time
+    | within `min_hours`-`max_hours` from now (computed once per order, shared
+    | across that order's deliveries).
+    |
+    | `shipping_titles` is matched case-insensitively against each line's title
+    | AND code; removed lines (is_removed=true) are ignored. Pipe-delimited so a
+    | title containing a comma is safe.
+    |
+    | Set `enabled` false to make the orders/updated webhook inert.
+    */
+    'expedite' => [
+        'enabled' => (bool) env('READINGS_EXPEDITE_ENABLED', true),
+        'min_hours' => (int) env('READINGS_EXPEDITE_MIN_HOURS', 1),
+        'max_hours' => (int) env('READINGS_EXPEDITE_MAX_HOURS', 24),
+        'shipping_titles' => array_values(array_filter(array_map(
+            fn ($t) => strtolower(trim((string) $t)),
+            explode('|', (string) env(
+                'READINGS_EXPEDITE_SHIPPING_TITLES',
+                'SAME DAY GUARANTEE - Via Email'
+            ))
+        ))),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Testing allowlist (TEMPORARY)
     |--------------------------------------------------------------------------
     | When non-empty, the reading webhook will only process orders whose

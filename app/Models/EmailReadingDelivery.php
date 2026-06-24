@@ -31,6 +31,7 @@ class EmailReadingDelivery extends Model
         'attempts',
         'sent_at',
         'scheduled_at',
+        'expedited_at',
     ];
 
     protected function casts(): array
@@ -44,6 +45,7 @@ class EmailReadingDelivery extends Model
             'attempts' => 'integer',
             'sent_at' => 'datetime',
             'scheduled_at' => 'datetime',
+            'expedited_at' => 'datetime',
         ];
     }
 
