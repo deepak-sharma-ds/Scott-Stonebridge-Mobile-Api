@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -14,6 +15,8 @@ class EmailReadingDelivery extends Model
     public const STATUS_SENT = 'sent';
 
     public const STATUS_FAILED = 'failed';
+
+    public const STATUS_CANCELLED = 'cancelled';
 
     protected $fillable = [
         'shopify_order_id',
@@ -52,6 +55,51 @@ class EmailReadingDelivery extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(EmailReadingProduct::class, 'email_reading_product_id');
+    }
+
+    /**
+     * Filter by delivery status when a non-empty status is given.
+     */
+    public function scopeStatus(Builder $query, ?string $status): Builder
+    {
+        if ($status === null || $status === '') {
+            return $query;
+        }
+
+        return $query->where('status', $status);
+    }
+
+    /**
+     * Match the term against customer email/name or the Shopify order id.
+     */
+    public function scopeSearch(Builder $query, ?string $term): Builder
+    {
+        $term = trim((string) $term);
+        if ($term === '') {
+            return $query;
+        }
+
+        return $query->where(function (Builder $q) use ($term) {
+            $q->where('customer_email', 'like', "%{$term}%")
+                ->orWhere('customer_name', 'like', "%{$term}%")
+                ->orWhere('shopify_order_id', 'like', "%{$term}%");
+        });
+    }
+
+    /**
+     * Human-readable status labels for the admin UI.
+     *
+     * @return array<string,string>
+     */
+    public static function statusLabels(): array
+    {
+        return [
+            self::STATUS_PENDING => 'Pending',
+            self::STATUS_GENERATED => 'Generated',
+            self::STATUS_SENT => 'Sent',
+            self::STATUS_FAILED => 'Failed',
+            self::STATUS_CANCELLED => 'Cancelled',
+        ];
     }
 
     public function markFailed(string $message): void
