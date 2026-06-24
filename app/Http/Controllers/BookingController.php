@@ -2,17 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use App\Models\ScheduledMeeting;
-use App\Services\BookingService;
 use App\Models\AvailabilityDate;
+use App\Models\ScheduledMeeting;
 use App\Models\TimeSlot;
-use \Carbon\Carbon;
+use App\Services\BookingService;
+use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class BookingController extends Controller
 {
-
     public function store(Request $request, BookingService $bookingService)
     {
         if ($request->header('X-App-Secret') !== config('shopify.api_secret')) {
@@ -20,24 +19,24 @@ class BookingController extends Controller
         }
 
         $data = $request->validate([
-            'name'            => 'required|string|max:255',
-            'email'           => 'required|email',
-            'phone'           => 'required|string',
+            'name' => 'required|string|max:255',
+            'email' => 'required|email',
+            'phone' => 'required|string',
             'availability_date' => 'required|date',
-            'time_slot_id'    => 'required|exists:time_slots,id',
+            'time_slot_id' => 'required|exists:time_slots,id',
             // no google_token required
         ]);
 
         $result = $bookingService->bookMeeting($data);
 
-        if (!empty($result['success'])) {
+        if (! empty($result['success'])) {
             return response()->json($result);
             // $booking = $result['booking'];  // Now this is the ScheduledMeeting model
             // Mail::to($booking->email)->send(new BookingConfirmationMail($booking));
         }
 
         return response()->json([
-            'error'   => $result['error'] ?? 'Booking failed',
+            'error' => $result['error'] ?? 'Booking failed',
             'message' => $result['message'] ?? null,
         ], 500);
     }
@@ -58,7 +57,7 @@ class BookingController extends Controller
 
         $date = $request->get('date');
         $availability = AvailabilityDate::where('date', $date)->first();
-        if (!$availability) {
+        if (! $availability) {
             return response()->json(['success' => true, 'time_slots' => []]);
         }
 
@@ -82,7 +81,49 @@ class BookingController extends Controller
 
         return response()->json([
             'success' => true,
-            'time_slots' => $slotsFormatted
+            'time_slots' => $slotsFormatted,
+        ]);
+    }
+
+    public function checkAvailableDates(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'month' => ['required', 'date_format:Y-m'],
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'errors' => $validator->errors(),
+            ], 422);
+        }
+
+        $startDate = Carbon::createFromFormat('Y-m', $request->month)->startOfMonth();
+        $endDate = $startDate->copy()->endOfMonth();
+
+        // Get all availability dates with slot counts
+        $availabilityDates = AvailabilityDate::withCount('timeSlots')
+            ->whereBetween('date', [$startDate, $endDate])
+            ->get()
+            ->keyBy(fn ($item) => Carbon::parse($item->date)->format('Y-m-d'));
+
+        $dates = [];
+
+        for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
+
+            $formattedDate = $date->format('Y-m-d');
+
+            $availability = $availabilityDates->get($formattedDate);
+
+            $dates[] = [
+                'date' => $formattedDate,
+                'available' => $availability && $availability->time_slots_count > 0,
+            ];
+        }
+
+        return response()->json([
+            'success' => true,
+            'dates' => $dates,
         ]);
     }
 }

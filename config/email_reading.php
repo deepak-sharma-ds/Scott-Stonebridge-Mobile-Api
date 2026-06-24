@@ -58,6 +58,55 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Scheduled send
+    |--------------------------------------------------------------------------
+    | The reading is GENERATED immediately on order, but the customer email is
+    | held and sent at a random time between `min_days` and `max_days` after
+    | ordering. One timestamp is computed per order (shared across that order's
+    | reading line items) and persisted on the delivery row, so retries and
+    | duplicate webhooks never re-randomize the send time.
+    |
+    | Set `enabled` false (or min/max both 0) to send immediately — exactly the
+    | pre-scheduling behavior.
+    */
+    'schedule' => [
+        'enabled' => (bool) env('READINGS_SCHEDULE_ENABLED', true),
+        'min_days' => (int) env('READINGS_SCHEDULE_MIN_DAYS', 3),
+        'max_days' => (int) env('READINGS_SCHEDULE_MAX_DAYS', 7),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Same-day expedite (orders/updated)
+    |--------------------------------------------------------------------------
+    | When a customer buys the "same day" upgrade on an existing order, Shopify
+    | fires an orders/updated webhook carrying the upgrade as a SHIPPING LINE
+    | (not a product). On detecting a matching shipping line, the order's
+    | reading send is pulled forward from the 3-7 day window to a random time
+    | within `min_hours`-`max_hours` from now (computed once per order, shared
+    | across that order's deliveries).
+    |
+    | `shipping_titles` is matched case-insensitively against each line's title
+    | AND code; removed lines (is_removed=true) are ignored. Pipe-delimited so a
+    | title containing a comma is safe.
+    |
+    | Set `enabled` false to make the orders/updated webhook inert.
+    */
+    'expedite' => [
+        'enabled' => (bool) env('READINGS_EXPEDITE_ENABLED', true),
+        'min_hours' => (int) env('READINGS_EXPEDITE_MIN_HOURS', 1),
+        'max_hours' => (int) env('READINGS_EXPEDITE_MAX_HOURS', 24),
+        'shipping_titles' => array_values(array_filter(array_map(
+            fn ($t) => strtolower(trim((string) $t)),
+            explode('|', (string) env(
+                'READINGS_EXPEDITE_SHIPPING_TITLES',
+                'SAME DAY GUARANTEE - Via Email'
+            ))
+        ))),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Testing allowlist (TEMPORARY)
     |--------------------------------------------------------------------------
     | When non-empty, the reading webhook will only process orders whose

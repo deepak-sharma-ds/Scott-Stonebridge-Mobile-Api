@@ -129,6 +129,14 @@ class ShopifyReadingWebhookController extends Controller
             return response()->json(['message' => 'No reading products in order'], 200);
         }
 
+        // When the customer already bought the same-day upgrade at purchase
+        // time, deliver within 24h instead of the standard 3-7 day window.
+        $sameDay = $this->hasSameDayUpgrade($order)
+            && (bool) config('email_reading.expedite.enabled', true);
+
+        $scheduledAt = $this->resolveScheduledAtForOrder($orderId, $sameDay);
+        $expeditedAt = ($sameDay && $scheduledAt) ? Carbon::now() : null;
+
         $dispatched = 0;
 
         foreach ($lineItems as $line) {
@@ -156,6 +164,8 @@ class ShopifyReadingWebhookController extends Controller
                     'customer_name' => $customerName ?: null,
                     'questions' => $questions,
                     'status' => EmailReadingDelivery::STATUS_PENDING,
+                    'scheduled_at' => $scheduledAt,
+                    'expedited_at' => $expeditedAt,
                 ]
             );
 
@@ -172,12 +182,89 @@ class ShopifyReadingWebhookController extends Controller
             'order_id' => $orderId,
             'matched_products' => $matched->count(),
             'dispatched' => $dispatched,
+            'scheduled_at' => $scheduledAt?->toIso8601String(),
+            'same_day' => $sameDay,
         ]);
 
         return response()->json([
             'message' => 'OK',
             'dispatched' => $dispatched,
         ], 200);
+    }
+
+    /**
+     * Resolve the send time for an order's reading emails.
+     *
+     * Returns null when scheduling is disabled (callers then dispatch the
+     * send immediately, preserving the pre-scheduling behavior). Otherwise a
+     * single random timestamp is returned per order: an existing `scheduled_at`
+     * already stored for the same order is reused so a replayed/duplicate
+     * webhook cannot re-randomize the time, and every reading line item in the
+     * order sends together.
+     *
+     * When `$sameDay` is true (customer bought the same-day upgrade at purchase
+     * time), the timestamp falls in the expedite window (`min_hours`-`max_hours`)
+     * instead of the standard `min_days`-`max_days` window.
+     */
+    private function resolveScheduledAtForOrder(int $orderId, bool $sameDay = false): ?Carbon
+    {
+        // Reuse any timestamp already stored for this order (idempotency on
+        // replays), regardless of which window produced it.
+        $existing = EmailReadingDelivery::where('shopify_order_id', $orderId)
+            ->whereNotNull('scheduled_at')
+            ->value('scheduled_at');
+
+        if ($existing) {
+            return Carbon::parse($existing);
+        }
+
+        if ($sameDay) {
+            $min = max(0, (int) config('email_reading.expedite.min_hours', 1));
+            $max = max($min, (int) config('email_reading.expedite.max_hours', 24));
+
+            return Carbon::now()->addSeconds(random_int($min * 3600, $max * 3600));
+        }
+
+        if (! (bool) config('email_reading.schedule.enabled', true)) {
+            return null;
+        }
+
+        $min = max(0, (int) config('email_reading.schedule.min_days', 3));
+        $max = max($min, (int) config('email_reading.schedule.max_days', 7));
+
+        return Carbon::now()->addSeconds(random_int($min * 86400, $max * 86400));
+    }
+
+    /**
+     * True when the order carries a non-removed shipping line whose title or
+     * code matches one of the configured same-day upgrade labels. Mirrors the
+     * detection used by the orders/updated webhook so both entry points agree.
+     */
+    private function hasSameDayUpgrade(array $order): bool
+    {
+        $titles = (array) config('email_reading.expedite.shipping_titles', []);
+        if (empty($titles)) {
+            return false;
+        }
+
+        foreach ((array) ($order['shipping_lines'] ?? []) as $line) {
+            if (($line['is_removed'] ?? false) === true) {
+                continue;
+            }
+
+            $candidates = [
+                strtolower(trim((string) ($line['title'] ?? ''))),
+                strtolower(trim((string) ($line['code'] ?? ''))),
+            ];
+
+            foreach ($candidates as $candidate) {
+                if ($candidate !== '' && in_array($candidate, $titles, true)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
