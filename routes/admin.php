@@ -5,21 +5,21 @@ use App\Http\Controllers\Admin\AudioController;
 use App\Http\Controllers\Admin\AudioStreamController;
 use App\Http\Controllers\Admin\AvailabilityCalendarController;
 use App\Http\Controllers\Admin\AvailabilityGenerationController;
-use App\Http\Controllers\Admin\ConfigurationsController;
-use App\Http\Controllers\RoleController;
-use App\Http\Controllers\Admin\UserController;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Admin\OrderController;
-use App\Http\Controllers\Admin\BookingController;
-use App\Http\Controllers\Admin\AvailableSlotController;
-use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\AvailabilitySlotController;
 use App\Http\Controllers\Admin\AvailabilityTemplateController;
+use App\Http\Controllers\Admin\BookingController;
+use App\Http\Controllers\Admin\ConfigurationsController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\CustomerEntitlementController;
+use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\EmailReadingController;
+use App\Http\Controllers\Admin\EmailReadingProductController;
 use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\ReportingController;
+use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\RoleController;
+use Illuminate\Support\Facades\Route;
 
 Route::post('/configurations/make-slug', [ConfigurationsController::class, 'make_slug'])->name('configurations.make_slug');
 Route::post('/configurations/upload-files', [ConfigurationsController::class, 'upload_files'])->name('configurations.upload_files');
@@ -27,126 +27,141 @@ Route::post('/configurations/remove-file', [ConfigurationsController::class, 're
 
 Route::middleware(['auth'])->prefix('admin')->group(function () {
 
+    /* Route for configurations */
+    Route::match(['get'], '/configurations', [ConfigurationsController::class, 'admin_prefix'])->name('admin.configurations');
+    Route::match(['get'], '/configurations/index', [ConfigurationsController::class, 'admin_index'])->name('admin.configurations.admin_index');
+    Route::match(['get', 'post'], '/configurations/add', [ConfigurationsController::class, 'admin_add'])->name('admin.configurations.admin_add');
+    Route::match(['get', 'post'], '/configurations/edit/{id}', [ConfigurationsController::class, 'admin_edit'])->name('admin.configurations.admin_edit');
+    Route::match(['get'], '/configurations/delete/{id}', [ConfigurationsController::class, 'admin_delete'])->name('admin.configurations.admin_delete');
+    Route::match(['get'], '/configurations/view/{id?}', [ConfigurationsController::class, 'admin_view'])->name('admin.configurations.admin_view');
+    Route::match(['get', 'post'], '/configurations/prefix/{prefix?}', [ConfigurationsController::class, 'admin_prefix'])->name('admin.configurations.admin_prefix');
+    Route::match(['post'], '/configurations/save_config/{prefix}', [ConfigurationsController::class, 'save_config'])->name('admin.configurations.save_config');
+    Route::match(['get'], '/configurations/change/{id}', [ConfigurationsController::class, 'admin_change'])->name('admin.configurations.admin_change');
+    Route::match(['get'], '/configurations/moveup/{id}', [ConfigurationsController::class, 'admin_moveup'])->name('admin.configurations.admin_moveup');
+    Route::match(['get'], '/configurations/movedown/{id}', [ConfigurationsController::class, 'admin_movedown'])->name('admin.configurations.admin_movedown');
 
-	/*Route for configurations*/
-	Route::match(['get'], '/configurations', [ConfigurationsController::class, 'admin_prefix'])->name('admin.configurations');
-	Route::match(['get'], '/configurations/index', [ConfigurationsController::class, 'admin_index'])->name('admin.configurations.admin_index');
-	Route::match(['get', 'post'], '/configurations/add', [ConfigurationsController::class, 'admin_add'])->name('admin.configurations.admin_add');
-	Route::match(['get', 'post'], '/configurations/edit/{id}', [ConfigurationsController::class, 'admin_edit'])->name('admin.configurations.admin_edit');
-	Route::match(['get'], '/configurations/delete/{id}', [ConfigurationsController::class, 'admin_delete'])->name('admin.configurations.admin_delete');
-	Route::match(['get'], '/configurations/view/{id?}', [ConfigurationsController::class, 'admin_view'])->name('admin.configurations.admin_view');
-	Route::match(['get', 'post'], '/configurations/prefix/{prefix?}', [ConfigurationsController::class, 'admin_prefix'])->name('admin.configurations.admin_prefix');
-	Route::match(['post'], '/configurations/save_config/{prefix}', [ConfigurationsController::class, 'save_config'])->name('admin.configurations.save_config');
-	Route::match(['get'], '/configurations/change/{id}', [ConfigurationsController::class, 'admin_change'])->name('admin.configurations.admin_change');
-	Route::match(['get'], '/configurations/moveup/{id}', [ConfigurationsController::class, 'admin_moveup'])->name('admin.configurations.admin_moveup');
-	Route::match(['get'], '/configurations/movedown/{id}', [ConfigurationsController::class, 'admin_movedown'])->name('admin.configurations.admin_movedown');
+    /* User Logs */
 
+    Route::resource('roles', RoleController::class);
+    Route::resource('users', UserController::class);
 
-	/* User Logs  */
+    /* Store */
+    Route::name('admin.')->group(function () {
+        // Time Availability
+        // Route::resource('availability', AvailabilitySlotController::class);
+        // Route::post('availability/delete-date/{id}', [AvailabilitySlotController::class, 'deleteDate'])->name('availability.delete-date');
+        // Route::delete('/availability/time-slot/{id}', [AvailabilitySlotController::class, 'deleteTimeSlot']);
 
-	Route::resource('roles', RoleController::class);
-	Route::resource('users', UserController::class);
+        // Availability Templates (New Flow)
+        Route::get('availability-templates', [AvailabilityTemplateController::class, 'index'])->name('availability_templates.index');
+        Route::get('availability-templates/create', [AvailabilityTemplateController::class, 'create'])->name('availability_templates.create');
+        Route::post('availability-templates', [AvailabilityTemplateController::class, 'store'])->name('availability_templates.store');
+        Route::delete('availability-templates/{id}', [AvailabilityTemplateController::class, 'destroy'])->name('availability_templates.destroy');
 
-	/* Store */
-	Route::name('admin.')->group(function () {
-		// Time Availability
-		// Route::resource('availability', AvailabilitySlotController::class);
-		// Route::post('availability/delete-date/{id}', [AvailabilitySlotController::class, 'deleteDate'])->name('availability.delete-date');
-		// Route::delete('/availability/time-slot/{id}', [AvailabilitySlotController::class, 'deleteTimeSlot']);
+        // Generate Availability
+        Route::get('availability/generate', [AvailabilityGenerationController::class, 'showForm'])->name('availability_templates.generate.form');
+        Route::post('availability/generate', [AvailabilityGenerationController::class, 'generate'])->name('availability_templates.generate');
 
+        // Calendar UI
+        Route::get('availability/calendar', [AvailabilityCalendarController::class, 'index'])->name('availability.calendar');
+        Route::get('availability/calendar/events', [AvailabilityCalendarController::class, 'events'])->name('availability.calendar.events');
 
-		// Availability Templates (New Flow)
-		Route::get('availability-templates', [AvailabilityTemplateController::class, 'index'])->name('availability_templates.index');
-		Route::get('availability-templates/create', [AvailabilityTemplateController::class, 'create'])->name('availability_templates.create');
-		Route::post('availability-templates', [AvailabilityTemplateController::class, 'store'])->name('availability_templates.store');
-		Route::delete('availability-templates/{id}', [AvailabilityTemplateController::class, 'destroy'])->name('availability_templates.destroy');
+        // CRUD for date
+        Route::get('availability/calendar/day/{date}', [AvailabilityCalendarController::class, 'day'])->where('date', '\d{4}-\d{2}-\d{2}')->name('availability.calendar.day'); // date: YYYY-mm-dd
+        Route::post('availability/calendar/day/{date}', [AvailabilityCalendarController::class, 'storeDay'])->where('date', '\d{4}-\d{2}-\d{2}')->name('availability.calendar.day.store');
+        Route::delete('availability/calendar/day/{date}', [AvailabilityCalendarController::class, 'deleteDay'])->where('date', '\d{4}-\d{2}-\d{2}')->name('availability.calendar.day.delete');
 
-		// Generate Availability
-		Route::get('availability/generate', [AvailabilityGenerationController::class, 'showForm'])->name('availability_templates.generate.form');
-		Route::post('availability/generate', [AvailabilityGenerationController::class, 'generate'])->name('availability_templates.generate');
+        // Delete slot
+        Route::delete('availability/calendar/slot/{id}', [AvailabilityCalendarController::class, 'deleteSlot'])->where('id', '[0-9]+')->name('availability.calendar.slot.delete');
 
+        // Manage Customers/Users
+        Route::prefix('customers')->group(function () {
+            Route::get('/', [CustomerController::class, 'index'])->name('customers.index');
+            Route::get('/details/{id}', [CustomerController::class, 'show'])->name('customers.show');
 
-		// Calendar UI
-		Route::get('availability/calendar', [AvailabilityCalendarController::class, 'index'])->name('availability.calendar');
-		Route::get('availability/calendar/events', [AvailabilityCalendarController::class, 'events'])->name('availability.calendar.events');
+            Route::post('/{id}/suspend', [CustomerController::class, 'suspend'])->name('customers.suspend');
+            Route::post('/{id}/unsuspend', [CustomerController::class, 'unsuspend'])->name('customers.unsuspend');
 
-		// CRUD for date
-		Route::get('availability/calendar/day/{date}', [AvailabilityCalendarController::class, 'day'])->where('date', '\d{4}-\d{2}-\d{2}')->name('availability.calendar.day'); // date: YYYY-mm-dd
-		Route::post('availability/calendar/day/{date}', [AvailabilityCalendarController::class, 'storeDay'])->where('date', '\d{4}-\d{2}-\d{2}')->name('availability.calendar.day.store');
-		Route::delete('availability/calendar/day/{date}', [AvailabilityCalendarController::class, 'deleteDay'])->where('date', '\d{4}-\d{2}-\d{2}')->name('availability.calendar.day.delete');
+            Route::delete('/{id}', [CustomerController::class, 'destroy'])->name('customers.destroy');
 
-		// Delete slot
-		Route::delete('availability/calendar/slot/{id}', [AvailabilityCalendarController::class, 'deleteSlot'])->where('id', '[0-9]+')->name('availability.calendar.slot.delete');
+            Route::get('/export-data', [CustomerController::class, 'exportCsv'])->name('customers.export');
+        });
 
-		// Manage Customers/Users
-		Route::prefix('customers')->group(function () {
-			Route::get('/', [CustomerController::class, 'index'])->name('customers.index');
-			Route::get('/details/{id}', [CustomerController::class, 'show'])->name('customers.show');
+        // Analytics
+        Route::name('analytics.')->prefix('analytics')->group(function () {
+            Route::get('/dashboard', [AnalyticsController::class, 'dashboard'])->name('dashboard');
+            Route::get('/top-products', [AnalyticsController::class, 'topProducts'])->name('top.products');
+            Route::get('/activity', [AnalyticsController::class, 'activityTrends'])->name('activity');
 
-			Route::post('/{id}/suspend', [CustomerController::class, 'suspend'])->name('customers.suspend');
-			Route::post('/{id}/unsuspend', [CustomerController::class, 'unsuspend'])->name('customers.unsuspend');
+            Route::get('/sales-timeseries', [AnalyticsController::class, 'salesTimeseries'])->name('sales.timeseries');
+        });
 
-			Route::delete('/{id}', [CustomerController::class, 'destroy'])->name('customers.destroy');
+        // Reporting
+        Route::name('reporting.')->prefix('reporting')->group(function () {
+            Route::get('/export/searches', [ReportingController::class, 'exportSearches'])->name('export.searches');
+            Route::get('/export/downloads', [ReportingController::class, 'exportDownloads'])->name('export.downloads');
+            Route::get('/sales', [ReportingController::class, 'salesReport'])->name('sales.report');
 
-			Route::get('/export-data', [CustomerController::class, 'exportCsv'])->name('customers.export');
-		});
+            Route::get('/sales/export', [ReportingController::class, 'exportSales'])->name('sales.export'); // implement
+            Route::get('/activities/export', [ReportingController::class, 'exportActivities'])->name('activities.export');
+        });
 
-		// Analytics
-		Route::name('analytics.')->prefix('analytics')->group(function () {
-			Route::get('/dashboard', [AnalyticsController::class, 'dashboard'])->name('dashboard');
-			Route::get('/top-products', [AnalyticsController::class, 'topProducts'])->name('top.products');
-			Route::get('/activity', [AnalyticsController::class, 'activityTrends'])->name('activity');
+        // Email Reading management (deliveries)
+        Route::prefix('email-readings')->name('email_readings.')->group(function () {
+            Route::get('/', [EmailReadingController::class, 'index'])->name('index');
+            Route::get('/export', [EmailReadingController::class, 'export'])->name('export');
+            Route::get('/create', [EmailReadingController::class, 'create'])->name('create');
+            Route::post('/', [EmailReadingController::class, 'store'])->name('store');
+            Route::get('/{delivery}', [EmailReadingController::class, 'show'])->name('show');
+            Route::get('/{delivery}/edit', [EmailReadingController::class, 'edit'])->name('edit');
+            Route::put('/{delivery}', [EmailReadingController::class, 'update'])->name('update');
+            Route::post('/{delivery}/regenerate', [EmailReadingController::class, 'regenerate'])->name('regenerate');
+            Route::post('/{delivery}/send', [EmailReadingController::class, 'sendNow'])->name('send');
+            Route::post('/{delivery}/cancel', [EmailReadingController::class, 'cancel'])->name('cancel');
+            Route::delete('/{delivery}', [EmailReadingController::class, 'destroy'])->name('destroy');
+        });
 
-			Route::get('/sales-timeseries', [AnalyticsController::class, 'salesTimeseries'])->name('sales.timeseries');
-		});
+        // Reading Products (email reading templates)
+        Route::post('email-reading-products/test', [EmailReadingProductController::class, 'test'])->name('email-reading-products.test');
+        Route::post('email-reading-products/{emailReadingProduct}/toggle', [EmailReadingProductController::class, 'toggleActive'])->name('email-reading-products.toggle');
+        Route::resource('email-reading-products', EmailReadingProductController::class)->except(['show']);
+    });
 
-		// Reporting
-		Route::name('reporting.')->prefix('reporting')->group(function () {
-			Route::get('/export/searches', [ReportingController::class, 'exportSearches'])->name('export.searches');
-			Route::get('/export/downloads', [ReportingController::class, 'exportDownloads'])->name('export.downloads');
-			Route::get('/sales', [ReportingController::class, 'salesReport'])->name('sales.report');
+    // Booking Inquiries
+    Route::get('booking-inquiries', [BookingController::class, 'index'])->name('admin.scheduled-meetings');
+    Route::get('booking/{id}/view', [BookingController::class, 'view'])->name('admin.booking.view');
+    Route::put('booking/reschedule', [BookingController::class, 'reschedule'])->name('admin.booking.reschedule');
+    Route::get('google-calendar/auth', [BookingController::class, 'adminGoogleAuth'])->name('admin.google.auth');
+    Route::put('booking/cancel', [BookingController::class, 'cancel'])->name('admin.booking.cancel');
+    Route::get('get-time-slots', [BookingController::class, 'getTimeSlots'])->name('admin.get.time-slots');
 
-			Route::get('/sales/export', [ReportingController::class, 'exportSales'])->name('sales.export'); // implement
-			Route::get('/activities/export', [ReportingController::class, 'exportActivities'])->name('activities.export');
-		});
-	});
+    // Audio & Packages
+    Route::resource('packages', PackageController::class);
+    Route::resource('audios', AudioController::class);
 
-	// Booking Inquiries
-	Route::get('booking-inquiries', [BookingController::class, 'index'])->name('admin.scheduled-meetings');
-	Route::get('booking/{id}/view', [BookingController::class, 'view'])->name('admin.booking.view');
-	Route::put('booking/reschedule', [BookingController::class, 'reschedule'])->name('admin.booking.reschedule');
-	Route::get('google-calendar/auth', [BookingController::class, 'adminGoogleAuth'])->name('admin.google.auth');
-	Route::put('booking/cancel', [BookingController::class, 'cancel'])->name('admin.booking.cancel');
-	Route::get('get-time-slots', [BookingController::class, 'getTimeSlots'])->name('admin.get.time-slots');
+    // Route::get('/stream/audio/{id}', [AudioStreamController::class, 'stream'])
+    // 	->name('audio.stream');
+    // ->middleware('auth'); // or your custom auth for Shopify tag
 
-
-	// Audio & Packages
-	Route::resource('packages', PackageController::class);
-	Route::resource('audios', AudioController::class);
-
-	// Route::get('/stream/audio/{id}', [AudioStreamController::class, 'stream'])
-	// 	->name('audio.stream');
-	// ->middleware('auth'); // or your custom auth for Shopify tag
-
-	// Manage customer entitlements of audio purchases
-	Route::get('customer-entitlements', [CustomerEntitlementController::class, 'index'])
-		->name('admin.customer.entitlements.index');
-	Route::get('customer-entitlements/{customerEntitlement}/edit', [CustomerEntitlementController::class, 'edit'])
-		->name('admin.customer.entitlements.edit');
-	Route::put('customer-entitlements/{customerEntitlement}', [CustomerEntitlementController::class, 'update'])
-		->name('admin.customer.entitlements.update');
+    // Manage customer entitlements of audio purchases
+    Route::get('customer-entitlements', [CustomerEntitlementController::class, 'index'])
+        ->name('admin.customer.entitlements.index');
+    Route::get('customer-entitlements/{customerEntitlement}/edit', [CustomerEntitlementController::class, 'edit'])
+        ->name('admin.customer.entitlements.edit');
+    Route::put('customer-entitlements/{customerEntitlement}', [CustomerEntitlementController::class, 'update'])
+        ->name('admin.customer.entitlements.update');
 });
 
 Route::prefix('admin')->name('admin.')->group(function () {
-	Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
+    Route::get('/dashboard', [DashboardController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
 
-	Route::middleware('auth')->group(function () {
-		Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-		Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
-		Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
-	});
+    Route::middleware('auth')->group(function () {
+        Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+        Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+        Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    });
 });
 
 Route::get('/admin/media/hls/{audio}/{file?}', [AudioStreamController::class, 'stream'])
-	->where('file', '.*')
-	->name('audio.stream');
+    ->where('file', '.*')
+    ->name('audio.stream');

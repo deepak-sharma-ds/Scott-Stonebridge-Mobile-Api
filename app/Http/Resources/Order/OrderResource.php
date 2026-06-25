@@ -3,22 +3,22 @@
 namespace App\Http\Resources\Order;
 
 use App\Http\Resources\Base\BaseApiResource;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 /**
  * Order API Resource
- * 
+ *
  * Transforms OrderDTO data to API response format.
  * Removes Shopify internal fields and includes calculated fields.
- * 
+ *
  * Requirements: 17.3, 17.6, 17.7, 17.8
  */
 class OrderResource extends BaseApiResource
 {
     /**
      * Transform the resource into an array.
-     * 
-     * @param Request $request
+     *
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
@@ -30,6 +30,10 @@ class OrderResource extends BaseApiResource
             'processed_at' => $this->processedAt,
             'financial_status' => $this->financialStatus,
             'fulfillment_status' => $this->fulfillmentStatus,
+            'canceled_at' => $this->canceledAt
+                ? Carbon::parse($this->canceledAt)->timezone(config('app.timezone'))->format('F j, Y \a\t g:i a')
+                : null,
+            'cancel_reason' => $this->cancelReason,
             'total_price' => $this->totalPrice['amount'],
             'subtotal_price' => $this->subtotalPrice['amount'],
             'total_tax' => $this->totalTax['amount'],

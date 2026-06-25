@@ -59,6 +59,14 @@ class SendEmailReadingJob implements ShouldQueue
             'delivery_id' => $delivery->id,
             'to' => $delivery->customer_email,
         ]);
+
+        // Email delivered: fulfill the Shopify order line item in its own job
+        // so a fulfillment failure never blocks or re-sends the email.
+        if ((bool) config('email_reading.fulfillment.enabled', true)) {
+            MarkReadingOrderFulfilledJob::dispatch($delivery->id)
+                ->onConnection(config('email_reading.queue.connection'))
+                ->onQueue(config('email_reading.queue.mail'));
+        }
     }
 
     public function failed(Throwable $e): void

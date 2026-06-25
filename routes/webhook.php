@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ShopifyController;
+use App\Http\Controllers\Webhook\ShopifyReadingOrderCancelledWebhookController;
 use App\Http\Controllers\Webhook\ShopifyReadingOrderUpdatedWebhookController;
 use App\Http\Controllers\Webhook\ShopifyReadingWebhookController;
 use Illuminate\Support\Facades\Route;
@@ -20,4 +21,8 @@ Route::prefix('webhook')->group(function () {
     Route::post('/order-updated-reading', [ShopifyReadingOrderUpdatedWebhookController::class, 'handle'])
         ->middleware('shopify.hmac')
         ->name('webhook.shopify.reading.updated');
+
+    Route::post('/order-cancelled-reading', [ShopifyReadingOrderCancelledWebhookController::class, 'handle'])
+        ->middleware('shopify.hmac')
+        ->name('webhook.shopify.reading.cancelled');
 });

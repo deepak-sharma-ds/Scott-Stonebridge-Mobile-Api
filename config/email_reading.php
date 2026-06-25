@@ -107,6 +107,40 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Shopify fulfillment on send
+    |--------------------------------------------------------------------------
+    | After a reading email is sent, the matching Shopify order LINE ITEM is
+    | fulfilled via the Admin GraphQL API (AdminApiClient). Only the reading
+    | line item is fulfilled, so an order containing physical products is left
+    | PARTIALLY_FULFILLED by Shopify automatically. Runs in its own job after
+    | the send is marked complete, so a fulfillment failure never blocks or
+    | re-sends the email. A per-delivery `fulfilled_at` flag keeps it idempotent.
+    |
+    | Set `enabled` false to leave Shopify orders untouched.
+    | `notify_customer` controls whether Shopify sends its own shipping email.
+    */
+    'fulfillment' => [
+        'enabled' => (bool) env('READINGS_FULFILL_ENABLED', true),
+        'notify_customer' => (bool) env('READINGS_FULFILL_NOTIFY_CUSTOMER', false),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Cancel on refund / cancellation
+    |--------------------------------------------------------------------------
+    | When a reading order is cancelled (orders/cancelled) or a reading line
+    | item is refunded (refunds/create), the matching UNSENT deliveries are
+    | marked `cancelled` so their queued send/generation jobs no-op — no email
+    | goes out. Already-sent readings are left untouched (cannot be unsent).
+    |
+    | Set `enabled` false to make the cancel webhook inert.
+    */
+    'cancel' => [
+        'enabled' => (bool) env('READINGS_CANCEL_ENABLED', true),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Testing allowlist (TEMPORARY)
     |--------------------------------------------------------------------------
     | When non-empty, the reading webhook will only process orders whose

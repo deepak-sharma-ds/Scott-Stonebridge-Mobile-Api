@@ -69,6 +69,41 @@ query getProductDetails($handle: String!, $country: CountryCode)
       values
     }
 
+    metafields(
+      identifiers: [
+        { namespace: "custom", key: "audio_player" }
+        { namespace: "custom", key: "audio_value" }
+        { namespace: "custom", key: "available_audio" }
+        { namespace: "custom", key: "add_schedule_time_options" }
+        { namespace: "custom", key: "trustpilot_logo" }
+      ]
+    ) {
+      namespace
+      key
+      type
+      value
+      reference {
+        __typename
+        ... on GenericFile {
+          url
+          mimeType
+          originalFileSize
+        }
+        ... on MediaImage {
+          image {
+            url
+            altText
+          }
+        }
+        ... on Video {
+          sources {
+            url
+            mimeType
+          }
+        }
+      }
+    }
+
     createdAt
     updatedAt
   }

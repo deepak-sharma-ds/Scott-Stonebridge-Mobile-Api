@@ -1,0 +1,23 @@
+mutation customerSubscribeNewsletter($customerId: ID!) {
+  customerEmailMarketingConsentUpdate(
+    input: {
+      customerId: $customerId
+      emailMarketingConsent: {
+        marketingState: SUBSCRIBED
+        marketingOptInLevel: SINGLE_OPT_IN
+      }
+    }
+  ) {
+    customer {
+      id
+      emailMarketingConsent {
+        marketingState
+        marketingOptInLevel
+      }
+    }
+    userErrors {
+      field
+      message
+    }
+  }
+}
