@@ -20,6 +20,9 @@ query getCustomerOrders(
           financialStatus
           fulfillmentStatus
 
+          canceledAt
+          cancelReason
+
           totalPrice {
             amount
             currencyCode

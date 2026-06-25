@@ -104,6 +104,7 @@
                 <div><dt style="color:var(--text-muted);">Scheduled</dt><dd style="margin:0.125rem 0 0;color:var(--text-primary);">{{ $delivery->scheduled_at?->format('d M Y H:i') ?? '—' }}</dd></div>
                 <div><dt style="color:var(--text-muted);">Expedited</dt><dd style="margin:0.125rem 0 0;color:var(--text-primary);">{{ $delivery->expedited_at?->format('d M Y H:i') ?? '—' }}</dd></div>
                 <div><dt style="color:var(--text-muted);">Sent</dt><dd style="margin:0.125rem 0 0;color:var(--text-primary);">{{ $delivery->sent_at?->format('d M Y H:i') ?? '—' }}</dd></div>
+                <div><dt style="color:var(--text-muted);">Fulfilled</dt><dd style="margin:0.125rem 0 0;color:var(--text-primary);">{{ $delivery->fulfilled_at?->format('d M Y H:i') ?? '—' }}</dd></div>
                 <div><dt style="color:var(--text-muted);">Created</dt><dd style="margin:0.125rem 0 0;color:var(--text-primary);">{{ $delivery->created_at?->format('d M Y H:i') }}</dd></div>
             </dl>
 

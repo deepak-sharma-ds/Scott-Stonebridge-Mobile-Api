@@ -6,25 +6,24 @@ use App\Contracts\Services\HomeServiceInterface;
 use App\Contracts\Shopify\AdminApiClientInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\Home\HomeDTO;
-use App\DTOs\Product\CollectionDTO;
-use App\DTOs\Product\ProductDTO;
-use App\Services\Base\BaseService;
 use App\Exceptions\ShopifyApiException;
 use App\Exceptions\ShopifyAuthException;
+use App\Services\Base\BaseService;
 use App\Traits\CacheWithFallback;
 use Illuminate\Support\Facades\Cache;
 
 /**
  * Home Service
- * 
+ *
  * Handles home page data retrieval and newsletter subscriptions.
  * Provides featured products, collections, and promotional content.
- * 
+ *
  * Requirements: 9.1, 9.6, 9.7, 9.8, 9.9, 9.10
  */
 class HomeService extends BaseService implements HomeServiceInterface
 {
     use CacheWithFallback;
+
     public function __construct(
         protected StorefrontApiClientInterface $storefrontClient,
         protected AdminApiClientInterface $adminClient
@@ -34,14 +33,13 @@ class HomeService extends BaseService implements HomeServiceInterface
 
     /**
      * Get home page data
-     * 
+     *
      * Returns featured products, collections, and promotional content
      * for the mobile app home screen.
-     * 
-     * @param string $featuredTag Tag for featured products collection (default: 'featured')
-     * @param int $featuredLimit Number of featured products to fetch (default: 10)
-     * @param int $collectionsLimit Number of collections to fetch (default: 6)
-     * @return HomeDTO
+     *
+     * @param  string  $featuredTag  Tag for featured products collection (default: 'featured')
+     * @param  int  $featuredLimit  Number of featured products to fetch (default: 10)
+     * @param  int  $collectionsLimit  Number of collections to fetch (default: 6)
      */
     public function getHomePageData(
         string $featuredTag = 'featured',
@@ -52,12 +50,12 @@ class HomeService extends BaseService implements HomeServiceInterface
             $this->logPerformanceStart('getHomePageData');
 
             $cacheKey = "home:data:{$featuredTag}:{$featuredLimit}:{$collectionsLimit}";
-            
+
             // Check if cache supports tagging
             $homeData = $this->cacheWithFallback(
                 $cacheKey,
                 900, // 15 minutes
-                fn() => $this->fetchHomePageData($featuredTag, $featuredLimit, $collectionsLimit),
+                fn () => $this->fetchHomePageData($featuredTag, $featuredLimit, $collectionsLimit),
                 ['home', 'products', 'collections']
             );
 
@@ -75,11 +73,6 @@ class HomeService extends BaseService implements HomeServiceInterface
 
     /**
      * Fetch home page data from Shopify
-     * 
-     * @param string $featuredTag
-     * @param int $featuredLimit
-     * @param int $collectionsLimit
-     * @return array
      */
     protected function fetchHomePageData(
         string $featuredTag,
@@ -101,10 +94,9 @@ class HomeService extends BaseService implements HomeServiceInterface
 
     /**
      * Fetch featured products from Shopify
-     * 
-     * @param string $tag Collection handle for featured products
-     * @param int $limit Number of products to fetch
-     * @return array
+     *
+     * @param  string  $tag  Collection handle for featured products
+     * @param  int  $limit  Number of products to fetch
      */
     protected function fetchFeaturedProducts(string $tag, int $limit): array
     {
@@ -137,9 +129,8 @@ class HomeService extends BaseService implements HomeServiceInterface
 
     /**
      * Fetch collections from Shopify
-     * 
-     * @param int $limit Number of collections to fetch
-     * @return array
+     *
+     * @param  int  $limit  Number of collections to fetch
      */
     protected function fetchCollections(int $limit): array
     {
@@ -164,13 +155,13 @@ class HomeService extends BaseService implements HomeServiceInterface
 
     /**
      * Subscribe customer to newsletter
-     * 
-     * Updates the customer's acceptsMarketing field to true.
+     *
+     * Updates the customer's email marketing consent to subscribed.
      * Requires customer access token for authentication.
-     * 
-     * @param string $email Customer email
-     * @param string $accessToken Customer access token
-     * @return bool
+     *
+     * @param  string  $email  Customer email
+     * @param  string  $accessToken  Customer access token
+     *
      * @throws ShopifyAuthException
      * @throws ShopifyApiException
      */
@@ -191,20 +182,19 @@ class HomeService extends BaseService implements HomeServiceInterface
 
             $customerId = $customerResponse['data']['customer']['id'];
 
-            // Update customer to accept marketing
+            // Update customer's email marketing consent to subscribed
             $variables = [
-                'id' => $customerId,
-                'acceptsMarketing' => true,
+                'customerId' => $customerId,
             ];
 
             $updateResponse = $this->adminClient->query(
-                'admin/customer/customer_update',
+                'admin/customer/subscribe_newsletter',
                 $variables
             );
 
-            if (!empty($updateResponse['data']['customerUpdate']['userErrors'])) {
-                $errors = $updateResponse['data']['customerUpdate']['userErrors'];
-                throw new ShopifyApiException('Newsletter subscription failed: ' . json_encode($errors));
+            if (! empty($updateResponse['data']['customerEmailMarketingConsentUpdate']['userErrors'])) {
+                $errors = $updateResponse['data']['customerEmailMarketingConsentUpdate']['userErrors'];
+                throw new ShopifyApiException('Newsletter subscription failed: '.json_encode($errors));
             }
 
             $this->logPerformanceEnd('subscribeToNewsletter', [
@@ -213,12 +203,12 @@ class HomeService extends BaseService implements HomeServiceInterface
             ]);
 
             return true;
-        } catch (ShopifyAuthException | ShopifyApiException $e) {
+        } catch (ShopifyAuthException|ShopifyApiException $e) {
             $this->logErrorWithException('Newsletter subscription failed', $e, ['email' => $email]);
             throw $e;
         } catch (\Exception $e) {
             $this->logErrorWithException('Newsletter subscription failed', $e, ['email' => $email]);
-            throw new ShopifyApiException('Failed to subscribe to newsletter: ' . $e->getMessage());
+            throw new ShopifyApiException('Failed to subscribe to newsletter: '.$e->getMessage());
         }
     }
 }

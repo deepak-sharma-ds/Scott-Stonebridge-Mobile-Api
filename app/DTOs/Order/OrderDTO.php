@@ -7,10 +7,10 @@ use InvalidArgumentException;
 
 /**
  * Order Data Transfer Object
- * 
+ *
  * Represents a Shopify order with typed properties and validation.
  * Orders contain line items, pricing, and fulfillment information.
- * 
+ *
  * Requirements: 16.3, 16.6, 16.7
  */
 class OrderDTO extends BaseDTO
@@ -22,6 +22,8 @@ class OrderDTO extends BaseDTO
         public readonly string $processedAt,
         public readonly ?string $financialStatus,
         public readonly ?string $fulfillmentStatus,
+        public readonly ?string $canceledAt,
+        public readonly ?string $cancelReason,
         public readonly array $totalPrice,
         public readonly array $subtotalPrice,
         public readonly array $totalTax,
@@ -38,7 +40,7 @@ class OrderDTO extends BaseDTO
 
     /**
      * Validate the order data.
-     * 
+     *
      * @throws InvalidArgumentException
      */
     protected function validate(): void
@@ -50,12 +52,11 @@ class OrderDTO extends BaseDTO
 
     /**
      * Create an OrderDTO from Shopify API response data.
-     * 
+     *
      * Transforms raw Shopify GraphQL order response into a typed DTO instance.
      * Handles nested line items and pricing information.
-     * 
-     * @param array $data Raw order data from Shopify GraphQL response
-     * @return self
+     *
+     * @param  array  $data  Raw order data from Shopify GraphQL response
      */
     public static function fromShopifyResponse(array $data): self
     {
@@ -69,7 +70,7 @@ class OrderDTO extends BaseDTO
             ?? [];
         $successfulFulfillments = $data['successfulFulfillments']
             ?? [];
-        
+
         return new self(
             id: $data['id'],
             name: $data['name'],
@@ -77,6 +78,8 @@ class OrderDTO extends BaseDTO
             processedAt: $data['processedAt'],
             financialStatus: $data['financialStatus'] ?? null,
             fulfillmentStatus: $data['fulfillmentStatus'] ?? null,
+            canceledAt: $data['canceledAt'] ?? null,
+            cancelReason: $data['cancelReason'] ?? null,
             totalPrice: [
                 'amount' => $data['totalPriceV2']['amount'] ?? $data['totalPrice']['amount'] ?? '0.00',
                 'currency' => $data['totalPriceV2']['currencyCode'] ?? $data['totalPrice']['currencyCode'] ?? 'GBP',
@@ -94,17 +97,17 @@ class OrderDTO extends BaseDTO
                 'currency' => $data['totalShippingPrice']['currencyCode'] ?? 'GBP',
             ] : null,
             lineItems: array_map(
-                fn($item) => OrderLineItemDTO::fromShopifyResponse($item['node'] ?? $item),
+                fn ($item) => OrderLineItemDTO::fromShopifyResponse($item['node'] ?? $item),
                 $lineItems
             ),
             billingAddress: $data['billingAddress'] ?? null,
             shippingAddress: $data['shippingAddress'] ?? null,
             discountApplications: array_map(
-                fn($item) => $item['node'] ?? $item,
+                fn ($item) => $item['node'] ?? $item,
                 $discountApplications
             ),
             successfulFulfillments: array_map(
-                fn($item) => $item['node'] ?? $item,
+                fn ($item) => $item['node'] ?? $item,
                 $successfulFulfillments
             ),
             statusUrl: $data['statusUrl'] ?? null,
@@ -113,16 +116,14 @@ class OrderDTO extends BaseDTO
 
     /**
      * Get the total number of items in the order.
-     * 
+     *
      * Sums the quantity of all line items.
-     * 
-     * @return int
      */
     public function getTotalItems(): int
     {
         return array_reduce(
             $this->lineItems,
-            fn($sum, $item) => $sum + $item->quantity,
+            fn ($sum, $item) => $sum + $item->quantity,
             0
         );
     }

@@ -24,6 +24,7 @@ use App\Contracts\Services\CurrencyFlagServiceInterface;
 use App\Contracts\Services\CustomerServiceInterface;
 use App\Contracts\Services\HomeServiceInterface;
 use App\Contracts\Services\NavigationServiceInterface;
+use App\Contracts\Services\OrderFulfillmentServiceInterface;
 use App\Contracts\Services\OrderServiceInterface;
 use App\Contracts\Services\ProductServiceInterface;
 use App\Contracts\Services\ProfileServiceInterface;
@@ -68,6 +69,7 @@ use App\Services\Shopify\CurrencyFlagService;
 use App\Services\Shopify\CustomerService;
 use App\Services\Shopify\HomeService;
 use App\Services\Shopify\NavigationService;
+use App\Services\Shopify\OrderFulfillmentService;
 use App\Services\Shopify\OrderService;
 use App\Services\Shopify\ProductService;
 use App\Services\Shopify\ProfileService;
@@ -114,6 +116,11 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(
             OrderServiceInterface::class,
             OrderService::class
+        );
+
+        $this->app->bind(
+            OrderFulfillmentServiceInterface::class,
+            OrderFulfillmentService::class
         );
 
         $this->app->bind(
