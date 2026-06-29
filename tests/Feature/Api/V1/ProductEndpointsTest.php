@@ -15,6 +15,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
  */
 class ProductEndpointsTest extends TestCase
 {
+    use RefreshDatabase;
+
     private MockShopifyClient $mockClient;
 
     protected function setUp(): void
@@ -76,8 +78,8 @@ class ProductEndpointsTest extends TestCase
         ]);
 
         $this->mockClient->mockResponse(
-            'storefront/products/get_product.graphql',
-            ShopifyResponseFactory::successResponse('product', $product)
+            'storefront/products/get_product_details',
+            ShopifyResponseFactory::successResponse('productByHandle', $product)
         );
 
         // Act
@@ -110,6 +112,65 @@ class ProductEndpointsTest extends TestCase
                 ]
             ]
         ]);
+    }
+
+    public function test_product_detail_includes_email_reading_config_when_matched(): void
+    {
+        // Arrange - product whose numeric ID maps to an email reading product
+        \App\Models\EmailReadingProduct::create([
+            'shopify_product_id' => 7939025469614,
+            'name' => 'Future Two Question Email Reading',
+            'slug' => 'future-two-question-email-reading',
+            'questions_schema' => [
+                ['key' => 'future_q1', 'label' => 'What do you want to know?', 'required' => true],
+                ['key' => 'future_q2', 'label' => 'What do you want to know?', 'required' => true],
+            ],
+            'prompt_template' => 'Customer: {{ $customer_name }}.',
+            'email_subject' => 'Your Future Two Question Reading',
+            'max_tokens' => 1500,
+            'is_active' => true,
+        ]);
+
+        $product = ShopifyResponseFactory::product([
+            'id' => 'gid://shopify/Product/7939025469614',
+            'title' => 'Future Two Question Email Reading',
+            'handle' => 'future-two-question-email-reading',
+        ]);
+
+        $this->mockClient->mockResponse(
+            'storefront/products/get_product_details',
+            ShopifyResponseFactory::successResponse('productByHandle', $product)
+        );
+
+        // Act
+        $response = $this->getJson('/api/v1/products/future-two-question-email-reading');
+
+        // Assert
+        $response->assertStatus(200);
+        $response->assertJsonPath('data.product.email_reading.prompt_template', 'Customer: {{ $customer_name }}.');
+        $response->assertJsonPath('data.product.email_reading.questions.0.key', 'future_q1');
+        $this->assertCount(2, $response->json('data.product.email_reading.questions'));
+    }
+
+    public function test_product_detail_email_reading_is_null_for_regular_product(): void
+    {
+        // Arrange - product with no matching email reading row
+        $product = ShopifyResponseFactory::product([
+            'id' => 'gid://shopify/Product/123456789',
+            'handle' => 'regular-product',
+        ]);
+
+        $this->mockClient->mockResponse(
+            'storefront/products/get_product_details',
+            ShopifyResponseFactory::successResponse('productByHandle', $product)
+        );
+
+        // Act
+        $response = $this->getJson('/api/v1/products/regular-product');
+
+        // Assert
+        $response->assertStatus(200);
+        $this->assertNull($response->json('data.product.email_reading'));
     }
 
     public function test_search_products_returns_filtered_results(): void
@@ -158,8 +219,8 @@ class ProductEndpointsTest extends TestCase
     {
         // Arrange
         $this->mockClient->mockResponse(
-            'storefront/products/get_product.graphql',
-            ShopifyResponseFactory::successResponse('product', null)
+            'storefront/products/get_product_details',
+            ['data' => ['productByHandle' => null]]
         );
 
         // Act
@@ -200,8 +261,8 @@ class ProductEndpointsTest extends TestCase
         // Arrange
         $product = ShopifyResponseFactory::product();
         $this->mockClient->mockResponse(
-            'storefront/products/get_product.graphql',
-            ShopifyResponseFactory::successResponse('product', $product)
+            'storefront/products/get_product_details',
+            ShopifyResponseFactory::successResponse('productByHandle', $product)
         );
 
         // Act

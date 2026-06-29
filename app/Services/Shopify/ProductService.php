@@ -4,17 +4,19 @@ namespace App\Services\Shopify;
 
 use App\Contracts\Services\ProductServiceInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
-use App\DTOs\Product\ProductDTO;
 use App\DTOs\Product\CollectionDTO;
+use App\DTOs\Product\ProductDTO;
+use App\Exceptions\ShopifyNotFoundException;
+use App\Models\EmailReadingProduct;
 use App\Services\Base\BaseService;
 use App\Services\Cache\ShopifyCacheStrategy;
 use App\Traits\CacheWithFallback;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
 
 class ProductService extends BaseService implements ProductServiceInterface
 {
     use CacheWithFallback;
+
     public function __construct(
         protected StorefrontApiClientInterface $storefrontClient,
         protected ShopifyCacheStrategy $cacheStrategy
@@ -25,9 +27,9 @@ class ProductService extends BaseService implements ProductServiceInterface
     /**
      * Get all products with pagination
      *
-     * @param int $limit Number of products to fetch
-     * @param string|null $cursor Pagination cursor
-     * @param array $filters Additional filters
+     * @param  int  $limit  Number of products to fetch
+     * @param  string|null  $cursor  Pagination cursor
+     * @param  array  $filters  Additional filters
      * @return Collection Collection of ProductDTO instances
      */
     public function getAllProducts(int $limit, ?string $cursor, array $filters): array
@@ -47,7 +49,7 @@ class ProductService extends BaseService implements ProductServiceInterface
             $response = $this->storefrontClient->queryWithCurrency('storefront/products/get_all_products', $variables);
 
             $products = collect($response['data']['products']['edges'] ?? [])
-                ->map(fn($edge) => ProductDTO::fromShopifyResponse($edge['node']));
+                ->map(fn ($edge) => ProductDTO::fromShopifyResponse($edge['node']));
 
             $pageInfo = $response['data']['products']['pageInfo'] ?? [];
 
@@ -73,12 +75,10 @@ class ProductService extends BaseService implements ProductServiceInterface
         }
     }
 
-
     /**
      * Get a single product by handle
      *
-     * @param string $handle Product handle
-     * @return ProductDTO
+     * @param  string  $handle  Product handle
      */
     public function getProductByHandle(string $handle): ProductDTO
     {
@@ -93,10 +93,15 @@ class ProductService extends BaseService implements ProductServiceInterface
             $response = $this->storefrontClient->queryWithCurrency('storefront/products/get_product_details', $variables);
 
             if (empty($response['data']['productByHandle'])) {
-                throw new \App\Exceptions\ShopifyNotFoundException("Product not found: {$handle}");
+                throw new ShopifyNotFoundException("Product not found: {$handle}");
             }
 
-            $product = ProductDTO::fromShopifyResponse($response['data']['productByHandle']);
+            $productData = $response['data']['productByHandle'];
+
+            $product = ProductDTO::fromShopifyResponse(
+                $productData,
+                $this->getEmailReadingForProduct($productData['id'] ?? '')
+            );
 
             $this->logPerformanceEnd('getProductByHandle', ['handle' => $handle]);
 
@@ -108,11 +113,46 @@ class ProductService extends BaseService implements ProductServiceInterface
     }
 
     /**
+     * Fetch the active email reading configuration for a Shopify product.
+     *
+     * Matches the numeric Shopify product ID against the email_reading_products
+     * table and returns its questions schema and prompt template, or null when
+     * the product is not an email reading product.
+     *
+     * @param  string  $productId  Shopify product ID, numeric or gid format
+     * @return array{id:int, questions:array<int,array<string,mixed>>, prompt_template:string, email_subject:string}|null
+     */
+    private function getEmailReadingForProduct(string $productId): ?array
+    {
+        $numericId = $this->extractProductNumericId($productId);
+
+        if (! ctype_digit($numericId)) {
+            return null;
+        }
+
+        $emailReadingProduct = EmailReadingProduct::query()
+            ->active()
+            ->where('shopify_product_id', (int) $numericId)
+            ->first();
+
+        if ($emailReadingProduct === null) {
+            return null;
+        }
+
+        return [
+            // 'id' => $emailReadingProduct->id,
+            'questions' => $emailReadingProduct->questions_schema,
+            // 'prompt_template' => $emailReadingProduct->prompt_template,
+            // 'email_subject' => $emailReadingProduct->email_subject,
+        ];
+    }
+
+    /**
      * Search products by query
      *
-     * @param string $query Search query
-     * @param int $limit Number of products to fetch
-     * @param string|null $cursor Pagination cursor
+     * @param  string  $query  Search query
+     * @param  int  $limit  Number of products to fetch
+     * @param  string|null  $cursor  Pagination cursor
      * @return array Array with 'items' and 'pagination' keys
      */
     public function searchProducts(string $query, int $limit, ?string $cursor): array
@@ -130,17 +170,17 @@ class ProductService extends BaseService implements ProductServiceInterface
             $response = $this->storefrontClient->queryWithCurrency('storefront/products/get_all_products', $variables);
 
             $products = collect($response['data']['products']['edges'] ?? [])
-                ->map(fn($edge) => ProductDTO::fromShopifyResponse($edge['node']));
+                ->map(fn ($edge) => ProductDTO::fromShopifyResponse($edge['node']));
 
             // Apply accurate price sorting if PRICE sortKey is used
             // Shopify's API sorts by base price, but we need to sort by actual min variant price
             if (isset($filters['sortKey']) && strtoupper($filters['sortKey']) === 'PRICE') {
                 $products = $products->sort(function ($a, $b) use ($filters) {
-                    $minPriceA = collect($a->variants)->min(fn($v) => (float) $v->price);
-                    $minPriceB = collect($b->variants)->min(fn($v) => (float) $v->price);
-                    
+                    $minPriceA = collect($a->variants)->min(fn ($v) => (float) $v->price);
+                    $minPriceB = collect($b->variants)->min(fn ($v) => (float) $v->price);
+
                     $result = $minPriceA <=> $minPriceB;
-                    
+
                     // Apply reverse if needed
                     return ($filters['reverse'] ?? false) ? -$result : $result;
                 })->values();
@@ -174,8 +214,8 @@ class ProductService extends BaseService implements ProductServiceInterface
     /**
      * Get featured products by tag with caching
      *
-     * @param string $tag Tag to filter by
-     * @param int $limit Number of products to fetch
+     * @param  string  $tag  Tag to filter by
+     * @param  int  $limit  Number of products to fetch
      * @return Collection Collection of ProductDTO instances
      */
     public function getFeaturedProducts(string $tag = 'featured', int $limit = 10): Collection
@@ -192,7 +232,7 @@ class ProductService extends BaseService implements ProductServiceInterface
             $products = $this->cacheWithFallback(
                 $cacheKey,
                 900, // 15 minutes
-                fn() => $this->fetchFeaturedProducts($tag, $limit),
+                fn () => $this->fetchFeaturedProducts($tag, $limit),
                 ['products', 'featured']
             );
 
@@ -217,8 +257,8 @@ class ProductService extends BaseService implements ProductServiceInterface
      * Related products are resolved in priority order:
      * Shopify recommendations, same collection, matching tags/type, then latest products.
      *
-     * @param string $productId Shopify product ID, numeric or gid format
-     * @param int $limit Number of products to fetch
+     * @param  string  $productId  Shopify product ID, numeric or gid format
+     * @param  int  $limit  Number of products to fetch
      * @return Collection Collection of ProductDTO instances
      */
     public function getRelatedProducts(string $productId, int $limit = 8): Collection
@@ -238,7 +278,7 @@ class ProductService extends BaseService implements ProductServiceInterface
             $products = $this->cacheWithFallback(
                 $cacheKey,
                 900,
-                fn() => $this->fetchRelatedProducts($normalizedProductId, $limit),
+                fn () => $this->fetchRelatedProducts($normalizedProductId, $limit),
                 ['products', 'related']
             );
 
@@ -260,9 +300,8 @@ class ProductService extends BaseService implements ProductServiceInterface
     /**
      * Fetch related products from Shopify with fallback priority.
      *
-     * @param string $productId Normalized Shopify product gid
-     * @param int $limit Number of products to fetch
-     * @return Collection
+     * @param  string  $productId  Normalized Shopify product gid
+     * @param  int  $limit  Number of products to fetch
      */
     private function fetchRelatedProducts(string $productId, int $limit): Collection
     {
@@ -307,9 +346,8 @@ class ProductService extends BaseService implements ProductServiceInterface
     /**
      * Fetch Shopify product recommendations.
      *
-     * @param string $productId Normalized Shopify product gid
-     * @param int $limit Number of products to fetch
-     * @return Collection
+     * @param  string  $productId  Normalized Shopify product gid
+     * @param  int  $limit  Number of products to fetch
      */
     private function fetchShopifyRecommendations(string $productId, int $limit): Collection
     {
@@ -323,8 +361,8 @@ class ProductService extends BaseService implements ProductServiceInterface
             );
 
             return collect($response['data']['productRecommendations'] ?? [])
-                ->map(fn($product) => ProductDTO::fromShopifyResponse($product))
-                ->reject(fn(ProductDTO $product) => $this->isSameProduct($product->id, $productId))
+                ->map(fn ($product) => ProductDTO::fromShopifyResponse($product))
+                ->reject(fn (ProductDTO $product) => $this->isSameProduct($product->id, $productId))
                 ->take($limit)
                 ->values();
         } catch (\Throwable $e) {
@@ -340,7 +378,7 @@ class ProductService extends BaseService implements ProductServiceInterface
     /**
      * Fetch the source product context for fallback matching.
      *
-     * @param string $productId Normalized Shopify product gid
+     * @param  string  $productId  Normalized Shopify product gid
      * @return array<string, mixed>
      */
     private function fetchRelatedProductContext(string $productId): array
@@ -368,15 +406,14 @@ class ProductService extends BaseService implements ProductServiceInterface
     /**
      * Fetch products from the first shared collection.
      *
-     * @param array<string, mixed> $context Source product context
-     * @param string $productId Normalized Shopify product gid
-     * @param int $limit Number of products to fetch
-     * @return Collection
+     * @param  array<string, mixed>  $context  Source product context
+     * @param  string  $productId  Normalized Shopify product gid
+     * @param  int  $limit  Number of products to fetch
      */
     private function fetchProductsFromSameCollection(array $context, string $productId, int $limit): Collection
     {
         $collections = $context['collections']['edges'] ?? [];
-        $collection = collect($collections)->first(fn($edge) => !empty($edge['node']['handle']));
+        $collection = collect($collections)->first(fn ($edge) => ! empty($edge['node']['handle']));
 
         if (empty($collection['node']['handle'])) {
             return collect();
@@ -406,20 +443,19 @@ class ProductService extends BaseService implements ProductServiceInterface
     /**
      * Fetch products with matching tags or product type.
      *
-     * @param array<string, mixed> $context Source product context
-     * @param string $productId Normalized Shopify product gid
-     * @param int $limit Number of products to fetch
-     * @return Collection
+     * @param  array<string, mixed>  $context  Source product context
+     * @param  string  $productId  Normalized Shopify product gid
+     * @param  int  $limit  Number of products to fetch
      */
     private function fetchProductsByMatchingAttributes(array $context, string $productId, int $limit): Collection
     {
         $queries = collect($context['tags'] ?? [])
             ->filter()
             ->take(5)
-            ->map(fn(string $tag) => 'tag:' . $this->quoteShopifySearchValue($tag));
+            ->map(fn (string $tag) => 'tag:'.$this->quoteShopifySearchValue($tag));
 
-        if (!empty($context['productType'])) {
-            $queries->push('product_type:' . $this->quoteShopifySearchValue($context['productType']));
+        if (! empty($context['productType'])) {
+            $queries->push('product_type:'.$this->quoteShopifySearchValue($context['productType']));
         }
 
         if ($queries->isEmpty()) {
@@ -447,9 +483,8 @@ class ProductService extends BaseService implements ProductServiceInterface
     /**
      * Fetch latest products as the final fallback.
      *
-     * @param string $productId Normalized Shopify product gid
-     * @param int $limit Number of products to fetch
-     * @return Collection
+     * @param  string  $productId  Normalized Shopify product gid
+     * @param  int  $limit  Number of products to fetch
      */
     private function fetchLatestRelatedProducts(string $productId, int $limit): Collection
     {
@@ -474,11 +509,8 @@ class ProductService extends BaseService implements ProductServiceInterface
     /**
      * Merge product candidates without duplicates or the requested product.
      *
-     * @param Collection $current
-     * @param Collection $candidates
-     * @param string $productId Normalized Shopify product gid
-     * @param int $limit Number of products to fetch
-     * @return Collection
+     * @param  string  $productId  Normalized Shopify product gid
+     * @param  int  $limit  Number of products to fetch
      */
     private function mergeRelatedProducts(
         Collection $current,
@@ -487,12 +519,12 @@ class ProductService extends BaseService implements ProductServiceInterface
         int $limit
     ): Collection {
         $seen = $current
-            ->map(fn(ProductDTO $product) => $this->extractProductNumericId($product->id))
+            ->map(fn (ProductDTO $product) => $this->extractProductNumericId($product->id))
             ->filter()
             ->flip();
 
         foreach ($candidates as $candidate) {
-            if (!$candidate instanceof ProductDTO) {
+            if (! $candidate instanceof ProductDTO) {
                 continue;
             }
 
@@ -516,22 +548,17 @@ class ProductService extends BaseService implements ProductServiceInterface
     /**
      * Remove the requested product from a collection.
      *
-     * @param Collection $products
-     * @param string $productId Normalized Shopify product gid
-     * @return Collection
+     * @param  string  $productId  Normalized Shopify product gid
      */
     private function filterCurrentProduct(Collection $products, string $productId): Collection
     {
         return $products
-            ->reject(fn(ProductDTO $product) => $this->isSameProduct($product->id, $productId))
+            ->reject(fn (ProductDTO $product) => $this->isSameProduct($product->id, $productId))
             ->values();
     }
 
     /**
      * Normalize numeric Shopify product IDs to gid format.
-     *
-     * @param string $productId
-     * @return string
      */
     private function normalizeProductId(string $productId): string
     {
@@ -546,10 +573,6 @@ class ProductService extends BaseService implements ProductServiceInterface
 
     /**
      * Compare Shopify product IDs across numeric and gid formats.
-     *
-     * @param string $first
-     * @param string $second
-     * @return bool
      */
     private function isSameProduct(string $first, string $second): bool
     {
@@ -558,9 +581,6 @@ class ProductService extends BaseService implements ProductServiceInterface
 
     /**
      * Extract numeric product ID from a Shopify product ID.
-     *
-     * @param string $productId
-     * @return string
      */
     private function extractProductNumericId(string $productId): string
     {
@@ -573,21 +593,17 @@ class ProductService extends BaseService implements ProductServiceInterface
 
     /**
      * Quote a Shopify search query value.
-     *
-     * @param string $value
-     * @return string
      */
     private function quoteShopifySearchValue(string $value): string
     {
-        return '"' . addcslashes($value, "\\\"") . '"';
+        return '"'.addcslashes($value, '\\"').'"';
     }
 
     /**
      * Fetch featured products from Shopify API
      *
-     * @param string $tag Tag to filter by
-     * @param int $limit Number of products to fetch
-     * @return Collection
+     * @param  string  $tag  Tag to filter by
+     * @param  int  $limit  Number of products to fetch
      */
     private function fetchFeaturedProducts(string $tag, int $limit): Collection
     {
@@ -601,14 +617,14 @@ class ProductService extends BaseService implements ProductServiceInterface
         $response = $this->storefrontClient->queryWithCurrency('storefront/product/products_featured', $variables);
 
         return collect($response['data']['products']['edges'] ?? [])
-            ->map(fn($edge) => ProductDTO::fromShopifyResponse($edge['node']));
+            ->map(fn ($edge) => ProductDTO::fromShopifyResponse($edge['node']));
     }
 
     /**
      * Get all collections with caching
      *
-     * @param int $limit Number of collections to fetch
-     * @param string|null $cursor Pagination cursor
+     * @param  int  $limit  Number of collections to fetch
+     * @param  string|null  $cursor  Pagination cursor
      * @return array ['items' => Collection, 'pagination' => array]
      */
     public function getCollections(int $limit = 50, ?string $cursor = null): array
@@ -624,7 +640,7 @@ class ProductService extends BaseService implements ProductServiceInterface
             $result = $this->cacheWithFallback(
                 $cacheKey,
                 1800, // 30 minutes
-                fn() => $this->fetchCollections($limit, $cursor),
+                fn () => $this->fetchCollections($limit, $cursor),
                 ['collections']
             );
 
@@ -646,9 +662,8 @@ class ProductService extends BaseService implements ProductServiceInterface
     /**
      * Fetch collections from Shopify API
      *
-     * @param int $limit Number of collections to fetch
-     * @param string|null $cursor Pagination cursor
-     * @return array
+     * @param  int  $limit  Number of collections to fetch
+     * @param  string|null  $cursor  Pagination cursor
      */
     private function fetchCollections(int $limit, ?string $cursor): array
     {
@@ -664,7 +679,7 @@ class ProductService extends BaseService implements ProductServiceInterface
                 $node = $edge['node'];
                 // Count products from the products connection
                 $productsCount = count($node['products']['edges'] ?? []);
-                
+
                 return CollectionDTO::fromShopifyResponse([
                     'id' => $node['id'],
                     'title' => $node['title'],
@@ -692,11 +707,11 @@ class ProductService extends BaseService implements ProductServiceInterface
     /**
      * Get products by collection with pagination
      *
-     * @param string $handle Collection handle
-     * @param int $limit Number of products to fetch
-     * @param string|null $cursor Pagination cursor
-     * @param string $sortKey Sort key (TITLE, PRICE, BEST_SELLING, etc.)
-     * @param bool $reverse Reverse sort order
+     * @param  string  $handle  Collection handle
+     * @param  int  $limit  Number of products to fetch
+     * @param  string|null  $cursor  Pagination cursor
+     * @param  string  $sortKey  Sort key (TITLE, PRICE, BEST_SELLING, etc.)
+     * @param  bool  $reverse  Reverse sort order
      * @return array ['items' => Collection, 'pagination' => array, 'collection' => CollectionDTO]
      */
     public function getCollectionProducts(
@@ -721,7 +736,7 @@ class ProductService extends BaseService implements ProductServiceInterface
             $response = $this->storefrontClient->queryWithCurrency('storefront/collection/collection_products', $variables);
 
             if (empty($response['data']['collectionByHandle'])) {
-                throw new \App\Exceptions\ShopifyNotFoundException("Collection not found: {$handle}");
+                throw new ShopifyNotFoundException("Collection not found: {$handle}");
             }
 
             $collectionData = $response['data']['collectionByHandle'];
@@ -740,7 +755,7 @@ class ProductService extends BaseService implements ProductServiceInterface
 
             // Map products
             $products = collect($collectionData['products']['edges'] ?? [])
-                ->map(fn($edge) => ProductDTO::fromShopifyResponse($edge['node']));
+                ->map(fn ($edge) => ProductDTO::fromShopifyResponse($edge['node']));
 
             $pageInfo = $collectionData['products']['pageInfo'] ?? [];
 

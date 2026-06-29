@@ -31,6 +31,7 @@ class ProductDTO extends BaseDTO
         public readonly ?string $publishedAt,
         public readonly ?string $updatedAt,
         public readonly array $metafields = [],
+        public readonly ?array $emailReading = null,
     ) {
         $this->validate();
     }
@@ -54,8 +55,9 @@ class ProductDTO extends BaseDTO
      * Handles nested variant transformation and image formatting.
      *
      * @param  array  $data  Raw product data from Shopify GraphQL response
+     * @param  array<string, mixed>|null  $emailReading  Email reading config for this product, if any
      */
-    public static function fromShopifyResponse(array $data): self
+    public static function fromShopifyResponse(array $data, ?array $emailReading = null): self
     {
         // Map variants from Shopify response
         $variants = array_map(
@@ -92,6 +94,7 @@ class ProductDTO extends BaseDTO
             publishedAt: $data['publishedAt'] ?? null,
             updatedAt: $data['updatedAt'] ?? null,
             metafields: self::buildMetafields($data['metafields'] ?? []),
+            emailReading: $emailReading,
         );
     }
 

@@ -36,6 +36,7 @@ class ProductResource extends BaseApiResource
             'variants' => ProductVariantResource::collection($this->variants),
             'options' => $this->options,
             'metafields' => $this->metafields,
+            'email_reading' => $this->emailReading,
             'published_at' => $this->publishedAt,
             'updated_at' => $this->updatedAt,
         ];
