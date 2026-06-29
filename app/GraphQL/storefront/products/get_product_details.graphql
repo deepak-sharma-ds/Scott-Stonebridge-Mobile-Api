@@ -76,6 +76,7 @@ query getProductDetails($handle: String!, $country: CountryCode)
         { namespace: "custom", key: "available_audio" }
         { namespace: "custom", key: "add_schedule_time_options" }
         { namespace: "custom", key: "trustpilot_logo" }
+        { namespace: "custom", key: "email_reading_all_questions" }
       ]
     ) {
       namespace
