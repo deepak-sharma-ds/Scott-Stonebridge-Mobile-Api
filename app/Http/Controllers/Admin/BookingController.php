@@ -7,6 +7,7 @@ use App\Models\AvailabilityDate;
 use App\Models\GoogleToken;
 use App\Models\ScheduledMeeting;
 use App\Models\TimeSlot;
+use App\Services\BookingService;
 use Carbon\Carbon;
 use DB;
 use Google\Client;
@@ -71,6 +72,50 @@ class BookingController extends Controller
         $booking = ScheduledMeeting::findOrFail($id);
 
         return view('admin.booking_inquiries.view', compact('booking'));
+    }
+
+    /**
+     * Manually create a meeting (admin side).
+     *
+     * Independent of the Shopify order/payment flow: the admin picks an
+     * available date and time slot and a calendar event is created directly.
+     */
+    public function store(Request $request, BookingService $bookingService)
+    {
+        $log = Log::channel('appointment_slots');
+        $log->info('================== START: BookingController::store (Admin manual booking) ==================');
+        $log->info('Creating manual meeting', ['request_data' => $request->all()]);
+
+        $data = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|max:255',
+            'phone' => 'nullable|string|max:20',
+            'availability_date' => 'required|date',
+            'time_slot_id' => 'required|exists:time_slots,id',
+        ]);
+
+        $result = $bookingService->bookMeeting([
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'phone' => $data['phone'] ?? '',
+            'availability_date' => $data['availability_date'],
+            'time_slot_id' => $data['time_slot_id'],
+            'order_id' => null,
+        ]);
+
+        if (! empty($result['success'])) {
+            $log->info('Manual meeting created successfully', ['booking_id' => $result['booking']->id]);
+            $log->info('================== END: BookingController::store (Admin manual booking) ==================');
+
+            return redirect()->route('admin.scheduled-meetings')
+                ->with('success', 'Meeting added successfully!');
+        }
+
+        $log->error('Manual meeting creation failed', $result);
+
+        return back()
+            ->withErrors(['api_error' => $result['error'] ?? 'Failed to add meeting.'])
+            ->withInput();
     }
 
     public function reschedule(Request $request)

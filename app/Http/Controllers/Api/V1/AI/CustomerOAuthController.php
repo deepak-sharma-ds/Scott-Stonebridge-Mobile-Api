@@ -10,7 +10,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -29,33 +28,25 @@ class CustomerOAuthController
 
     private const DISCOVERY_CACHE_TTL = 3600;
 
-    // Number of times the callback may transparently restart the whole OAuth
-    // flow after finding the PKCE state gone (DB migrated, cache flushed,
-    // server moved, TTL lapsed). Bounded so a permanently broken cache store
-    // surfaces the error page instead of bouncing the popup forever.
-    private const MAX_AUTH_RESTARTS = 1;
-
     public function start(Request $request): RedirectResponse
     {
         $validated = $request->validate([
             'session_id' => ['required', 'uuid', 'exists:ai_conversations,session_id'],
             'shop_domain' => ['required', 'string', 'regex:/^[A-Za-z0-9.\-]+$/'],
-            'attempt' => ['sometimes', 'integer', 'min:0', 'max:'.self::MAX_AUTH_RESTARTS],
         ]);
 
         $sessionId = (string) $validated['session_id'];
         $shopDomain = (string) $validated['shop_domain'];
-        $attempt = (int) ($validated['attempt'] ?? 0);
 
         $config = $this->discoverOidcConfig($shopDomain);
 
         $verifier = Str::random(64);
         $challenge = $this->codeChallenge($verifier);
-        $nonce = bin2hex(random_bytes(16));
-        $ttl = (int) config('chatbot.oauth.pkce_session_ttl', 1800);
+        $state = bin2hex(random_bytes(16));
+        $ttl = (int) config('chatbot.oauth.pkce_session_ttl', 600);
 
         Cache::put(
-            self::STATE_PREFIX.$nonce,
+            self::STATE_PREFIX.$state,
             [
                 'verifier' => $verifier,
                 'session_id' => $sessionId,
@@ -63,20 +54,6 @@ class CustomerOAuthController
             ],
             $ttl,
         );
-
-        // Carry the chat session, shop, and restart counter inside an
-        // encrypted, tamper-proof `state`. Shopify round-trips it verbatim, so
-        // if the PKCE cache row is lost before the callback (DB migration,
-        // cache flush, server move, TTL), the callback can still recover these
-        // values and restart the whole flow from `/start`. Encryption prevents
-        // an attacker from forging a `state` that binds their login to another
-        // chat session.
-        $state = Crypt::encryptString((string) json_encode([
-            'n' => $nonce,
-            'sid' => $sessionId,
-            'shop' => $shopDomain,
-            'a' => $attempt,
-        ]));
 
         $clientId = (string) config('chatbot.oauth.client_id');
         $scopeString = implode(' ', (array) config('chatbot.oauth.scopes', []));
@@ -99,14 +76,13 @@ class CustomerOAuthController
             'shop_domain' => $shopDomain,
             'client_id' => $clientId,
             'scope' => $scopeString,
-            'attempt' => $attempt,
             'authorize_endpoint' => $config['authorization_endpoint'],
         ]);
 
         return redirect()->away($config['authorization_endpoint'].'?'.$query);
     }
 
-    public function callback(Request $request): Response|RedirectResponse
+    public function callback(Request $request): Response
     {
         // Unconditional entry log so we can prove the callback was hit even
         // when validation fails before any other log line fires. Truncate the
@@ -141,20 +117,7 @@ class CustomerOAuthController
             'code' => ['required', 'string'],
         ]);
 
-        $stateData = $this->decodeState((string) $validated['state']);
-        if ($stateData === null) {
-            Log::channel('ai')->warning('oauth.state_decode_failed', [
-                'state_prefix' => substr((string) $validated['state'], 0, 8),
-                'note' => 'State could not be decrypted — likely a stale link signed with a previous APP_KEY, or a tampered value.',
-            ]);
-
-            return $this->errorPage(
-                'Authentication session expired. Please close this window and click Sign in again from the chat.',
-                400,
-            );
-        }
-
-        $stateKey = self::STATE_PREFIX.$stateData['nonce'];
+        $stateKey = self::STATE_PREFIX.$validated['state'];
         // Use Cache::get + explicit forget-on-success rather than Cache::pull.
         // Chrome's network prefetcher (and `<link rel="prerender">` style
         // speculative requests) can hit this URL before the user's real
@@ -164,31 +127,11 @@ class CustomerOAuthController
         // safe and rescues the prefetch race.
         $payload = Cache::get($stateKey);
         if (! is_array($payload)) {
-            // The PKCE verifier for this `code` is gone, so the code can never
-            // be redeemed. Instead of dead-ending, transparently restart the
-            // whole flow with a fresh state + verifier — the session_id and
-            // shop_domain survive inside the encrypted `state`. Bounded by
-            // MAX_AUTH_RESTARTS so a permanently broken cache store still
-            // surfaces the error page rather than looping the popup.
-            if ($stateData['attempt'] < self::MAX_AUTH_RESTARTS) {
-                Log::channel('ai')->info('oauth.state_missing_restart', [
-                    'session_id' => $stateData['session_id'],
-                    'attempt' => $stateData['attempt'],
-                    'note' => 'PKCE state absent (cache flushed / TTL / server moved) — restarting auth from /start.',
-                ]);
-
-                return redirect()->route('api.v1.ai.oauth.customer.start', [
-                    'session_id' => $stateData['session_id'],
-                    'shop_domain' => $stateData['shop_domain'],
-                    'attempt' => $stateData['attempt'] + 1,
-                ]);
-            }
-
+            $statePrefix = substr((string) $validated['state'], 0, 8);
             Log::channel('ai')->warning('oauth.state_not_found', [
-                'state_prefix' => substr($stateData['nonce'], 0, 8),
-                'attempt' => $stateData['attempt'],
-                'reason' => 'cache_miss_after_restart',
-                'note' => 'PKCE state still missing after an automatic restart — the cache store is likely unavailable (check the `cache` table / CACHE_STORE).',
+                'state_prefix' => $statePrefix,
+                'reason' => 'cache_miss',
+                'note' => 'Either TTL expired (default 600s — extend SHOPIFY_OAUTH_PKCE_TTL) or callback was hit twice and a previous attempt already forgot the state.',
             ]);
 
             return $this->errorPage(
@@ -332,31 +275,6 @@ class CustomerOAuthController
     private function codeChallenge(string $verifier): string
     {
         return rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=');
-    }
-
-    /**
-     * Decrypt and validate the OAuth `state` blob produced by start().
-     *
-     * @return array{nonce: string, session_id: string, shop_domain: string, attempt: int}|null
-     */
-    private function decodeState(string $state): ?array
-    {
-        try {
-            $decoded = json_decode(Crypt::decryptString($state), true);
-        } catch (\Throwable) {
-            return null;
-        }
-
-        if (! is_array($decoded) || ! isset($decoded['n'], $decoded['sid'], $decoded['shop'])) {
-            return null;
-        }
-
-        return [
-            'nonce' => (string) $decoded['n'],
-            'session_id' => (string) $decoded['sid'],
-            'shop_domain' => (string) $decoded['shop'],
-            'attempt' => (int) ($decoded['a'] ?? 0),
-        ];
     }
 
     private function closePopupPage(string $sessionId): Response
