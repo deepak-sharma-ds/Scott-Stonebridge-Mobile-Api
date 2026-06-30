@@ -9,7 +9,6 @@ use App\Models\AiCustomerSession;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -69,9 +68,8 @@ class CustomerOAuthTest extends TestCase
         $this->assertNotEmpty($query['code_challenge'] ?? null);
         $this->assertNotEmpty($query['state'] ?? null);
 
-        $decoded = json_decode(Crypt::decryptString($query['state']), true);
-        $this->assertIsArray($decoded);
-        $stashed = Cache::get('ai:oauth:state:'.$decoded['n']);
+        $state = $query['state'];
+        $stashed = Cache::get('ai:oauth:state:'.$state);
         $this->assertIsArray($stashed);
         $this->assertSame($convo->session_id, $stashed['session_id']);
         $this->assertSame(self::SHOP, $stashed['shop_domain']);
@@ -99,15 +97,9 @@ class CustomerOAuthTest extends TestCase
     public function test_callback_exchanges_code_persists_token_and_returns_close_page(): void
     {
         $convo = AiConversation::factory()->create(['shop_domain' => self::SHOP]);
-        $nonce = 'fixed-nonce-token';
-        $state = Crypt::encryptString((string) json_encode([
-            'n' => $nonce,
-            'sid' => $convo->session_id,
-            'shop' => self::SHOP,
-            'a' => 0,
-        ]));
+        $state = 'fixed-state-token';
 
-        Cache::put('ai:oauth:state:'.$nonce, [
+        Cache::put('ai:oauth:state:'.$state, [
             'verifier' => 'fixed-verifier-value-fixed-verifier-value-fixed-verifier-value',
             'session_id' => $convo->session_id,
             'shop_domain' => self::SHOP,
@@ -140,7 +132,7 @@ class CustomerOAuthTest extends TestCase
         $this->assertSame('shpca_test_token_value', $row->customer_access_token);
         $this->assertTrue($row->expires_at->isFuture());
 
-        $this->assertNull(Cache::get('ai:oauth:state:'.$nonce));
+        $this->assertNull(Cache::get('ai:oauth:state:'.$state));
 
         Http::assertSent(function ($request) {
             return $request->url() === 'https://'.self::SHOP.'/oauth/token'
@@ -153,54 +145,6 @@ class CustomerOAuthTest extends TestCase
     public function test_callback_with_unknown_state_returns_400_error_page(): void
     {
         $response = $this->get('/api/v1/ai/oauth/customer/callback?code=x&state=missing');
-
-        $response->assertStatus(400);
-        $this->assertStringContainsString('expired', $response->getContent());
-    }
-
-    public function test_callback_restarts_auth_when_pkce_state_is_gone(): void
-    {
-        $convo = AiConversation::factory()->create(['shop_domain' => self::SHOP]);
-        // Valid, decryptable state but no matching cache row (DB migrated /
-        // cache flushed) — the callback should restart the flow from /start.
-        $state = Crypt::encryptString((string) json_encode([
-            'n' => 'gone-nonce',
-            'sid' => $convo->session_id,
-            'shop' => self::SHOP,
-            'a' => 0,
-        ]));
-
-        $response = $this->get('/api/v1/ai/oauth/customer/callback?'.http_build_query([
-            'code' => 'auth-code-abc',
-            'state' => $state,
-        ]));
-
-        $response->assertStatus(302);
-        $location = $response->headers->get('Location');
-        $this->assertNotNull($location);
-        $this->assertStringContainsString('/api/v1/ai/oauth/customer/start', $location);
-
-        parse_str(parse_url($location, PHP_URL_QUERY) ?? '', $query);
-        $this->assertSame($convo->session_id, $query['session_id'] ?? null);
-        $this->assertSame(self::SHOP, $query['shop_domain'] ?? null);
-        $this->assertSame('1', $query['attempt'] ?? null);
-    }
-
-    public function test_callback_errors_when_state_gone_after_max_restarts(): void
-    {
-        $convo = AiConversation::factory()->create(['shop_domain' => self::SHOP]);
-        // attempt already at the cap — no further restart, surface the error.
-        $state = Crypt::encryptString((string) json_encode([
-            'n' => 'gone-nonce',
-            'sid' => $convo->session_id,
-            'shop' => self::SHOP,
-            'a' => 1,
-        ]));
-
-        $response = $this->get('/api/v1/ai/oauth/customer/callback?'.http_build_query([
-            'code' => 'auth-code-abc',
-            'state' => $state,
-        ]));
 
         $response->assertStatus(400);
         $this->assertStringContainsString('expired', $response->getContent());

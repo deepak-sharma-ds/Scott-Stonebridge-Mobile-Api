@@ -130,6 +130,7 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
     // Booking Inquiries
     Route::get('booking-inquiries', [BookingController::class, 'index'])->name('admin.scheduled-meetings');
     Route::get('booking/{id}/view', [BookingController::class, 'view'])->name('admin.booking.view');
+    Route::post('booking/store', [BookingController::class, 'store'])->name('admin.booking.store');
     Route::put('booking/reschedule', [BookingController::class, 'reschedule'])->name('admin.booking.reschedule');
     Route::get('google-calendar/auth', [BookingController::class, 'adminGoogleAuth'])->name('admin.google.auth');
     Route::put('booking/cancel', [BookingController::class, 'cancel'])->name('admin.booking.cancel');

@@ -7,13 +7,36 @@
         @include('admin.components.page-header', [
             'title' => 'Booking Inquiries',
             'subtitle' => 'Manage customer booking requests and schedules',
+            'action' => '<div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
+                    <button type="button" class="btn btn-primary" id="btnAddMeeting">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            style="display: inline-block; vertical-align: middle; margin-right: 0.25rem;">
+                            <line x1="12" y1="5" x2="12" y2="19"></line>
+                            <line x1="5" y1="12" x2="19" y2="12"></line>
+                        </svg>
+                        Add Meeting
+                    </button>
+                </div>',
         ])
 
         {{-- Alert Messages --}}
-        @if ($errors->has('error'))
+        @if (session('success'))
+            <div class="alert alert-success alert-dismissible fade show card" role="alert"
+                style="border-left: 4px solid #10b981;">
+                {{ session('success') }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        @endif
+
+        @if ($errors->any())
             <div class="alert alert-danger alert-dismissible fade show card" role="alert"
                 style="border-left: 4px solid #ef4444;">
-                <strong>Error:</strong> {{ $errors->first('error') }}
+                <strong>Error:</strong>
+                <ul style="margin: 0.5rem 0 0; padding-left: 1.25rem;">
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
                 <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
         @endif
@@ -147,9 +170,12 @@
                                                 style="display: inline-block; vertical-align: middle;">
                                                 <rect x="3" y="4" width="18" height="18" rx="2"
                                                     ry="2"></rect>
-                                                <line x1="16" y1="2" x2="16" y2="6"></line>
-                                                <line x1="8" y1="2" x2="8" y2="6"></line>
-                                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                                                <line x1="16" y1="2" x2="16" y2="6">
+                                                </line>
+                                                <line x1="8" y1="2" x2="8" y2="6">
+                                                </line>
+                                                <line x1="3" y1="10" x2="21" y2="10">
+                                                </line>
                                             </svg>
                                         </button>
 
@@ -182,11 +208,11 @@
                                     @include('admin.components.empty-state', [
                                         'message' => 'No booking inquiries found',
                                         'icon' => '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 1rem; opacity: 0.5;">
-                                                                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                                                                                        <line x1="16" y1="2" x2="16" y2="6"></line>
-                                                                                        <line x1="8" y1="2" x2="8" y2="6"></line>
-                                                                                        <line x1="3" y1="10" x2="21" y2="10"></line>
-                                                                                    </svg>',
+                                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                                            </svg>',
                                     ])
                                 </td>
                             </tr>
@@ -272,64 +298,162 @@
         </div>
     </div>
 
+    {{-- Add Meeting Modal --}}
+    <div class="modal fade" id="addMeetingModal" tabindex="-1" aria-labelledby="addMeetingModalLabel"
+        aria-hidden="true">
+        <div class="modal-dialog">
+            <form id="addMeetingForm" method="POST" action="{{ route('admin.booking.store') }}">
+                @csrf
+                <div class="modal-content" style="border: none; border-radius: 16px; box-shadow: var(--shadow-xl);">
+                    <div class="modal-header" style="border-bottom: 1px solid #f1f5f9; padding: 1.5rem;">
+                        <h5 class="modal-title" id="addMeetingModalLabel" style="font-weight: 700; color: #1e293b;">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2"
+                                style="display: inline-block; vertical-align: middle; margin-right: 0.5rem; color: var(--color-primary);">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            Add Meeting
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+
+                    <div class="modal-body" style="padding: 1.5rem;">
+                        <div class="row g-3">
+                            <div class="col-md-12">
+                                <label for="add_name" class="form-label"
+                                    style="font-weight: 600; color: #475569; font-size: 0.875rem;">Name</label>
+                                <input type="text" class="form-control" name="name" id="add_name"
+                                    value="{{ old('name') }}" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="add_email" class="form-label"
+                                    style="font-weight: 600; color: #475569; font-size: 0.875rem;">Email</label>
+                                <input type="email" class="form-control" name="email" id="add_email"
+                                    value="{{ old('email') }}" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="add_phone" class="form-label"
+                                    style="font-weight: 600; color: #475569; font-size: 0.875rem;">Phone</label>
+                                <input type="text" class="form-control" name="phone" id="add_phone"
+                                    value="{{ old('phone') }}">
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="add_availability_date" class="form-label"
+                                    style="font-weight: 600; color: #475569; font-size: 0.875rem;">Date</label>
+                                <input type="date" class="form-control" name="availability_date"
+                                    id="add_availability_date" value="{{ old('availability_date') }}" required>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="add_time_slot_id" class="form-label"
+                                    style="font-weight: 600; color: #475569; font-size: 0.875rem;">Available Time
+                                    Slots</label>
+                                <select name="time_slot_id" id="add_time_slot_id" class="form-control" required>
+                                    <option value="">Select a time slot</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="modal-footer" style="border-top: 1px solid #f1f5f9; padding: 1.5rem; gap: 0.5rem;">
+                        <button type="button" class="btn btn-light" data-bs-dismiss="modal"
+                            style="border: 2px solid #e2e8f0;">Cancel</button>
+                        <button type="submit" class="btn btn-primary">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2"
+                                style="display: inline-block; vertical-align: middle; margin-right: 0.25rem;">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            Save Meeting
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
     {{-- Scripts --}}
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            // Set minimum date for availability date input
-            const dateInput = document.getElementById('availability_date');
             const today = new Date().toISOString().split('T')[0];
-            dateInput.setAttribute('min', today);
+            const slotsUrl = `{{ route('admin.get.time-slots') }}`;
 
-            // Reschedule modal functionality
-            var rescheduleModal = new bootstrap.Modal(document.getElementById('rescheduleModal'));
+            // Load available time slots for a date into the given <select>.
+            function loadTimeSlots(selectedDate, dropdown) {
+                dropdown.innerHTML = '<option value="">Select a time slot</option>';
+                if (!selectedDate) {
+                    return;
+                }
+
+                fetch(`${slotsUrl}?date=${selectedDate}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success && data.time_slots.length > 0) {
+                            data.time_slots.forEach(slot => {
+                                const option = document.createElement('option');
+                                option.value = slot.id;
+                                option.textContent = `${slot.start_time} - ${slot.end_time}`;
+                                if (slot.booked) {
+                                    option.disabled = true;
+                                    option.textContent += ' (Booked)';
+                                }
+                                dropdown.appendChild(option);
+                            });
+                        } else {
+                            const option = document.createElement('option');
+                            option.value = '';
+                            option.textContent = 'No available time slots';
+                            dropdown.appendChild(option);
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error fetching time slots:', error);
+                        toastr.error('Failed to load time slots');
+                    });
+            }
+
+            // ---- Reschedule modal ----
+            const rescheduleModal = new bootstrap.Modal(document.getElementById('rescheduleModal'));
+            const rescheduleDate = document.getElementById('availability_date');
+            const rescheduleSlots = document.getElementById('time_slot_id');
+            rescheduleDate.setAttribute('min', today);
 
             document.querySelectorAll('.btn-reschedule').forEach(function(button) {
                 button.addEventListener('click', function() {
-                    var bookingId = this.getAttribute('data-id');
-                    document.getElementById('booking_id').value = bookingId;
+                    document.getElementById('booking_id').value = this.getAttribute('data-id');
                     rescheduleModal.show();
                 });
             });
 
-            // Fetch time slots when date is selected
-            const timeSlotDropdown = document.getElementById('time_slot_id');
-
-            dateInput.addEventListener('change', function() {
-                const selectedDate = this.value;
-
-                if (selectedDate) {
-                    fetch(`{{ route('admin.get.time-slots') }}?date=${selectedDate}`)
-                        .then(response => response.json())
-                        .then(data => {
-                            timeSlotDropdown.innerHTML = '<option value="">Select a time slot</option>';
-
-                            if (data.success && data.time_slots.length > 0) {
-                                data.time_slots.forEach(slot => {
-                                    const option = document.createElement('option');
-                                    option.value = slot.id;
-                                    option.textContent =
-                                    `${slot.start_time} - ${slot.end_time}`;
-
-                                    if (slot.booked) {
-                                        option.disabled = true;
-                                        option.textContent += ' (Booked)';
-                                    }
-
-                                    timeSlotDropdown.appendChild(option);
-                                });
-                            } else {
-                                const option = document.createElement('option');
-                                option.value = '';
-                                option.textContent = 'No available time slots';
-                                timeSlotDropdown.appendChild(option);
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error fetching time slots:', error);
-                            toastr.error('Failed to load time slots');
-                        });
-                }
+            rescheduleDate.addEventListener('change', function() {
+                loadTimeSlots(this.value, rescheduleSlots);
             });
+
+            // ---- Add Meeting modal ----
+            const addMeetingModal = new bootstrap.Modal(document.getElementById('addMeetingModal'));
+            const addDate = document.getElementById('add_availability_date');
+            const addSlots = document.getElementById('add_time_slot_id');
+            addDate.setAttribute('min', today);
+
+            document.getElementById('btnAddMeeting').addEventListener('click', function() {
+                addMeetingModal.show();
+            });
+
+            addDate.addEventListener('change', function() {
+                loadTimeSlots(this.value, addSlots);
+            });
+
+            // Reopen the Add Meeting modal and restore the slot list after a validation error.
+            @if ($errors->any() && old('name'))
+                addMeetingModal.show();
+                @if (old('availability_date'))
+                    loadTimeSlots('{{ old('availability_date') }}', addSlots);
+                @endif
+            @endif
         });
     </script>
 @endsection
