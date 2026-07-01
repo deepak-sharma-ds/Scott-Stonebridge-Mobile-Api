@@ -25,6 +25,9 @@ class CartLineItemDTO extends BaseDTO
         public readonly ?array $compareAtPrice,
         public readonly ?string $image,
         public readonly array $attributes,
+        public readonly bool $availableForSale,
+        public readonly ?int $quantityAvailable,
+        public readonly bool $currentlyNotInStock
     ) {
         $this->validate();
     }
@@ -73,6 +76,9 @@ class CartLineItemDTO extends BaseDTO
             ],
             image: $merchandise['image']['url'] ?? $product['featuredImage']['url'] ?? null,
             attributes: $data['attributes'] ?? [],
+            availableForSale: $merchandise['availableForSale'] ?? false,
+            quantityAvailable: $merchandise['quantityAvailable'] ?? null,
+            currentlyNotInStock: $merchandise['currentlyNotInStock'] ?? false,
         );
     }
 }

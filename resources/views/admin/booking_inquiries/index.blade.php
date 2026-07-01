@@ -20,14 +20,6 @@
         ])
 
         {{-- Alert Messages --}}
-        @if (session('success'))
-            <div class="alert alert-success alert-dismissible fade show card" role="alert"
-                style="border-left: 4px solid #10b981;">
-                {{ session('success') }}
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-        @endif
-
         @if ($errors->any())
             <div class="alert alert-danger alert-dismissible fade show card" role="alert"
                 style="border-left: 4px solid #ef4444;">
