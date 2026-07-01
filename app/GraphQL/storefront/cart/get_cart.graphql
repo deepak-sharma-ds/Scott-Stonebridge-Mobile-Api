@@ -42,6 +42,10 @@ query getCart($cartId: ID!, $country: CountryCode)
                 title
                 handle
               }
+
+              availableForSale
+              quantityAvailable
+              currentlyNotInStock
             }
           }
 

@@ -33,6 +33,9 @@ class CartLineItemResource extends BaseApiResource
             'compare_at_price' => $this->compareAtPrice ? ['amount' => $this->compareAtPrice['amount'], 'currency' => $this->compareAtPrice['currency']] : null,
             'image' => $this->image,
             'attributes' => $this->attributes,
+            'available_for_sale' => $this->availableForSale,
+            'quantity_available' => $this->quantityAvailable,
+            'currently_not_in_stock' => $this->currentlyNotInStock,
         ];
     }
 }
