@@ -9,6 +9,7 @@ use App\Exceptions\AI\AuthRequiredException;
 use App\Models\AiConversation;
 use App\Models\AiCustomerSession;
 use App\Services\AI\ChatSessionContext;
+use App\Services\AI\MCP\CustomerAccountGraphClient;
 use App\Services\AI\MCP\CustomerMcpClient;
 use App\Services\AI\MCP\StorefrontMcpClient;
 use App\Services\AI\Streaming\ChunkEmitter;
@@ -16,6 +17,7 @@ use App\Services\AI\Tools\ToolExecutor;
 use App\Services\AI\Tools\ToolResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use PHPUnit\Framework\MockObject\MockObject;
 use Tests\TestCase;
 
@@ -190,6 +192,170 @@ class ToolExecutorTest extends TestCase
         $output = $this->invoke('get_most_recent_order_status', []);
 
         $this->assertStringContainsString('"type":"auth_required"', $output);
+    }
+
+    public function test_list_customer_orders_without_auth_emits_auth_required(): void
+    {
+        $this->customer->expects($this->never())->method('callTool');
+
+        $output = $this->invoke('list_customer_orders', []);
+
+        $this->assertStringContainsString('"type":"auth_required"', $output);
+        $this->assertStringContainsString('"reason":"customer_account"', $output);
+    }
+
+    public function test_list_customer_orders_with_auth_emits_order_list(): void
+    {
+        $convo = AiConversation::factory()->create([
+            'session_id' => self::SESSION_ID,
+            'shop_domain' => self::SHOP,
+        ]);
+        AiCustomerSession::create([
+            'session_id' => $convo->session_id,
+            'customer_access_token' => 'shpca_active',
+            'expires_at' => now()->addHour(),
+        ]);
+
+        $graph = $this->createMock(CustomerAccountGraphClient::class);
+        $graph->expects($this->once())
+            ->method('query')
+            ->with(self::SHOP, 'shpca_active', $this->anything(), ['first' => 10, 'after' => null])
+            ->willReturn([
+                'customer' => [
+                    'orders' => [
+                        'pageInfo' => ['hasNextPage' => true, 'endCursor' => 'CURSOR_2'],
+                        'edges' => [
+                            ['node' => [
+                                'name' => '#22467', 'number' => 22467,
+                                'processedAt' => '2026-06-23T10:52:00Z',
+                                'fulfillmentStatus' => 'UNFULFILLED', 'financialStatus' => 'PAID',
+                                'totalPrice' => ['amount' => '0.00', 'currencyCode' => 'GBP'],
+                                'statusPageUrl' => 'https://scottstonebridge.com/account/orders/adc11bfa',
+                            ]],
+                            ['node' => [
+                                'name' => '#22001', 'number' => 22001,
+                                'processedAt' => '2026-05-01T09:00:00Z',
+                                'fulfillmentStatus' => 'FULFILLED', 'financialStatus' => 'PAID',
+                                'totalPrice' => ['amount' => '25.00', 'currencyCode' => 'GBP'],
+                                'statusPageUrl' => 'https://scottstonebridge.com/account/orders/bbb222',
+                            ]],
+                        ],
+                    ],
+                ],
+            ]);
+
+        $executor = new ToolExecutor(
+            $this->storefront,
+            $this->customer,
+            $this->emitter,
+            $this->upsell,
+            null,
+            $graph,
+        );
+
+        ob_start();
+        try {
+            $executor->execute('list_customer_orders', [], $this->ctx());
+        } finally {
+            $output = (string) ob_get_clean();
+        }
+
+        $this->assertStringContainsString('"type":"order_list"', $output);
+        $this->assertStringContainsString('"order_number":"22467"', $output);
+        $this->assertStringContainsString('"status":"delivered"', $output);
+        $this->assertStringContainsString('"order_url":"https://scottstonebridge.com/account/orders/adc11bfa"', $output);
+        $this->assertStringContainsString('"has_next_page":true', $output);
+        $this->assertStringContainsString('"cursor":"CURSOR_2"', $output);
+    }
+
+    public function test_expired_access_token_is_refreshed_as_public_client(): void
+    {
+        $convo = AiConversation::factory()->create([
+            'session_id' => self::SESSION_ID,
+            'shop_domain' => self::SHOP,
+        ]);
+        $session = AiCustomerSession::create([
+            'session_id' => $convo->session_id,
+            'customer_access_token' => 'shcat_expired',
+            'refresh_token' => 'shcrt_valid',
+            'expires_at' => now()->subMinutes(5),
+            'refresh_token_expires_at' => now()->addDays(13),
+        ]);
+
+        config(['chatbot.oauth.client_id' => 'client-123']);
+
+        Http::fake([
+            'demo.myshopify.com/.well-known/openid-configuration' => Http::response([
+                'authorization_endpoint' => 'https://shopify.com/authentication/1/oauth/authorize',
+                'token_endpoint' => 'https://shopify.com/authentication/1/oauth/token',
+            ]),
+            'shopify.com/authentication/1/oauth/token' => Http::response([
+                'access_token' => 'shcat_refreshed',
+                'refresh_token' => 'shcrt_rotated',
+                'expires_in' => 3600,
+                'refresh_token_expires_in' => 1123200,
+            ]),
+        ]);
+
+        $graph = $this->createMock(CustomerAccountGraphClient::class);
+        $graph->expects($this->once())
+            ->method('query')
+            ->with(self::SHOP, 'shcat_refreshed', $this->anything(), ['first' => 10, 'after' => null])
+            ->willReturn([
+                'customer' => [
+                    'orders' => [
+                        'pageInfo' => ['hasNextPage' => false, 'endCursor' => null],
+                        'edges' => [
+                            ['node' => [
+                                'name' => '#30001', 'number' => 30001,
+                                'processedAt' => '2026-06-01T00:00:00Z',
+                                'fulfillmentStatus' => 'FULFILLED', 'financialStatus' => 'PAID',
+                                'totalPrice' => ['amount' => '10.00', 'currencyCode' => 'GBP'],
+                                'statusPageUrl' => 'https://scottstonebridge.com/account/orders/x',
+                            ]],
+                        ],
+                    ],
+                ],
+            ]);
+
+        $executor = new ToolExecutor(
+            $this->storefront,
+            $this->customer,
+            $this->emitter,
+            $this->upsell,
+            null,
+            $graph,
+        );
+
+        ob_start();
+        try {
+            $executor->execute('list_customer_orders', [], $this->ctx());
+        } finally {
+            $output = (string) ob_get_clean();
+        }
+
+        // Order list rendered off the silently-refreshed access token.
+        $this->assertStringContainsString('"type":"order_list"', $output);
+
+        // Refreshed + rotated tokens persisted.
+        $session->refresh();
+        $this->assertSame('shcat_refreshed', $session->customer_access_token);
+        $this->assertSame('shcrt_rotated', $session->refresh_token);
+        $this->assertTrue($session->expires_at->isFuture());
+
+        // Shopify Customer Account API refresh is a PUBLIC client grant —
+        // client_id in the body, NEVER HTTP Basic auth (that returns 401).
+        Http::assertSent(function ($request) {
+            if (! str_contains($request->url(), '/oauth/token')) {
+                return false;
+            }
+            $data = $request->data();
+
+            return ($data['grant_type'] ?? null) === 'refresh_token'
+                && ($data['client_id'] ?? null) === 'client-123'
+                && ($data['refresh_token'] ?? null) === 'shcrt_valid'
+                && ! $request->hasHeader('Authorization');
+        });
     }
 
     public function test_start_checkout_synthesises_checkout_link_from_cart(): void

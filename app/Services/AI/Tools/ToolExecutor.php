@@ -7,6 +7,7 @@ namespace App\Services\AI\Tools;
 use App\Contracts\Services\Sales\StoreKnowledgeServiceInterface;
 use App\Contracts\Services\Sales\UpsellServiceInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
+use App\DTOs\AI\CustomerOrderSummaryDTO;
 use App\DTOs\Chat\ProductRecommendationDTO;
 use App\Exceptions\AI\AIServiceUnavailableException;
 use App\Exceptions\AI\AuthRequiredException;
@@ -314,6 +315,13 @@ class ToolExecutor
             return $this->emitAuthRequired($ctx);
         }
 
+        // Order history is list-shaped and has no Shopify MCP tool — query the
+        // Customer Account GraphQL API directly (same `customer-account-api:full`
+        // scope the single-order path already relies on).
+        if ($toolName === ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS) {
+            return $this->executeCustomerOrderListViaGraph($args, $ctx, $token);
+        }
+
         try {
             $result = $this->customer->callTool($toolName, $args, $ctx->shopDomain, $token);
         } catch (AuthRequiredException $e) {
@@ -406,6 +414,103 @@ class ToolExecutor
             "Order {$dto->orderNumber} status: {$dto->status}.",
             ['type' => 'order_tracking'] + $payload,
         );
+    }
+
+    /**
+     * List the signed-in customer's orders via Customer Account GraphQL,
+     * newest first, with cursor pagination. Emits an `order_list` chunk whose
+     * rows each link out to the order's Shopify order-detail page.
+     *
+     * @param  array<string, mixed>  $args
+     */
+    private function executeCustomerOrderListViaGraph(array $args, ChatSessionContext $ctx, string $token): ToolResult
+    {
+        $limit = (int) ($args['limit'] ?? 10);
+        $limit = $limit >= 1 && $limit <= 20 ? $limit : 10;
+        $cursor = isset($args['cursor']) && is_string($args['cursor']) && $args['cursor'] !== ''
+            ? $args['cursor']
+            : null;
+
+        try {
+            $data = $this->customerGraph()->query(
+                $ctx->shopDomain,
+                $token,
+                $this->customerOrderListQuery(),
+                ['first' => $limit, 'after' => $cursor],
+            );
+        } catch (AuthRequiredException $e) {
+            Log::channel('ai')->warning('tool.customer_graph_rejected_valid_token', [
+                'session_id' => $ctx->sessionId,
+                'shop_domain' => $ctx->shopDomain,
+                'tool' => ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS,
+            ]);
+
+            $this->emitter->emit('text', [
+                'content' => "You're signed in, but I can't reach your order history right now. "
+                    .'Please try again in a few minutes.',
+            ]);
+
+            return ToolResult::error('Customer Account GraphQL rejected a valid token.');
+        } catch (Throwable $e) {
+            $this->logToolError(ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS, $ctx, $e);
+
+            $this->emitter->emit('text', [
+                'content' => "I couldn't load your orders just now. Please try again in a moment.",
+            ]);
+
+            return ToolResult::error("Customer order list failed: {$e->getMessage()}");
+        }
+
+        $list = CustomerGraphOrderMapper::listFromConnection($data);
+        $orders = array_map(
+            static fn (CustomerOrderSummaryDTO $order): array => $order->toArray(),
+            $list['orders'],
+        );
+
+        if ($orders === []) {
+            $this->emitter->emit('text', ['content' => "You don't have any orders yet."]);
+
+            return ToolResult::success('No orders found for this customer.', ['type' => 'order_list', 'orders' => []]);
+        }
+
+        $payload = ['orders' => $orders, 'page_info' => $list['page_info']];
+        $this->emitter->emit('order_list', $payload);
+
+        $count = count($orders);
+
+        return ToolResult::success(
+            "Listed {$count} order(s) for the customer.",
+            ['type' => 'order_list'] + $payload,
+        );
+    }
+
+    /**
+     * Customer Account API query: the signed-in customer's orders, newest
+     * first, with cursor pagination and each order's detail-page URL.
+     */
+    private function customerOrderListQuery(): string
+    {
+        return <<<'GRAPHQL'
+        query CustomerOrders($first: Int!, $after: String) {
+          customer {
+            orders(first: $first, after: $after, sortKey: PROCESSED_AT, reverse: true) {
+              pageInfo { hasNextPage endCursor }
+              edges {
+                node {
+                  id
+                  name
+                  number
+                  processedAt
+                  fulfillmentStatus
+                  financialStatus
+                  totalPrice { amount currencyCode }
+                  statusPageUrl
+                }
+              }
+            }
+          }
+        }
+        GRAPHQL;
     }
 
     /**
@@ -1523,15 +1628,17 @@ class ToolExecutor
             }
 
             $clientId = (string) config('chatbot.oauth.client_id');
-            $clientSecret = (string) config('chatbot.oauth.client_secret');
-
-            $request = Http::asForm();
-            if ($clientSecret !== '') {
-                $request = $request->withBasicAuth($clientId, $clientSecret);
-            }
 
             try {
-                $response = $request->post($config['token_endpoint'], [
+                // Shopify's Customer Account API treats the refresh_token grant
+                // as a PUBLIC client call — client_id in the body, NO client
+                // secret / HTTP Basic auth. Sending Basic auth here returns a
+                // 401 + HTML challenge page (verified against live Shopify),
+                // which previously forced a full re-OAuth every time the 1-hour
+                // access token lapsed. The authorization_code exchange in
+                // CustomerOAuthController still uses Basic auth (confidential) —
+                // only the refresh grant must be public.
+                $response = Http::asForm()->post($config['token_endpoint'], [
                     'grant_type' => 'refresh_token',
                     'client_id' => $clientId,
                     'refresh_token' => $refreshToken,
