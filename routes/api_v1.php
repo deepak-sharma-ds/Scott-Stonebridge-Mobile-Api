@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CartController;
 use App\Http\Controllers\Api\V1\ContactController;
 use App\Http\Controllers\Api\V1\ContentController;
+use App\Http\Controllers\Api\V1\FreeReadingController;
 use App\Http\Controllers\Api\V1\HomeController;
 use App\Http\Controllers\Api\V1\NavigationController;
 use App\Http\Controllers\Api\V1\OrderController;
@@ -173,6 +174,13 @@ Route::prefix('v1')->middleware([
      * POST /api/v1/contact - Submit contact form
      */
     Route::post('/contact', [ContactController::class, 'store'])->name('api.v1.contact.store');
+
+    /**
+     * Free Email Reading Route (Public lead-capture form)
+     *
+     * POST /api/v1/free-reading - Submit the free email reading form
+     */
+    Route::post('/free-reading', [FreeReadingController::class, 'store'])->name('api.v1.free-reading.store');
 
     /**
      * Shop & Currency Routes (Public - Guest Friendly)

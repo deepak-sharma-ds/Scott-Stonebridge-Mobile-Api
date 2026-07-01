@@ -22,6 +22,7 @@ use App\Contracts\Services\ContactServiceInterface;
 use App\Contracts\Services\ContentServiceInterface;
 use App\Contracts\Services\CurrencyFlagServiceInterface;
 use App\Contracts\Services\CustomerServiceInterface;
+use App\Contracts\Services\FreeReadingServiceInterface;
 use App\Contracts\Services\HomeServiceInterface;
 use App\Contracts\Services\NavigationServiceInterface;
 use App\Contracts\Services\OrderFulfillmentServiceInterface;
@@ -57,6 +58,7 @@ use App\Services\AI\StreamingService;
 use App\Services\AI\Tools\ToolDefinitions;
 use App\Services\AI\Tools\ToolExecutor;
 use App\Services\Cache\ShopifyCacheStrategy;
+use App\Services\FreeReadingService;
 use App\Services\Sales\LeadCaptureService;
 use App\Services\Sales\ProactiveTriggerService;
 use App\Services\Sales\StoreKnowledgeService;
@@ -151,6 +153,11 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(
             ContactServiceInterface::class,
             ContactService::class
+        );
+
+        $this->app->bind(
+            FreeReadingServiceInterface::class,
+            FreeReadingService::class
         );
 
         $this->app->bind(

@@ -46,6 +46,11 @@ query getCart($cartId: ID!, $country: CountryCode)
               availableForSale
               quantityAvailable
               currentlyNotInStock
+
+              selectedOptions {
+                name
+                value
+              }
             }
           }
 

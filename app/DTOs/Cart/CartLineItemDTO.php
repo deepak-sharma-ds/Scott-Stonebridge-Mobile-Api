@@ -27,7 +27,8 @@ class CartLineItemDTO extends BaseDTO
         public readonly array $attributes,
         public readonly bool $availableForSale,
         public readonly ?int $quantityAvailable,
-        public readonly bool $currentlyNotInStock
+        public readonly bool $currentlyNotInStock,
+        public readonly ?array $selectedOptions
     ) {
         $this->validate();
     }
@@ -79,6 +80,7 @@ class CartLineItemDTO extends BaseDTO
             availableForSale: $merchandise['availableForSale'] ?? false,
             quantityAvailable: $merchandise['quantityAvailable'] ?? null,
             currentlyNotInStock: $merchandise['currentlyNotInStock'] ?? false,
+            selectedOptions: $merchandise['selectedOptions'] ?? [],
         );
     }
 }
