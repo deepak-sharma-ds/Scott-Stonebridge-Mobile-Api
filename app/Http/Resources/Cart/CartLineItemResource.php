@@ -36,6 +36,7 @@ class CartLineItemResource extends BaseApiResource
             'available_for_sale' => $this->availableForSale,
             'quantity_available' => $this->quantityAvailable,
             'currently_not_in_stock' => $this->currentlyNotInStock,
+            'selected_options' => $this->selectedOptions,
         ];
     }
 }
