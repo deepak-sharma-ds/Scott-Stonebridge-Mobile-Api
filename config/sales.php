@@ -259,7 +259,7 @@ return [
     |
     */
     'prompt_guard' => [
-        'system_prompt_max_tokens' => (int) env('SALES_SYSTEM_PROMPT_MAX_TOKENS', 800),
+        'system_prompt_max_tokens' => (int) env('SALES_SYSTEM_PROMPT_MAX_TOKENS', 1200),
     ],
 
 ];

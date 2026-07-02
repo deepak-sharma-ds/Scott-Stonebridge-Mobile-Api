@@ -129,6 +129,7 @@ class StreamingService extends BaseService implements StreamingServiceInterface
     {
         $model = (string) config('chatbot.models.default');
         $maxOutput = (int) config('chatbot.tokens.output_budget', 600);
+        $temperature = (float) config('chatbot.generation.temperature', 0.6);
         $tools = $this->toolDefinitions->all();
         $startedAt = microtime(true);
 
@@ -144,7 +145,7 @@ class StreamingService extends BaseService implements StreamingServiceInterface
                     'model' => $model,
                     'messages' => $messages,
                     'tools' => $tools,
-                    'temperature' => 0.4,
+                    'temperature' => $temperature,
                     'max_tokens' => $maxOutput,
                     'stream_options' => ['include_usage' => true],
                 ];

@@ -12,6 +12,7 @@ use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use OpenAI\Laravel\Facades\OpenAI;
+use OpenAI\Resources\Chat;
 use OpenAI\Responses\Chat\CreateStreamedResponse;
 use OpenAI\Responses\StreamResponse;
 use Tests\Mocks\MockShopifyClient;
@@ -251,6 +252,30 @@ class ChatStreamMcpTest extends TestCase
 
         $this->assertStringContainsString('"type":"checkout_link"', $body);
         $this->assertStringContainsString('"checkout_url":"https://demo.myshopify.com/checkouts/xyz"', $body);
+    }
+
+    public function test_stream_payload_uses_config_temperature_and_output_budget(): void
+    {
+        config([
+            'chatbot.generation.temperature' => 0.33,
+            'chatbot.tokens.output_budget' => 999,
+        ]);
+
+        $convo = $this->makeConversation();
+
+        OpenAI::fake([
+            $this->streamedText('Hello there.'),
+        ]);
+
+        $body = $this->stream($convo->session_id, 'hi');
+
+        $this->assertStringContainsString('"type":"text"', $body);
+
+        OpenAI::assertSent(Chat::class, function (string $method, array $parameters): bool {
+            return $method === 'createStreamed'
+                && $parameters['temperature'] === 0.33
+                && $parameters['max_tokens'] === 999;
+        });
     }
 
     private function makeConversation(): AiConversation

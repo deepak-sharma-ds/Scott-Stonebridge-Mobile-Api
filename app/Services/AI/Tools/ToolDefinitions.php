@@ -226,7 +226,7 @@ final class ToolDefinitions
                 ],
             ),
             $this->fn(self::TOOL_SUGGEST_QUICK_REPLIES,
-                'Use when the conversation reaches a decision point and the user would benefit from 2-5 short tap-to-send suggestions ("Tell me more", "Add to cart", "Show similar").',
+                'ALWAYS call this at the end of any turn where the customer must choose a next step (after showing products, product detail, cart state, or a recommendation). Provide 2-5 short tap-to-send suggestions ("Tell me more", "Add to cart", "Show similar"). Skip only for a pure factual one-liner or an auth_required reply.',
                 [
                     'type' => 'object',
                     'properties' => [
@@ -242,7 +242,7 @@ final class ToolDefinitions
                 ],
             ),
             $this->fn(self::TOOL_SUGGEST_UPSELL,
-                'Use immediately after a successful add-to-cart, or when the customer is browsing the cart, to surface complementary products (upsell / cross-sell).',
+                'Call this IMMEDIATELY after every successful add-to-cart, and whenever the customer is browsing their cart, to surface complementary products (upsell / cross-sell).',
                 [
                     'type' => 'object',
                     'properties' => [

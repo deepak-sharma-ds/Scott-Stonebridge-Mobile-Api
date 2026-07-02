@@ -12,6 +12,7 @@ use App\DTOs\Chat\ChatContextDTO;
 use App\DTOs\Chat\IntentDTO;
 use App\DTOs\Sales\UpsellSuggestionDTO;
 use App\Services\AI\PromptBuilderService;
+use Illuminate\Support\Facades\View;
 use Mockery;
 use Mockery\MockInterface;
 use Tests\TestCase;
@@ -162,6 +163,30 @@ class PromptBuilderInjectionTest extends TestCase
         $block = $this->builder->injectLocaleRule(null);
 
         $this->assertStringContainsString('Respond exclusively in: en', $block);
+    }
+
+    public function test_system_prompt_has_persona_and_adaptive_output_style(): void
+    {
+        $rendered = View::make('ai.prompts.system', [
+            'shop' => 'demo.myshopify.com',
+            'intent' => IntentDTO::INTENT_UNKNOWN,
+            'page_type' => 'home',
+            'currency' => 'GBP',
+            'locale' => 'en',
+            'resolved_context' => [],
+            'products' => [],
+            'upsell_block' => '',
+            'knowledge_block' => '',
+            'locale_block' => 'LANGUAGE RULE:',
+        ])->render();
+
+        // New persona + adaptive output guidance are present.
+        $this->assertStringContainsString('PERSONA', $rendered);
+        $this->assertStringContainsString('OUTPUT STYLE', $rendered);
+
+        // Old rigid caps are gone.
+        $this->assertStringNotContainsString('3 short sentences', $rendered);
+        $this->assertStringNotContainsString('1–3 short paragraphs', $rendered);
     }
 
     private function context(string $cartTotal): ChatContextDTO
