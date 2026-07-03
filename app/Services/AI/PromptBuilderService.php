@@ -54,6 +54,7 @@ class PromptBuilderService extends BaseService implements PromptBuilderServiceIn
         string $userMessage,
         array $resolvedContext = [],
         array $recommendations = [],
+        ?array $customerSummary = null,
     ): array {
         $tail = (int) config('chatbot.tokens.history_tail', 10);
         $template = (string) config('chatbot.prompts.system_template', 'ai.prompts.system');
@@ -72,6 +73,7 @@ class PromptBuilderService extends BaseService implements PromptBuilderServiceIn
             'upsell_block' => $this->injectUpsellContext($intent, $context, $upsells),
             'knowledge_block' => $this->injectStoreKnowledge($intent, $context, $userMessage),
             'locale_block' => $this->injectLocaleRule($context->locale),
+            'customer_block' => $this->injectCustomerContext($customerSummary),
         ])->render();
 
         // Hard-enforce the prompt budget — soft-warning let oversized prompts
@@ -171,6 +173,43 @@ class PromptBuilderService extends BaseService implements PromptBuilderServiceIn
             'Do not answer policy or store questions from memory — use only the above.',
             'If information is not present above, say you do not have that detail.',
         ]);
+    }
+
+    /**
+     * E1 — CUSTOMER CONTEXT block for a signed-in customer. Privacy-safe:
+     * only order numbers, totals, and dates (no name / email / line items).
+     * Empty string when there is no summary so the Blade section is skipped.
+     *
+     * @param  array<string, mixed>|null  $summary  {order_count, recent_orders:[{number,total,currency,date}]}
+     */
+    public function injectCustomerContext(?array $summary): string
+    {
+        $recent = $summary['recent_orders'] ?? null;
+        if (! is_array($recent) || $recent === []) {
+            return '';
+        }
+
+        $lines = ['CUSTOMER CONTEXT:'];
+        $lines[] = 'This customer is signed in. Recent orders (newest first):';
+        foreach ($recent as $order) {
+            if (! is_array($order) || empty($order['number'])) {
+                continue;
+            }
+            $total = isset($order['total']) ? trim(($order['currency'] ?? '').' '.$order['total']) : null;
+            $date = $order['date'] ?? null;
+            $lines[] = trim(sprintf(
+                '- Order #%s%s%s',
+                $order['number'],
+                $total !== null && $total !== '' ? " — {$total}" : '',
+                $date !== null ? " (placed {$date})" : '',
+            ));
+        }
+
+        $lines[] = '';
+        $lines[] = 'Use this to greet them warmly and offer relevant help (order status, reorders, complements to past purchases).';
+        $lines[] = 'Never invent orders or details beyond what is listed here, and do not read the list back verbatim unless asked.';
+
+        return implode("\n", $lines);
     }
 
     /**

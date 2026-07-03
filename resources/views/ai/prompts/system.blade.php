@@ -84,6 +84,10 @@ PRODUCTS (the ONLY products you may mention)
 @else
 (none returned for this turn — do not recommend any product)
 @endif
+@if(!empty($customer_block))
+
+{!! $customer_block !!}
+@endif
 @if(!empty($upsell_block))
 
 {!! $upsell_block !!}

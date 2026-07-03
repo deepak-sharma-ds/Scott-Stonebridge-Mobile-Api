@@ -254,6 +254,29 @@ class ChatStreamMcpTest extends TestCase
         $this->assertStringContainsString('"checkout_url":"https://demo.myshopify.com/checkouts/xyz"', $body);
     }
 
+    public function test_tool_loop_cap_emits_graceful_continuation(): void
+    {
+        $convo = $this->makeConversation();
+
+        // Queue MAX_TOOL_LOOPS (4) turns that each keep asking for a tool —
+        // the loop exhausts its cap while still finish_reason=tool_calls.
+        // suggest_quick_replies is internal (no external HTTP) and always succeeds.
+        OpenAI::fake([
+            $this->streamedToolCall('c1', 'suggest_quick_replies', '{"replies":["a","b"]}'),
+            $this->streamedToolCall('c2', 'suggest_quick_replies', '{"replies":["a","b"]}'),
+            $this->streamedToolCall('c3', 'suggest_quick_replies', '{"replies":["a","b"]}'),
+            $this->streamedToolCall('c4', 'suggest_quick_replies', '{"replies":["a","b"]}'),
+        ]);
+
+        // Use a fast-path keyword ("recommend") so intent detection does NOT
+        // fall back to the LLM classifier, which would consume a queued fake
+        // and desync the four tool-call turns.
+        $body = $this->stream($convo->session_id, 'recommend something for me');
+
+        $this->assertStringContainsString('still working', strtolower($body));
+        $this->assertStringContainsString('"type":"done"', $body);
+    }
+
     public function test_stream_payload_uses_config_temperature_and_output_budget(): void
     {
         config([

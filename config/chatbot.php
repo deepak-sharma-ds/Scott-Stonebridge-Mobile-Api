@@ -50,6 +50,9 @@ return [
     */
     'generation' => [
         'temperature' => (float) env('CHATBOT_TEMPERATURE', 0.6),
+        // Bounded retry attempts for OPENING the OpenAI stream (before any
+        // bytes stream). Mid-stream failures are never retried.
+        'stream_max_attempts' => (int) env('CHATBOT_STREAM_MAX_ATTEMPTS', 2),
     ],
 
     /*

@@ -181,7 +181,7 @@ return [
             'min_score' => (float) env('SALES_KNOWLEDGE_MIN_SCORE', 0.05),
             'candidate_limit' => (int) env('SALES_KNOWLEDGE_CANDIDATES', 40),
             'recency_half_life_days' => (float) env('SALES_KNOWLEDGE_RECENCY_HALFLIFE', 90.0),
-            'enable_semantic' => (bool) env('SALES_KNOWLEDGE_ENABLE_SEMANTIC', false),
+            'enable_semantic' => (bool) env('SALES_KNOWLEDGE_ENABLE_SEMANTIC', true),
         ],
 
         /*

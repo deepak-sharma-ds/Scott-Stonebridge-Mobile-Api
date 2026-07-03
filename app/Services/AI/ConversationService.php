@@ -126,6 +126,9 @@ class ConversationService extends BaseService implements ConversationServiceInte
                 'model' => $response->model,
                 'finish_reason' => $response->finishReason,
                 'product_ids' => array_map(fn ($p) => $p->id, $response->products),
+                // B1 — compact refs to entities shown this turn so a later turn
+                // can resolve "add the second one" / "tell me about that".
+                'shown_entities' => $response->shownEntities,
             ],
         ]);
     }
@@ -166,8 +169,62 @@ class ConversationService extends BaseService implements ConversationServiceInte
             ->values()
             ->map(fn (AiMessage $m): array => [
                 'role' => $m->role,
-                'content' => $m->message,
+                'content' => $this->messageContentWithShownEntities($m),
             ])
             ->all();
+    }
+
+    /**
+     * B1 — for assistant turns, append a terse "[Shown to customer: …]" hint so
+     * the model can resolve references to previously displayed products/orders
+     * ("add the second one"). Read-time only; the stored message is untouched.
+     */
+    private function messageContentWithShownEntities(AiMessage $message): string
+    {
+        if ($message->role !== AiMessage::ROLE_ASSISTANT) {
+            return (string) $message->message;
+        }
+
+        $shown = $message->metadata['shown_entities'] ?? [];
+        if (! is_array($shown) || $shown === []) {
+            return (string) $message->message;
+        }
+
+        $parts = [];
+        foreach ($shown as $group) {
+            if (! is_array($group) || empty($group['items']) || ! is_array($group['items'])) {
+                continue;
+            }
+            $type = (string) ($group['type'] ?? 'items');
+            $labels = [];
+            foreach ($group['items'] as $item) {
+                if (! is_array($item)) {
+                    continue;
+                }
+                if (isset($item['order_number'])) {
+                    $labels[] = 'Order '.$item['order_number'];
+                } elseif (isset($item['title'])) {
+                    $meta = [];
+                    if (isset($item['handle'])) {
+                        $meta[] = 'handle: '.$item['handle'];
+                    }
+                    if (isset($item['variant_id'])) {
+                        $meta[] = 'variant: '.$item['variant_id'];
+                    }
+                    $labels[] = $meta === []
+                        ? sprintf('"%s"', $item['title'])
+                        : sprintf('"%s" (%s)', $item['title'], implode(', ', $meta));
+                }
+            }
+            if ($labels !== []) {
+                $parts[] = $type.': '.implode(', ', $labels);
+            }
+        }
+
+        if ($parts === []) {
+            return (string) $message->message;
+        }
+
+        return trim((string) $message->message)."\n[Shown to customer — ".implode(' | ', $parts).']';
     }
 }

@@ -21,6 +21,7 @@ use App\Services\AI\Tools\ToolDefinitions;
 use App\Services\AI\Tools\ToolExecutor;
 use App\Services\Base\BaseService;
 use OpenAI\Laravel\Facades\OpenAI;
+use OpenAI\Responses\StreamResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
@@ -53,9 +54,23 @@ class StreamingService extends BaseService implements StreamingServiceInterface
         private readonly ChunkEmitter $emitter,
         private readonly ToolDefinitions $toolDefinitions,
         private readonly ToolExecutor $toolExecutor,
+        private readonly CustomerPersonalizationService $personalization,
     ) {
         parent::__construct();
     }
+
+    /**
+     * Intents where a signed-in customer's order summary is worth the extra
+     * Customer Account API call. Kept narrow so ordinary turns take no hit.
+     *
+     * @var list<string>
+     */
+    private const PERSONALISED_INTENTS = [
+        IntentDTO::INTENT_GREETING,
+        IntentDTO::INTENT_RECOMMENDATION,
+        IntentDTO::INTENT_UPSELL_OPPORTUNITY,
+        IntentDTO::INTENT_CROSS_SELL_OPPORTUNITY,
+    ];
 
     public function stream(ChatRequestDTO $request): StreamedResponse
     {
@@ -92,6 +107,14 @@ class StreamingService extends BaseService implements StreamingServiceInterface
             'detected_by' => $intent->detectedBy,
         ]);
 
+        // E1 — only fetch the signed-in order summary for intents that benefit,
+        // so ordinary turns never pay the Customer Account API round-trip.
+        $customerSummary = null;
+        if (in_array($intent->name, self::PERSONALISED_INTENTS, true)) {
+            $shopDomain = (string) ($request->context->shopDomain ?? $conversation->shop_domain);
+            $customerSummary = $this->personalization->summaryFor($request->sessionId, $shopDomain);
+        }
+
         $messages = $this->promptBuilder->build(
             conversation: $conversation,
             context: $request->context,
@@ -99,6 +122,7 @@ class StreamingService extends BaseService implements StreamingServiceInterface
             userMessage: $sanitized,
             resolvedContext: $context,
             recommendations: [],
+            customerSummary: $customerSummary,
         );
 
         $sessionCtx = new ChatSessionContext(
@@ -139,6 +163,11 @@ class StreamingService extends BaseService implements StreamingServiceInterface
         $finishReason = null;
         $aborted = false;
 
+        // B1 — compact record of entities surfaced to the customer this turn
+        // (products / orders / cart), persisted so the next turn can resolve
+        // references like "add the second one".
+        $shownEntities = [];
+
         try {
             for ($loop = 0; $loop < self::MAX_TOOL_LOOPS; $loop++) {
                 $payload = [
@@ -154,7 +183,7 @@ class StreamingService extends BaseService implements StreamingServiceInterface
                 $toolCalls = [];
                 $turnFinish = null;
 
-                $stream = OpenAI::chat()->createStreamed($payload);
+                $stream = $this->openStreamWithRetry($payload);
                 foreach ($stream as $chunk) {
                     $choice = $chunk->choices[0] ?? null;
                     if ($choice !== null) {
@@ -205,6 +234,8 @@ class StreamingService extends BaseService implements StreamingServiceInterface
                     $args = $this->decodeArguments($tc['function']['arguments'] ?? '');
                     $result = $this->toolExecutor->execute($name, $args, $ctx);
 
+                    $this->collectShownEntities($shownEntities, $result->emittedChunk);
+
                     $messages[] = [
                         'role' => 'tool',
                         'tool_call_id' => $tc['id'] ?? '',
@@ -231,6 +262,15 @@ class StreamingService extends BaseService implements StreamingServiceInterface
             return;
         }
 
+        // F1 — the tool loop hit its iteration cap while the model still wanted
+        // more tool calls. Rather than stop silently, surface one friendly
+        // continuation so the customer knows to nudge again.
+        if (! $aborted && $finishReason === 'tool_calls') {
+            $capMessage = "I'm still working through that — could you nudge me again in a moment?";
+            $this->emitter->emitText($capMessage);
+            $assistantText = $assistantText === '' ? $capMessage : $assistantText."\n\n".$capMessage;
+        }
+
         $latency = (int) round((microtime(true) - $startedAt) * 1000);
         $usage = [
             'prompt_tokens' => $promptTokens,
@@ -246,6 +286,7 @@ class StreamingService extends BaseService implements StreamingServiceInterface
             latencyMs: $latency,
             model: $model,
             finishReason: $aborted ? 'aborted' : $finishReason,
+            shownEntities: $shownEntities,
         );
 
         $this->conversations->recordAssistantMessage($conversation, $assistant);
@@ -316,5 +357,135 @@ class StreamingService extends BaseService implements StreamingServiceInterface
         }
 
         return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * Open the OpenAI stream, retrying transient failures BEFORE any bytes are
+     * streamed. Safe because a failed establishment has emitted nothing, so a
+     * retry cannot duplicate already-streamed text. A mid-stream failure is not
+     * retried here — it propagates to the caller's catch (hard-failure path).
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function openStreamWithRetry(array $payload): StreamResponse
+    {
+        $maxAttempts = max(1, (int) config('chatbot.generation.stream_max_attempts', 2));
+        $attempt = 0;
+
+        while (true) {
+            $attempt++;
+            try {
+                return OpenAI::chat()->createStreamed($payload);
+            } catch (Throwable $e) {
+                if ($attempt >= $maxAttempts) {
+                    throw $e;
+                }
+                $this->logWarning('OpenAI stream establishment failed; retrying', [
+                    'attempt' => $attempt,
+                    'max_attempts' => $maxAttempts,
+                    'error' => $e->getMessage(),
+                ], 'ai');
+                usleep(200_000 * $attempt);
+            }
+        }
+    }
+
+    /**
+     * B1 — append a compact summary of a tool's emitted chunk to the running
+     * shown-entities list (skips chunks that surface nothing referenceable).
+     *
+     * @param  list<array<string, mixed>>  $shownEntities
+     * @param  array<string, mixed>  $chunk
+     */
+    private function collectShownEntities(array &$shownEntities, array $chunk): void
+    {
+        $summary = $this->summariseShownChunk($chunk);
+        if ($summary !== null) {
+            $shownEntities[] = $summary;
+        }
+    }
+
+    /**
+     * Reduce a rich SSE chunk to the few identifiers needed to resolve later
+     * references ("the second one", "add that"). Returns null for chunk types
+     * that carry nothing referenceable.
+     *
+     * @param  array<string, mixed>  $chunk
+     * @return array{type:string, items:list<array<string,mixed>>}|null
+     */
+    private function summariseShownChunk(array $chunk): ?array
+    {
+        $cap = 5;
+        $keep = static fn ($v): bool => $v !== null && $v !== '';
+
+        switch ($chunk['type'] ?? null) {
+            case 'products':
+                $items = [];
+                foreach (array_slice($chunk['products'] ?? [], 0, $cap) as $p) {
+                    if (! is_array($p)) {
+                        continue;
+                    }
+                    $item = array_filter([
+                        'title' => $p['title'] ?? null,
+                        'handle' => $p['handle'] ?? null,
+                        'variant_id' => $p['variant_id'] ?? null,
+                    ], $keep);
+                    if ($item !== []) {
+                        $items[] = $item;
+                    }
+                }
+
+                return $items === [] ? null : ['type' => 'products', 'items' => $items];
+
+            case 'product_detail':
+                $p = $chunk['product'] ?? null;
+                if (! is_array($p)) {
+                    return null;
+                }
+                $variantId = $p['variant_id'] ?? ($p['variants'][0]['id'] ?? null);
+                $item = array_filter([
+                    'title' => $p['title'] ?? null,
+                    'handle' => $p['handle'] ?? null,
+                    'variant_id' => $variantId,
+                ], $keep);
+
+                return $item === [] ? null : ['type' => 'product', 'items' => [$item]];
+
+            case 'order_list':
+                $items = [];
+                foreach (array_slice($chunk['orders'] ?? [], 0, $cap) as $o) {
+                    if (! is_array($o)) {
+                        continue;
+                    }
+                    $number = $o['order_number'] ?? $o['name'] ?? null;
+                    if ($keep($number)) {
+                        $items[] = ['order_number' => $number];
+                    }
+                }
+
+                return $items === [] ? null : ['type' => 'orders', 'items' => $items];
+
+            case 'cart_state':
+                $cart = $chunk['cart'] ?? null;
+                $lines = is_array($cart) ? ($cart['items'] ?? []) : [];
+                $items = [];
+                foreach (array_slice(is_array($lines) ? $lines : [], 0, $cap) as $line) {
+                    if (! is_array($line)) {
+                        continue;
+                    }
+                    $item = array_filter([
+                        'title' => $line['title'] ?? null,
+                        'variant_id' => $line['variant_id'] ?? null,
+                    ], $keep);
+                    if ($item !== []) {
+                        $items[] = $item;
+                    }
+                }
+
+                return $items === [] ? null : ['type' => 'cart', 'items' => $items];
+
+            default:
+                return null;
+        }
     }
 }
