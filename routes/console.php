@@ -45,3 +45,19 @@ Schedule::call(function (): void {
             ->onQueue((string) config('sales.queue.sync', 'sync'));
     }
 })->dailyAt(sprintf('%02d:00', (int) env('KNOWLEDGE_SYNC_HOUR', 2)))->name('ai-knowledge-sync');
+
+/*
+|--------------------------------------------------------------------------
+| Marketing Push — Klaviyo campaign sweep
+|--------------------------------------------------------------------------
+|
+| Klaviyo has no campaign-sent webhook on the standard plan, so this polls
+| the Campaigns API every ten minutes for newly SENT campaigns and fans out
+| per-recipient pushes. Guarded by push.enabled + push.sweep.enabled inside
+| the command; withoutOverlapping prevents a slow run from stacking.
+|
+*/
+Schedule::command('push:sweep-klaviyo-campaigns')
+    ->everyTenMinutes()
+    ->withoutOverlapping()
+    ->name('push-sweep-klaviyo-campaigns');

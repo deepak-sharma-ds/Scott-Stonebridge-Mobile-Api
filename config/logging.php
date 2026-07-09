@@ -159,6 +159,13 @@ return [
             'level' => 'debug',
         ],
 
+        // Marketing push notifications (Klaviyo webhook + sweep + FCM sends)
+        'push' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/push.log'),
+            'level' => 'debug',
+        ],
+
         // Shopify API request/response logging
         'shopify' => [
             'driver' => 'daily',

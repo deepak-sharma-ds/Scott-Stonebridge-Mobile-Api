@@ -2,9 +2,11 @@
 
 namespace App\Providers;
 
+use App\Clients\Klaviyo\KlaviyoApiClient;
 use App\Clients\Shopify\AdminApiClient;
 use App\Clients\Shopify\StorefrontApiClient;
 use App\Contracts\Cache\CacheStrategyInterface;
+use App\Contracts\Klaviyo\KlaviyoApiClientInterface;
 use App\Contracts\Services\AI\AIResponseServiceInterface;
 use App\Contracts\Services\AI\AnalyticsServiceInterface;
 use App\Contracts\Services\AI\ChatbotServiceInterface;
@@ -29,6 +31,7 @@ use App\Contracts\Services\OrderFulfillmentServiceInterface;
 use App\Contracts\Services\OrderServiceInterface;
 use App\Contracts\Services\ProductServiceInterface;
 use App\Contracts\Services\ProfileServiceInterface;
+use App\Contracts\Services\PushNotificationServiceInterface;
 use App\Contracts\Services\Sales\LeadCaptureServiceInterface;
 use App\Contracts\Services\Sales\ProactiveTriggerServiceInterface;
 use App\Contracts\Services\Sales\StoreKnowledgeServiceInterface;
@@ -59,6 +62,7 @@ use App\Services\AI\Tools\ToolDefinitions;
 use App\Services\AI\Tools\ToolExecutor;
 use App\Services\Cache\ShopifyCacheStrategy;
 use App\Services\FreeReadingService;
+use App\Services\Push\PushNotificationService;
 use App\Services\Sales\LeadCaptureService;
 use App\Services\Sales\ProactiveTriggerService;
 use App\Services\Sales\StoreKnowledgeService;
@@ -280,6 +284,19 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(ChunkEmitter::class);
         $this->app->singleton(ToolDefinitions::class);
         $this->app->singleton(ToolExecutor::class);
+
+        // -------------------------------------------------------------
+        // Marketing push notifications (Klaviyo email -> FCM).
+        // -------------------------------------------------------------
+        $this->app->bind(
+            KlaviyoApiClientInterface::class,
+            KlaviyoApiClient::class
+        );
+
+        $this->app->bind(
+            PushNotificationServiceInterface::class,
+            PushNotificationService::class
+        );
     }
 
     /**

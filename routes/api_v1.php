@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\V1\NavigationController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProfileController;
+use App\Http\Controllers\Api\V1\Push\DeviceTokenController;
 use App\Http\Controllers\Api\V1\Sales\ConversionEventController as AIConversionEventController;
 use App\Http\Controllers\Api\V1\Sales\KnowledgeController as AIKnowledgeController;
 use App\Http\Controllers\Api\V1\Sales\LeadController as AILeadController;
@@ -407,6 +408,22 @@ Route::prefix('v1')->middleware([
             Route::get('/details', [OrderController::class, 'show'])
                 // ->where('orderId', '.*')
                 ->name('api.v1.orders.show');
+        });
+
+        /**
+         * Push Notification Device Tokens
+         *
+         * POST   /api/v1/push/device-tokens - Register/refresh FCM token
+         * DELETE /api/v1/push/device-tokens - Unregister token (logout)
+         * PUT    /api/v1/push/preferences   - Opt in/out of marketing push
+         */
+        Route::prefix('push')->group(function () {
+            Route::post('/device-tokens', [DeviceTokenController::class, 'store'])
+                ->name('api.v1.push.device-tokens.store');
+            Route::delete('/device-tokens', [DeviceTokenController::class, 'destroy'])
+                ->name('api.v1.push.device-tokens.destroy');
+            Route::put('/preferences', [DeviceTokenController::class, 'updatePreferences'])
+                ->name('api.v1.push.preferences.update');
         });
     });
 });
