@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\Push\DeviceTokenController;
+use App\Http\Controllers\Api\V1\Push\NotificationController;
 use App\Http\Controllers\Api\V1\Sales\ConversionEventController as AIConversionEventController;
 use App\Http\Controllers\Api\V1\Sales\KnowledgeController as AIKnowledgeController;
 use App\Http\Controllers\Api\V1\Sales\LeadController as AILeadController;
@@ -416,6 +417,8 @@ Route::prefix('v1')->middleware([
          * POST   /api/v1/push/device-tokens - Register/refresh FCM token
          * DELETE /api/v1/push/device-tokens - Unregister token (logout)
          * PUT    /api/v1/push/preferences   - Opt in/out of marketing push
+         * GET    /api/v1/push/notifications - List caller's notifications (in-app inbox)
+         * GET    /api/v1/push/notifications/{pushNotification} - Notification detail (marks read)
          */
         Route::prefix('push')->group(function () {
             Route::post('/device-tokens', [DeviceTokenController::class, 'store'])
@@ -424,6 +427,10 @@ Route::prefix('v1')->middleware([
                 ->name('api.v1.push.device-tokens.destroy');
             Route::put('/preferences', [DeviceTokenController::class, 'updatePreferences'])
                 ->name('api.v1.push.preferences.update');
+            Route::get('/notifications', [NotificationController::class, 'index'])
+                ->name('api.v1.push.notifications.index');
+            Route::get('/notifications/{pushNotification}', [NotificationController::class, 'show'])
+                ->name('api.v1.push.notifications.show');
         });
     });
 });

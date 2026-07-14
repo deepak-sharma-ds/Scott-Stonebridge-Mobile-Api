@@ -2,13 +2,13 @@
 
 namespace App\Http\Controllers\Api\V1\Push;
 
+use App\Http\Controllers\Api\V1\Push\Concerns\ResolvesAuthenticatedCustomer;
 use App\Http\Controllers\Base\BaseApiController;
 use App\Http\Requests\Push\RegisterDeviceTokenRequest;
 use App\Http\Requests\Push\UnregisterDeviceTokenRequest;
 use App\Http\Requests\Push\UpdatePushPreferencesRequest;
 use App\Models\DeviceToken;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 
 /**
  * Mobile-facing device token registration for marketing push notifications.
@@ -18,6 +18,8 @@ use Illuminate\Http\Request;
  */
 class DeviceTokenController extends BaseApiController
 {
+    use ResolvesAuthenticatedCustomer;
+
     /**
      * Register or refresh the caller's device token (upsert on fcm_token).
      */
@@ -67,43 +69,5 @@ class DeviceTokenController extends BaseApiController
             ->update(['push_enabled' => (bool) $request->validated('enabled')]);
 
         return $this->success('Push preferences updated');
-    }
-
-    /**
-     * Resolve the authenticated Shopify customer id + email from the request
-     * context populated by the shopify.auth middleware.
-     *
-     * @return array{id: int|null, email: string|null}
-     */
-    protected function customer(Request $request): array
-    {
-        $data = (array) $request->input('shopify_customer_data', []);
-        $rawId = $request->input('shopify_customer_id') ?? ($data['id'] ?? null);
-
-        return [
-            'id' => $this->normalizeCustomerId($rawId),
-            'email' => isset($data['email']) ? strtolower(trim((string) $data['email'])) : null,
-        ];
-    }
-
-    /**
-     * Shopify customer ids may arrive as a GID (gid://shopify/Customer/123);
-     * reduce to the numeric id stored on device_tokens.
-     */
-    protected function normalizeCustomerId(mixed $rawId): ?int
-    {
-        if ($rawId === null) {
-            return null;
-        }
-
-        if (is_numeric($rawId)) {
-            return (int) $rawId;
-        }
-
-        if (is_string($rawId) && preg_match('/(\d+)$/', $rawId, $matches)) {
-            return (int) $matches[1];
-        }
-
-        return null;
     }
 }

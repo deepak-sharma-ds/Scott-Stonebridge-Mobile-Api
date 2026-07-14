@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -43,12 +44,30 @@ class PushNotification extends Model
         return [
             'data' => 'array',
             'sent_at' => 'datetime',
+            'read_at' => 'datetime',
         ];
     }
 
     public function deviceToken(): BelongsTo
     {
         return $this->belongsTo(DeviceToken::class);
+    }
+
+    public function scopeUnread(Builder $query): Builder
+    {
+        return $query->whereNull('read_at');
+    }
+
+    public function scopeRead(Builder $query): Builder
+    {
+        return $query->whereNotNull('read_at');
+    }
+
+    public function markRead(): void
+    {
+        if ($this->read_at === null) {
+            $this->forceFill(['read_at' => now()])->save();
+        }
     }
 
     public function markSent(string $fcmMessageId): void
