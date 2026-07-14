@@ -31,7 +31,7 @@ class SweepCampaignRecipientsJobTest extends TestCase
         ]);
     }
 
-    protected function eventPage(array $emails, ?string $nextCursor): array
+    protected function eventPage(array $emails, ?string $nextCursor, string $attributedMessage = 'CAMP1'): array
     {
         $data = [];
         $included = [];
@@ -39,7 +39,11 @@ class SweepCampaignRecipientsJobTest extends TestCase
             $profileId = 'P'.$i.'_'.md5($email);
             $data[] = [
                 'id' => 'E'.$i,
-                'attributes' => ['event_properties' => []],
+                // Klaviyo stamps the sending campaign's id on the event as
+                // `$message` (verified against a live account) — not
+                // `$attributed_message`/`Campaign Name`, which is what the
+                // client used to (incorrectly) match against.
+                'attributes' => ['event_properties' => ['$message' => $attributedMessage]],
                 'relationships' => ['profile' => ['data' => ['id' => $profileId]]],
             ];
             $included[] = [
@@ -80,6 +84,31 @@ class SweepCampaignRecipientsJobTest extends TestCase
         $this->assertSame(KlaviyoCampaignSweep::STATUS_COMPLETED, $sweep->status);
         $this->assertSame(3, $sweep->recipients_found);
         $this->assertSame(3, $sweep->pushes_dispatched);
+    }
+
+    public function test_events_attributed_to_a_different_campaign_are_excluded(): void
+    {
+        Queue::fake();
+
+        Http::fake([
+            'a.klaviyo.com/api/events*' => Http::response(
+                $this->eventPage(['a@example.com'], null, 'OTHER_CAMPAIGN'),
+                200
+            ),
+        ]);
+
+        $sweep = KlaviyoCampaignSweep::factory()->create([
+            'campaign_id' => 'CAMP1',
+            'status' => KlaviyoCampaignSweep::STATUS_SWEEPING,
+        ]);
+
+        (new SweepCampaignRecipientsJob($sweep->id))->handle(app(KlaviyoApiClientInterface::class));
+
+        Queue::assertNothingPushed();
+
+        $sweep->refresh();
+        $this->assertSame(KlaviyoCampaignSweep::STATUS_COMPLETED, $sweep->status);
+        $this->assertSame(0, $sweep->recipients_found);
     }
 
     public function test_completed_sweep_is_not_reprocessed(): void

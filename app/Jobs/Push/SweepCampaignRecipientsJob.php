@@ -50,7 +50,7 @@ class SweepCampaignRecipientsJob implements ShouldQueue
         $dispatched = $sweep->pushes_dispatched;
 
         do {
-            $page = $klaviyo->getReceivedEmailEvents($sweep->campaign_id, $cursor);
+            $page = $klaviyo->getReceivedEmailEvents($sweep->campaign_id, $cursor, $sweep->send_time);
 
             foreach ($page['events'] as $event) {
                 $email = strtolower(trim((string) ($event['email'] ?? '')));

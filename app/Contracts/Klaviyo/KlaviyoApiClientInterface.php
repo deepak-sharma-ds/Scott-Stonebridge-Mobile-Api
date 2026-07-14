@@ -17,9 +17,12 @@ interface KlaviyoApiClientInterface
     /**
      * Fetch one page of "Received Email" events attributed to a campaign.
      *
+     * @param  Carbon|null  $since  Only consider events at/after this time (normally the
+     *                              campaign's send_time) so the whole account's event
+     *                              history isn't paged through for every sweep.
      * @return array{events: array<int, array{email: string|null, event_id: string|null}>, next_cursor: string|null}
      */
-    public function getReceivedEmailEvents(string $campaignId, ?string $cursor = null): array;
+    public function getReceivedEmailEvents(string $campaignId, ?string $cursor = null, ?Carbon $since = null): array;
 
     /**
      * Resolve a Klaviyo metric id by its name (e.g. "Received Email").

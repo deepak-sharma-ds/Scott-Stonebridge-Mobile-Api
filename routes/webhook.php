@@ -30,7 +30,7 @@ Route::prefix('webhook')->group(function () {
     /**
      * KLAVIYO Webhooks (marketing push notifications)
      */
-    Route::post('/klaviyo/flow-email', [KlaviyoFlowWebhookController::class, 'handle'])
+    Route::post('/klaviyo-flow-email', [KlaviyoFlowWebhookController::class, 'handle'])
         ->middleware('klaviyo.secret')
         ->name('webhook.klaviyo.flow');
 });

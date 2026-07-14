@@ -24,9 +24,12 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
 
     public function getRecentlySentCampaigns(Carbon $since): array
     {
+        // Klaviyo's filter operators are kebab-case ("greater-than", not
+        // "greaterThan") — the old operator name made Klaviyo reject every
+        // request with a 400, which is why this filter was disabled.
         $response = $this->get('campaigns', [
             'filter' => sprintf(
-                "and(equals(messages.channel,'email'),greaterThan(scheduled_at,%s))",
+                "and(equals(messages.channel,'email'),greater-than(scheduled_at,%s))",
                 $since->toIso8601String()
             ),
         ]);
@@ -51,15 +54,23 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
         return array_values(array_filter($campaigns, fn ($c) => $c['campaign_id'] !== ''));
     }
 
-    public function getReceivedEmailEvents(string $campaignId, ?string $cursor = null): array
+    public function getReceivedEmailEvents(string $campaignId, ?string $cursor = null, ?Carbon $since = null): array
     {
         $metricId = (string) config('push.klaviyo.received_email_metric_id');
         if ($metricId === '') {
             throw new KlaviyoApiException('KLAVIYO_RECEIVED_EMAIL_METRIC_ID is not configured');
         }
 
+        $filter = sprintf('equals(metric_id,"%s")', $metricId);
+        if ($since !== null) {
+            // Bounds the page walk to events at/after the campaign's send
+            // time — without this the endpoint has no other way to narrow
+            // results and pages through the account's entire event history.
+            $filter = sprintf('and(%s,greater-or-equal(datetime,%s))', $filter, $since->toIso8601String());
+        }
+
         $query = [
-            'filter' => sprintf('equals(metric_id,"%s")', $metricId),
+            'filter' => $filter,
             'include' => 'profile',
             'fields[profile]' => 'email',
             'page[size]' => (int) config('push.sweep.page_size', 200),
@@ -84,15 +95,13 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
         $events = [];
 
         foreach ((array) ($response['data'] ?? []) as $event) {
-            // The metric filter cannot express campaign attribution in every
-            // API revision, so attribution is filtered client-side from the
-            // event properties Klaviyo stamps on Received Email events.
+            // The metric filter cannot express campaign attribution, so it's
+            // filtered client-side. Klaviyo stamps the sending campaign's id
+            // on Received Email events as the `$message` property (verified
+            // against a live account: it matches the id returned by the
+            // Campaigns API, not `$campaign`, which is a different resource).
             $properties = (array) ($event['attributes']['event_properties'] ?? []);
-            $attributedCampaign = (string) (
-                $properties['$attributed_message']
-                ?? $properties['Campaign Name']
-                ?? ''
-            );
+            $attributedCampaign = (string) ($properties['$message'] ?? '');
 
             if ($attributedCampaign !== '' && $attributedCampaign !== $campaignId) {
                 continue;

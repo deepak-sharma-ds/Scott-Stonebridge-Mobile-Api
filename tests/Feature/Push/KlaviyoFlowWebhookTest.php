@@ -45,7 +45,7 @@ class KlaviyoFlowWebhookTest extends TestCase
         Queue::fake();
 
         $response = $this->withHeaders(['X-Klaviyo-Webhook-Secret' => 'secret-123'])
-            ->postJson('/webhook/klaviyo/flow-email', $this->payload());
+            ->postJson('/webhook/klaviyo-flow-email', $this->payload());
 
         $response->assertStatus(200);
         Queue::assertPushed(SendPushToRecipientJob::class);
@@ -57,7 +57,7 @@ class KlaviyoFlowWebhookTest extends TestCase
         Queue::fake();
 
         $this->withHeaders(['X-Klaviyo-Webhook-Secret' => 'wrong'])
-            ->postJson('/webhook/klaviyo/flow-email', $this->payload())
+            ->postJson('/webhook/klaviyo-flow-email', $this->payload())
             ->assertStatus(401);
 
         Queue::assertNothingPushed();
@@ -68,8 +68,8 @@ class KlaviyoFlowWebhookTest extends TestCase
         Queue::fake();
 
         $headers = ['X-Klaviyo-Webhook-Secret' => 'secret-123'];
-        $this->withHeaders($headers)->postJson('/webhook/klaviyo/flow-email', $this->payload())->assertStatus(200);
-        $this->withHeaders($headers)->postJson('/webhook/klaviyo/flow-email', $this->payload())->assertStatus(200);
+        $this->withHeaders($headers)->postJson('/webhook/klaviyo-flow-email', $this->payload())->assertStatus(200);
+        $this->withHeaders($headers)->postJson('/webhook/klaviyo-flow-email', $this->payload())->assertStatus(200);
 
         $this->assertSame(1, KlaviyoWebhookEvent::count());
         Queue::assertPushed(SendPushToRecipientJob::class, 1);
@@ -80,7 +80,7 @@ class KlaviyoFlowWebhookTest extends TestCase
         Queue::fake();
 
         $this->withHeaders(['X-Klaviyo-Webhook-Secret' => 'secret-123'])
-            ->postJson('/webhook/klaviyo/flow-email', $this->payload(['email' => '']))
+            ->postJson('/webhook/klaviyo-flow-email', $this->payload(['email' => '']))
             ->assertStatus(200);
 
         Queue::assertNothingPushed();
@@ -92,7 +92,7 @@ class KlaviyoFlowWebhookTest extends TestCase
         Queue::fake();
 
         $this->withHeaders(['X-Klaviyo-Webhook-Secret' => 'secret-123'])
-            ->postJson('/webhook/klaviyo/flow-email', $this->payload())
+            ->postJson('/webhook/klaviyo-flow-email', $this->payload())
             ->assertStatus(200);
 
         Queue::assertNothingPushed();
