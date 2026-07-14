@@ -37,14 +37,12 @@ return [
     |--------------------------------------------------------------------------
     | Firebase Cloud Messaging
     |--------------------------------------------------------------------------
-    | credentials — absolute path to the Firebase Admin SDK service-account
-    | JSON. Keep it outside the webroot (storage/app/firebase/) and out of
-    | git; production receives it as a deployment secret.
+    | Not configured here — kreait/laravel-firebase reads its own config
+    | (vendor/kreait/laravel-firebase/config/firebase.php), which resolves
+    | credentials straight from the FIREBASE_CREDENTIALS env var (absolute
+    | path to the Admin SDK service-account JSON). The project ID is read
+    | from inside that JSON file, not from a separate env var.
     */
-    'firebase' => [
-        'credentials' => env('FIREBASE_CREDENTIALS', storage_path('app/firebase/google-services.json')),
-        'project_id' => env('FIREBASE_PROJECT_ID'),
-    ],
 
     /*
     |--------------------------------------------------------------------------
