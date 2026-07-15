@@ -24,6 +24,10 @@ return [
     | received_email_metric_id — Klaviyo's "Received Email" metric id, looked
     |                   up once via KlaviyoApiClient::getMetricId() and pinned
     |                   here so the sweep never has to resolve it per run.
+    | message_content_cache_ttl — seconds a flow message's fetched
+    |                   subject/preview_text is cached for (KlaviyoFlowWebhookController).
+    |                   The same flow message fires for every profile that
+    |                   passes through it, so this avoids refetching per send.
     */
     'klaviyo' => [
         'api_key' => env('KLAVIYO_API_KEY'),
@@ -31,6 +35,7 @@ return [
         'webhook_secret' => env('KLAVIYO_WEBHOOK_SECRET'),
         'webhook_auth_enabled' => (bool) env('KLAVIYO_WEBHOOK_AUTH_ENABLED', true),
         'received_email_metric_id' => env('KLAVIYO_RECEIVED_EMAIL_METRIC_ID'),
+        'message_content_cache_ttl' => (int) env('KLAVIYO_MESSAGE_CONTENT_CACHE_TTL', 900),
     ],
 
     /*

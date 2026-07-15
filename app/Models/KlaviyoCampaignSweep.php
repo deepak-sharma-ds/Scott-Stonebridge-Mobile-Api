@@ -21,6 +21,8 @@ class KlaviyoCampaignSweep extends Model
     protected $fillable = [
         'campaign_id',
         'campaign_name',
+        'title',
+        'body',
         'send_time',
         'status',
         'events_cursor',

@@ -47,6 +47,11 @@ class SweepKlaviyoCampaignsCommand extends Command
                 ['campaign_id' => $campaign['campaign_id']],
                 [
                     'campaign_name' => $campaign['campaign_name'],
+                    // Real campaign copy when Klaviyo has it, else the
+                    // generic default — resolved once here so every
+                    // recipient of this campaign gets identical content.
+                    'title' => ($campaign['subject'] ?: null) ?? config('push.defaults.title'),
+                    'body' => ($campaign['preview_text'] ?: null) ?? config('push.defaults.body'),
                     'send_time' => $sendTime,
                     // Campaigns older than the lookback window predate the
                     // feature; mark them completed so they never push.

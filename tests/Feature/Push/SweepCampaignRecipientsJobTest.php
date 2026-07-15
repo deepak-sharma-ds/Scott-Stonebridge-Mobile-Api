@@ -86,6 +86,27 @@ class SweepCampaignRecipientsJobTest extends TestCase
         $this->assertSame(3, $sweep->pushes_dispatched);
     }
 
+    public function test_dispatched_push_uses_sweeps_real_campaign_content(): void
+    {
+        Queue::fake();
+        Http::fake([
+            'a.klaviyo.com/api/events*' => Http::response($this->eventPage(['a@example.com'], null), 200),
+        ]);
+
+        $sweep = KlaviyoCampaignSweep::factory()->create([
+            'campaign_id' => 'CAMP1',
+            'status' => KlaviyoCampaignSweep::STATUS_SWEEPING,
+            'title' => 'Real campaign subject',
+            'body' => 'Real campaign preview',
+        ]);
+
+        (new SweepCampaignRecipientsJob($sweep->id))->handle(app(KlaviyoApiClientInterface::class));
+
+        Queue::assertPushed(SendPushToRecipientJob::class, function (SendPushToRecipientJob $job) {
+            return $job->title === 'Real campaign subject' && $job->body === 'Real campaign preview';
+        });
+    }
+
     public function test_events_attributed_to_a_different_campaign_are_excluded(): void
     {
         Queue::fake();

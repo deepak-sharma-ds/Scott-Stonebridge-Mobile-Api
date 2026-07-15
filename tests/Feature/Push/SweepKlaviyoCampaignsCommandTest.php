@@ -30,14 +30,14 @@ class SweepKlaviyoCampaignsCommandTest extends TestCase
         ]);
     }
 
-    protected function fakeCampaigns(array $campaigns): void
+    protected function fakeCampaigns(array $campaigns, array $included = []): void
     {
         Http::fake([
-            'a.klaviyo.com/api/campaigns*' => Http::response(['data' => $campaigns], 200),
+            'a.klaviyo.com/api/campaigns*' => Http::response(['data' => $campaigns, 'included' => $included], 200),
         ]);
     }
 
-    protected function campaign(string $id, string $status, Carbon $sendTime): array
+    protected function campaign(string $id, string $status, Carbon $sendTime, ?string $messageId = null): array
     {
         return [
             'id' => $id,
@@ -46,6 +46,18 @@ class SweepKlaviyoCampaignsCommandTest extends TestCase
                 'status' => $status,
                 'send_time' => $sendTime->toIso8601String(),
             ],
+            'relationships' => $messageId ? [
+                'campaign-messages' => ['data' => [['type' => 'campaign-message', 'id' => $messageId]]],
+            ] : [],
+        ];
+    }
+
+    protected function campaignMessage(string $id, string $subject, string $previewText): array
+    {
+        return [
+            'type' => 'campaign-message',
+            'id' => $id,
+            'attributes' => ['definition' => ['content' => ['subject' => $subject, 'preview_text' => $previewText]]],
         ];
     }
 
@@ -62,6 +74,36 @@ class SweepKlaviyoCampaignsCommandTest extends TestCase
         $this->assertNotNull($sweep);
         $this->assertSame(KlaviyoCampaignSweep::STATUS_SWEEPING, $sweep->status);
         Queue::assertPushed(SweepCampaignRecipientsJob::class);
+    }
+
+    public function test_sweep_persists_real_campaign_content_when_available(): void
+    {
+        Queue::fake();
+        $this->fakeCampaigns(
+            [$this->campaign('CAMP3', 'Sent', Carbon::now()->subMinutes(30), 'MSG3')],
+            [$this->campaignMessage('MSG3', 'Real subject line', 'Real preview text')]
+        );
+
+        $this->artisan('push:sweep-klaviyo-campaigns')->assertExitCode(0);
+
+        $sweep = KlaviyoCampaignSweep::where('campaign_id', 'CAMP3')->first();
+        $this->assertSame('Real subject line', $sweep->title);
+        $this->assertSame('Real preview text', $sweep->body);
+    }
+
+    public function test_sweep_falls_back_to_default_copy_without_campaign_message_content(): void
+    {
+        config(['push.defaults.title' => 'Default Title', 'push.defaults.body' => 'Default Body']);
+        Queue::fake();
+        $this->fakeCampaigns([
+            $this->campaign('CAMP4', 'Sent', Carbon::now()->subMinutes(30)),
+        ]);
+
+        $this->artisan('push:sweep-klaviyo-campaigns')->assertExitCode(0);
+
+        $sweep = KlaviyoCampaignSweep::where('campaign_id', 'CAMP4')->first();
+        $this->assertSame('Default Title', $sweep->title);
+        $this->assertSame('Default Body', $sweep->body);
     }
 
     public function test_campaign_within_settle_window_is_not_swept_yet(): void

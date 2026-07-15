@@ -69,8 +69,8 @@ class SweepCampaignRecipientsJob implements ShouldQueue
                     PushNotification::SOURCE_CAMPAIGN,
                     $sweep->campaign_id,
                     $sweep->campaign_id,
-                    (string) config('push.defaults.title'),
-                    (string) config('push.defaults.body'),
+                    (string) ($sweep->title ?? config('push.defaults.title')),
+                    (string) ($sweep->body ?? config('push.defaults.body')),
                     (string) config('push.defaults.deep_link'),
                 )
                     ->onConnection(config('push.queue.connection'))

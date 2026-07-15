@@ -7,6 +7,7 @@ namespace Tests\Feature\Push;
 use App\Jobs\Push\SendPushToRecipientJob;
 use App\Models\KlaviyoWebhookEvent;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
@@ -84,6 +85,94 @@ class KlaviyoFlowWebhookTest extends TestCase
             ->assertStatus(200);
 
         Queue::assertNothingPushed();
+    }
+
+    public function test_missing_title_body_fetches_real_content_from_klaviyo(): void
+    {
+        Queue::fake();
+        Http::fake([
+            'a.klaviyo.com/api/flow-messages/MSG1*' => Http::response([
+                'data' => [
+                    'type' => 'flow-message',
+                    'id' => 'MSG1',
+                    'attributes' => [
+                        'content' => [
+                            'subject' => 'You left something in your basket',
+                            'preview_text' => 'You can return to your basket at any time.',
+                        ],
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $payload = $this->payload();
+        unset($payload['title'], $payload['body']);
+
+        $this->withHeaders(['X-Klaviyo-Webhook-Secret' => 'secret-123'])
+            ->postJson('/webhook/klaviyo-flow-email', $payload)
+            ->assertStatus(200);
+
+        Queue::assertPushed(SendPushToRecipientJob::class, function (SendPushToRecipientJob $job) {
+            return $job->title === 'You left something in your basket'
+                && $job->body === 'You can return to your basket at any time.';
+        });
+    }
+
+    public function test_blank_title_body_are_treated_as_missing(): void
+    {
+        Queue::fake();
+        Http::fake([
+            'a.klaviyo.com/api/flow-messages/MSG1*' => Http::response([
+                'data' => [
+                    'type' => 'flow-message',
+                    'id' => 'MSG1',
+                    'attributes' => ['content' => ['subject' => 'Real subject', 'preview_text' => 'Real preview']],
+                ],
+            ], 200),
+        ]);
+
+        $this->withHeaders(['X-Klaviyo-Webhook-Secret' => 'secret-123'])
+            ->postJson('/webhook/klaviyo-flow-email', $this->payload(['title' => '  ', 'body' => '']))
+            ->assertStatus(200);
+
+        Queue::assertPushed(SendPushToRecipientJob::class, function (SendPushToRecipientJob $job) {
+            return $job->title === 'Real subject' && $job->body === 'Real preview';
+        });
+    }
+
+    public function test_klaviyo_fetch_failure_falls_back_to_defaults(): void
+    {
+        config([
+            'push.defaults.title' => 'Default Title',
+            'push.defaults.body' => 'Default Body',
+        ]);
+        Queue::fake();
+        Http::fake([
+            'a.klaviyo.com/api/flow-messages/MSG1*' => Http::response(['errors' => [['status' => 404]]], 404),
+        ]);
+
+        $payload = $this->payload();
+        unset($payload['title'], $payload['body']);
+
+        $this->withHeaders(['X-Klaviyo-Webhook-Secret' => 'secret-123'])
+            ->postJson('/webhook/klaviyo-flow-email', $payload)
+            ->assertStatus(200);
+
+        Queue::assertPushed(SendPushToRecipientJob::class, function (SendPushToRecipientJob $job) {
+            return $job->title === 'Default Title' && $job->body === 'Default Body';
+        });
+    }
+
+    public function test_explicit_title_body_skip_klaviyo_fetch(): void
+    {
+        Queue::fake();
+        Http::fake();
+
+        $this->withHeaders(['X-Klaviyo-Webhook-Secret' => 'secret-123'])
+            ->postJson('/webhook/klaviyo-flow-email', $this->payload())
+            ->assertStatus(200);
+
+        Http::assertNothingSent();
     }
 
     public function test_kill_switch_makes_endpoint_inert(): void

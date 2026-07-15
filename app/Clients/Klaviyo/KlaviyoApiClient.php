@@ -6,6 +6,7 @@ use App\Contracts\Klaviyo\KlaviyoApiClientInterface;
 use App\Exceptions\KlaviyoApiException;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
@@ -32,7 +33,32 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
                 "and(equals(messages.channel,'email'),greater-than(scheduled_at,%s))",
                 $since->toIso8601String()
             ),
+            // Pulls each campaign's message content (subject/preview_text) in
+            // the same request via JSON:API `included`, so real campaign
+            // copy is available without a second call per campaign. Sparse
+            // fieldset must name the actual top-level attribute
+            // (`definition`, which nests `content.subject`/`.preview_text`)
+            // — not the nested keys themselves, which Klaviyo rejects with a
+            // 400 "not a field on the campaign-message resource" (verified
+            // live).
+            'include' => 'campaign-messages',
+            'fields[campaign-message]' => 'definition',
         ]);
+
+        // campaign-message content arrives under `included`, keyed by its own
+        // id (verified against a live account: attributes.definition.content).
+        $messageContent = [];
+        foreach ((array) ($response['included'] ?? []) as $included) {
+            if (($included['type'] ?? '') !== 'campaign-message') {
+                continue;
+            }
+
+            $content = (array) ($included['attributes']['definition']['content'] ?? []);
+            $messageContent[(string) $included['id']] = [
+                'subject' => $content['subject'] ?? null,
+                'preview_text' => $content['preview_text'] ?? null,
+            ];
+        }
 
         $campaigns = [];
 
@@ -42,12 +68,17 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
                 continue;
             }
 
+            $messageId = (string) ($campaign['relationships']['campaign-messages']['data'][0]['id'] ?? '');
+            $content = $messageContent[$messageId] ?? ['subject' => null, 'preview_text' => null];
+
             $campaigns[] = [
                 'campaign_id' => (string) ($campaign['id'] ?? ''),
                 'campaign_name' => $campaign['attributes']['name'] ?? null,
                 'send_time' => $campaign['attributes']['send_time']
                     ?? $campaign['attributes']['scheduled_at']
                     ?? null,
+                'subject' => $content['subject'],
+                'preview_text' => $content['preview_text'],
             ];
         }
 
@@ -121,6 +152,41 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
             'events' => $events,
             'next_cursor' => $this->extractCursor($nextLink),
         ];
+    }
+
+    public function getFlowMessageContent(string $messageId): ?array
+    {
+        if ($messageId === '') {
+            return null;
+        }
+
+        try {
+            return Cache::remember(
+                "klaviyo:flow-message-content:{$messageId}",
+                (int) config('push.klaviyo.message_content_cache_ttl', 900),
+                function () use ($messageId) {
+                    $response = $this->get("flow-messages/{$messageId}", [
+                        'fields[flow-message]' => 'content',
+                    ]);
+
+                    $content = (array) ($response['data']['attributes']['content'] ?? []);
+
+                    return [
+                        'subject' => $content['subject'] ?? null,
+                        'preview_text' => $content['preview_text'] ?? null,
+                    ];
+                }
+            );
+        } catch (KlaviyoApiException $e) {
+            // Best-effort enrichment: an unknown/typo'd message id or a
+            // Klaviyo outage shouldn't block the push — caller falls back.
+            Log::channel('push')->warning('Failed to fetch Klaviyo flow message content', [
+                'message_id' => $messageId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
     }
 
     public function getMetricId(string $name): ?string

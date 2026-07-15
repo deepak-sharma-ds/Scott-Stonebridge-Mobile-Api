@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Webhook;
 
+use App\Contracts\Klaviyo\KlaviyoApiClientInterface;
 use App\Http\Controllers\Controller;
 use App\Jobs\Push\SendPushToRecipientJob;
 use App\Models\KlaviyoWebhookEvent;
@@ -15,11 +16,13 @@ use Throwable;
 /**
  * Receives Klaviyo flow "Webhook" actions placed next to an email step. The
  * body is a marketer-defined JSON template carrying the recipient email plus
- * hardcoded flow/message identifiers and push copy. Responds 200 quickly so
- * Klaviyo does not retry; the actual send is queued.
+ * hardcoded flow/message identifiers and (optionally) push copy. Responds
+ * 200 quickly so Klaviyo does not retry; the actual send is queued.
  */
 class KlaviyoFlowWebhookController extends Controller
 {
+    public function __construct(private KlaviyoApiClientInterface $klaviyo) {}
+
     public function handle(Request $request): JsonResponse
     {
         if (! config('push.enabled', false)) {
@@ -74,13 +77,26 @@ class KlaviyoFlowWebhookController extends Controller
             return response()->json(['message' => 'Already processed'], 200);
         }
 
+        // Prefer whatever the marketer hardcoded in the webhook JSON; if they
+        // left title/body out (or blank), fetch the actual email's rendered
+        // subject/preview text from Klaviyo so the push matches what was
+        // really sent instead of the generic fallback copy.
+        $title = blank($payload['title'] ?? null) ? null : (string) $payload['title'];
+        $body = blank($payload['body'] ?? null) ? null : (string) $payload['body'];
+
+        if (($title === null || $body === null) && $messageId !== '') {
+            $content = $this->klaviyo->getFlowMessageContent($messageId);
+            $title ??= $content['subject'] ?? null;
+            $body ??= $content['preview_text'] ?? null;
+        }
+
         SendPushToRecipientJob::dispatch(
             $email,
             PushNotification::SOURCE_FLOW,
             $flowId,
             $messageId,
-            (string) ($payload['title'] ?? config('push.defaults.title')),
-            (string) ($payload['body'] ?? config('push.defaults.body')),
+            $title ?? (string) config('push.defaults.title'),
+            $body ?? (string) config('push.defaults.body'),
             (string) ($payload['deep_link'] ?? config('push.defaults.deep_link')),
         )
             ->onConnection(config('push.queue.connection'))
