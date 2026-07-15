@@ -35,7 +35,8 @@ class NotificationController extends BaseApiController
 
         $base = fn () => PushNotification::query()
             ->where('recipient_email', $customer['email'])
-            ->where('status', PushNotification::STATUS_SENT);
+            ->where('status', PushNotification::STATUS_SENT)
+            ->visible();
 
         $query = $base()->orderByDesc('sent_at');
 
@@ -68,13 +69,58 @@ class NotificationController extends BaseApiController
     {
         $customer = $this->customer($request);
 
-        if ($pushNotification->recipient_email !== $customer['email']
-            || $pushNotification->status !== PushNotification::STATUS_SENT) {
+        if (! $this->owns($pushNotification, $customer['email'])) {
             return $this->notFound('Notification not found');
         }
 
         $pushNotification->markRead();
 
         return $this->success('Notification fetched', new NotificationResource($pushNotification));
+    }
+
+    /**
+     * Clear a single notification from the caller's in-app list. The
+     * delivery record is kept (cleared_at is set, nothing is deleted); it
+     * just stops appearing in index()/show().
+     */
+    public function destroy(Request $request, PushNotification $pushNotification): JsonResponse
+    {
+        $customer = $this->customer($request);
+
+        if (! $this->owns($pushNotification, $customer['email'])) {
+            return $this->notFound('Notification not found');
+        }
+
+        $pushNotification->clear();
+
+        return $this->success('Notification cleared');
+    }
+
+    /**
+     * Clear every notification currently visible to the caller (the "Clear
+     * all" button). Same soft-hide semantics as destroy() — no data loss.
+     */
+    public function clearAll(Request $request): JsonResponse
+    {
+        $customer = $this->customer($request);
+
+        if (! $customer['email']) {
+            return $this->error('Authenticated customer has no email', [], [], 422);
+        }
+
+        PushNotification::query()
+            ->where('recipient_email', $customer['email'])
+            ->where('status', PushNotification::STATUS_SENT)
+            ->visible()
+            ->update(['cleared_at' => now()]);
+
+        return $this->success('Notifications cleared');
+    }
+
+    private function owns(PushNotification $pushNotification, ?string $email): bool
+    {
+        return $pushNotification->recipient_email === $email
+            && $pushNotification->status === PushNotification::STATUS_SENT
+            && $pushNotification->cleared_at === null;
     }
 }

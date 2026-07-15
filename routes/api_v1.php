@@ -419,6 +419,8 @@ Route::prefix('v1')->middleware([
          * PUT    /api/v1/push/preferences   - Opt in/out of marketing push
          * GET    /api/v1/push/notifications - List caller's notifications (in-app inbox)
          * GET    /api/v1/push/notifications/{pushNotification} - Notification detail (marks read)
+         * DELETE /api/v1/push/notifications - Clear all (hides them; data kept)
+         * DELETE /api/v1/push/notifications/{pushNotification} - Clear one (hides it; data kept)
          */
         Route::prefix('push')->group(function () {
             Route::post('/device-tokens', [DeviceTokenController::class, 'store'])
@@ -429,8 +431,12 @@ Route::prefix('v1')->middleware([
                 ->name('api.v1.push.preferences.update');
             Route::get('/notifications', [NotificationController::class, 'index'])
                 ->name('api.v1.push.notifications.index');
+            Route::delete('/notifications', [NotificationController::class, 'clearAll'])
+                ->name('api.v1.push.notifications.clear-all');
             Route::get('/notifications/{pushNotification}', [NotificationController::class, 'show'])
                 ->name('api.v1.push.notifications.show');
+            Route::delete('/notifications/{pushNotification}', [NotificationController::class, 'destroy'])
+                ->name('api.v1.push.notifications.destroy');
         });
     });
 });

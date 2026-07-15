@@ -45,6 +45,7 @@ class PushNotification extends Model
             'data' => 'array',
             'sent_at' => 'datetime',
             'read_at' => 'datetime',
+            'cleared_at' => 'datetime',
         ];
     }
 
@@ -63,10 +64,26 @@ class PushNotification extends Model
         return $query->whereNotNull('read_at');
     }
 
+    /**
+     * Notifications the customer hasn't cleared from their in-app list.
+     * Clearing only hides a row from the app; the delivery record stays.
+     */
+    public function scopeVisible(Builder $query): Builder
+    {
+        return $query->whereNull('cleared_at');
+    }
+
     public function markRead(): void
     {
         if ($this->read_at === null) {
             $this->forceFill(['read_at' => now()])->save();
+        }
+    }
+
+    public function clear(): void
+    {
+        if ($this->cleared_at === null) {
+            $this->forceFill(['cleared_at' => now()])->save();
         }
     }
 
