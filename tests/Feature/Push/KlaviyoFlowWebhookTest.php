@@ -163,6 +163,49 @@ class KlaviyoFlowWebhookTest extends TestCase
         });
     }
 
+    public function test_duplicate_preview_text_falls_back_to_template_excerpt(): void
+    {
+        Queue::fake();
+        Http::fake([
+            'a.klaviyo.com/api/flow-messages/MSG1*' => Http::response([
+                'data' => [
+                    'type' => 'flow-message',
+                    'id' => 'MSG1',
+                    'attributes' => [
+                        'content' => [
+                            'subject' => 'You left something in your basket',
+                            'preview_text' => 'You left something in your basket',
+                        ],
+                    ],
+                    'relationships' => [
+                        'template' => ['data' => ['type' => 'template', 'id' => 'TPL1']],
+                    ],
+                ],
+            ], 200),
+            'a.klaviyo.com/api/templates/TPL1*' => Http::response([
+                'data' => [
+                    'type' => 'template',
+                    'id' => 'TPL1',
+                    'attributes' => [
+                        'text' => "[Logo](http://example.com)\n\nYou left something in your basket\n\nHi {{ person.first_name }},\n\nYour cart is still waiting for you, come back any time.",
+                    ],
+                ],
+            ], 200),
+        ]);
+
+        $payload = $this->payload();
+        unset($payload['title'], $payload['body']);
+
+        $this->withHeaders(['X-Klaviyo-Webhook-Secret' => 'secret-123'])
+            ->postJson('/webhook/klaviyo-flow-email', $payload)
+            ->assertStatus(200);
+
+        Queue::assertPushed(SendPushToRecipientJob::class, function (SendPushToRecipientJob $job) {
+            return $job->title === 'You left something in your basket'
+                && $job->body === 'Your cart is still waiting for you, come back any time.';
+        });
+    }
+
     public function test_explicit_title_body_skip_klaviyo_fetch(): void
     {
         Queue::fake();

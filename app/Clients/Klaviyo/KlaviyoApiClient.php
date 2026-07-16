@@ -47,6 +47,9 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
 
         // campaign-message content arrives under `included`, keyed by its own
         // id (verified against a live account: attributes.definition.content).
+        // The `template` relationship id rides along on the same object even
+        // though it wasn't asked for via sparse fieldsets — JSON:API always
+        // returns relationship linkage, only `fields[]` restricts attributes.
         $messageContent = [];
         foreach ((array) ($response['included'] ?? []) as $included) {
             if (($included['type'] ?? '') !== 'campaign-message') {
@@ -57,6 +60,7 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
             $messageContent[(string) $included['id']] = [
                 'subject' => $content['subject'] ?? null,
                 'preview_text' => $content['preview_text'] ?? null,
+                'template_id' => $included['relationships']['template']['data']['id'] ?? null,
             ];
         }
 
@@ -69,7 +73,14 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
             }
 
             $messageId = (string) ($campaign['relationships']['campaign-messages']['data'][0]['id'] ?? '');
-            $content = $messageContent[$messageId] ?? ['subject' => null, 'preview_text' => null];
+            $content = $messageContent[$messageId] ?? ['subject' => null, 'preview_text' => null, 'template_id' => null];
+
+            $subject = $content['subject'];
+            $previewText = $content['preview_text'];
+
+            if (! $this->isMeaningfulPreviewText($previewText, $subject) && ! empty($content['template_id'])) {
+                $previewText = $this->getTemplateExcerpt($content['template_id'], (string) $subject) ?? $previewText;
+            }
 
             $campaigns[] = [
                 'campaign_id' => (string) ($campaign['id'] ?? ''),
@@ -77,8 +88,8 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
                 'send_time' => $campaign['attributes']['send_time']
                     ?? $campaign['attributes']['scheduled_at']
                     ?? null,
-                'subject' => $content['subject'],
-                'preview_text' => $content['preview_text'],
+                'subject' => $subject,
+                'preview_text' => $previewText,
             ];
         }
 
@@ -161,7 +172,7 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
         }
 
         try {
-            return Cache::remember(
+            $content = Cache::remember(
                 "klaviyo:flow-message-content:{$messageId}",
                 (int) config('push.klaviyo.message_content_cache_ttl', 900),
                 function () use ($messageId) {
@@ -169,11 +180,12 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
                         'fields[flow-message]' => 'content',
                     ]);
 
-                    $content = (array) ($response['data']['attributes']['content'] ?? []);
-
                     return [
-                        'subject' => $content['subject'] ?? null,
-                        'preview_text' => $content['preview_text'] ?? null,
+                        'subject' => $response['data']['attributes']['content']['subject'] ?? null,
+                        'preview_text' => $response['data']['attributes']['content']['preview_text'] ?? null,
+                        // Relationship linkage is returned regardless of the
+                        // fields[] restriction above.
+                        'template_id' => $response['data']['relationships']['template']['data']['id'] ?? null,
                     ];
                 }
             );
@@ -187,6 +199,91 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
 
             return null;
         }
+
+        if (! $this->isMeaningfulPreviewText($content['preview_text'], $content['subject']) && ! empty($content['template_id'])) {
+            $content['preview_text'] = $this->getTemplateExcerpt($content['template_id'], (string) $content['subject'])
+                ?? $content['preview_text'];
+        }
+
+        return ['subject' => $content['subject'], 'preview_text' => $content['preview_text']];
+    }
+
+    /**
+     * Whether preview_text is actually a marketer-authored value, as opposed
+     * to blank or a copy-paste of the subject line (which is what Klaviyo's
+     * "New Campaign" wizard leaves behind if it's never edited).
+     */
+    protected function isMeaningfulPreviewText(?string $previewText, ?string $subject): bool
+    {
+        if ($previewText === null || trim($previewText) === '') {
+            return false;
+        }
+
+        return strcasecmp(trim($previewText), trim((string) $subject)) !== 0;
+    }
+
+    /**
+     * Derive a short, human-readable excerpt from a template's plain-text
+     * rendering — used as a preview_text fallback when Klaviyo's own
+     * preview_text is blank or just repeats the subject line. Cached per
+     * template id (subject-agnostic, since the same template can back
+     * multiple sends); returns null if nothing usable is found or the API
+     * call fails.
+     */
+    protected function getTemplateExcerpt(string $templateId, string $subject): ?string
+    {
+        try {
+            $text = Cache::remember(
+                "klaviyo:template-text:{$templateId}",
+                (int) config('push.klaviyo.message_content_cache_ttl', 900),
+                function () use ($templateId) {
+                    $response = $this->get("templates/{$templateId}", ['fields[template]' => 'text']);
+
+                    return (string) ($response['data']['attributes']['text'] ?? '');
+                }
+            );
+        } catch (KlaviyoApiException $e) {
+            Log::channel('push')->warning('Failed to fetch Klaviyo template text', [
+                'template_id' => $templateId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return null;
+        }
+
+        return $this->extractExcerptLine($text, $subject);
+    }
+
+    /**
+     * Pick the first line of a Klaviyo template's plain-text rendering that
+     * looks like real message content: normalizes non-breaking spaces,
+     * drops whole-line markdown links (logo/button lines), strips
+     * unresolved `{{ liquid }}` tags, and skips blank lines, lines matching
+     * the subject, and anything too short to be a real sentence (greetings,
+     * stray punctuation).
+     */
+    protected function extractExcerptLine(string $text, string $subject): ?string
+    {
+        $normalized = str_replace("\xc2\xa0", ' ', $text);
+        $subject = trim($subject);
+
+        foreach (preg_split('/\R/', $normalized) ?: [] as $line) {
+            $line = trim($line);
+
+            if ($line === '' || preg_match('/^\[.+\]\(.+\)$/', $line) === 1) {
+                continue;
+            }
+
+            $line = trim((string) preg_replace('/\{\{.*?\}\}/', '', $line));
+
+            if ($line === '' || mb_strlen($line) < 15 || strcasecmp($line, $subject) === 0) {
+                continue;
+            }
+
+            return mb_strlen($line) > 150 ? mb_substr($line, 0, 149).'…' : $line;
+        }
+
+        return null;
     }
 
     public function getMetricId(string $name): ?string

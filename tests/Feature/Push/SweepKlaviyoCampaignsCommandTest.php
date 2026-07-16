@@ -30,11 +30,20 @@ class SweepKlaviyoCampaignsCommandTest extends TestCase
         ]);
     }
 
-    protected function fakeCampaigns(array $campaigns, array $included = []): void
+    protected function fakeCampaigns(array $campaigns, array $included = [], array $templates = []): void
     {
-        Http::fake([
+        $fakes = [
             'a.klaviyo.com/api/campaigns*' => Http::response(['data' => $campaigns, 'included' => $included], 200),
-        ]);
+        ];
+
+        foreach ($templates as $templateId => $text) {
+            $fakes["a.klaviyo.com/api/templates/{$templateId}*"] = Http::response(
+                ['data' => ['type' => 'template', 'id' => $templateId, 'attributes' => ['text' => $text]]],
+                200
+            );
+        }
+
+        Http::fake($fakes);
     }
 
     protected function campaign(string $id, string $status, Carbon $sendTime, ?string $messageId = null): array
@@ -52,12 +61,15 @@ class SweepKlaviyoCampaignsCommandTest extends TestCase
         ];
     }
 
-    protected function campaignMessage(string $id, string $subject, string $previewText): array
+    protected function campaignMessage(string $id, string $subject, string $previewText, ?string $templateId = null): array
     {
         return [
             'type' => 'campaign-message',
             'id' => $id,
             'attributes' => ['definition' => ['content' => ['subject' => $subject, 'preview_text' => $previewText]]],
+            'relationships' => $templateId ? [
+                'template' => ['data' => ['type' => 'template', 'id' => $templateId]],
+            ] : [],
         ];
     }
 
@@ -104,6 +116,37 @@ class SweepKlaviyoCampaignsCommandTest extends TestCase
         $sweep = KlaviyoCampaignSweep::where('campaign_id', 'CAMP4')->first();
         $this->assertSame('Default Title', $sweep->title);
         $this->assertSame('Default Body', $sweep->body);
+    }
+
+    public function test_sweep_derives_excerpt_from_template_when_preview_text_duplicates_subject(): void
+    {
+        Queue::fake();
+        $this->fakeCampaigns(
+            [$this->campaign('CAMP5', 'Sent', Carbon::now()->subMinutes(30), 'MSG5')],
+            [$this->campaignMessage('MSG5', 'QA Testing Push Notification', 'QA Testing Push Notification', 'TPL5')],
+            ['TPL5' => "[Logo](http://example.com)\n\nQA Testing Push Notification\n\n\u{00A0}\n\nHi {{ person.first_name|default:'there' }},\n\u{00A0}\nI just wanted to send a gentle reminder that your 20% welcome gift is still here for you.\n\n[Redeem now](http://example.com)"]
+        );
+
+        $this->artisan('push:sweep-klaviyo-campaigns')->assertExitCode(0);
+
+        $sweep = KlaviyoCampaignSweep::where('campaign_id', 'CAMP5')->first();
+        $this->assertSame('QA Testing Push Notification', $sweep->title);
+        $this->assertSame('I just wanted to send a gentle reminder that your 20% welcome gift is still here for you.', $sweep->body);
+    }
+
+    public function test_sweep_keeps_meaningful_preview_text_without_fetching_template(): void
+    {
+        Queue::fake();
+        $this->fakeCampaigns(
+            [$this->campaign('CAMP6', 'Sent', Carbon::now()->subMinutes(30), 'MSG6')],
+            [$this->campaignMessage('MSG6', 'QA Testing Push Notification', 'Your 20% off code is waiting', 'TPL6')]
+        );
+
+        $this->artisan('push:sweep-klaviyo-campaigns')->assertExitCode(0);
+
+        $sweep = KlaviyoCampaignSweep::where('campaign_id', 'CAMP6')->first();
+        $this->assertSame('Your 20% off code is waiting', $sweep->body);
+        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/templates/'));
     }
 
     public function test_campaign_within_settle_window_is_not_swept_yet(): void
