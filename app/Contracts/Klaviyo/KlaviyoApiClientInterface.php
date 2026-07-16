@@ -11,7 +11,9 @@ interface KlaviyoApiClientInterface
      * given time. Returns one entry per SENT campaign, including its message
      * subject/preview_text (fetched via ?include=campaign-messages in the
      * same request — no extra API call) so pushes can carry real content
-     * instead of generic defaults.
+     * instead of generic defaults. If preview_text is blank or just repeats
+     * the subject (marketer never customized it), it's replaced with a short
+     * excerpt pulled from the template's own rendered text.
      *
      * @return array<int, array{campaign_id: string, campaign_name: string|null, send_time: string|null, subject: string|null, preview_text: string|null}>
      */
@@ -37,7 +39,9 @@ interface KlaviyoApiClientInterface
      * auto-populate push copy for flow-triggered pushes so it matches
      * whatever the marketer set up in Klaviyo. Result is cached (the same
      * message fires for many profiles); returns null if the message can't be
-     * found or the API call fails — callers should fall back gracefully.
+     * found or the API call fails — callers should fall back gracefully. Same
+     * template-excerpt fallback as {@see getRecentlySentCampaigns()} applies
+     * when preview_text is blank or repeats the subject.
      *
      * @return array{subject: string|null, preview_text: string|null}|null
      */
