@@ -71,6 +71,38 @@ class SendPushJobsTest extends TestCase
         Queue::assertNothingPushed();
     }
 
+    public function test_recipient_job_stores_full_content_when_provided(): void
+    {
+        Queue::fake();
+        DeviceToken::factory()->create(['customer_email' => 'full@example.com']);
+
+        (new SendPushToRecipientJob(
+            'full@example.com',
+            PushNotification::SOURCE_CAMPAIGN,
+            'CAMP1',
+            'CAMP1',
+            'Title',
+            'Body',
+            'app://home',
+            'The full email body, in full.'
+        ))->handle();
+
+        $notification = PushNotification::first();
+        $this->assertSame('The full email body, in full.', $notification->data['content'] ?? null);
+        $this->assertSame('app://home', $notification->data['deep_link'] ?? null);
+    }
+
+    public function test_recipient_job_omits_content_key_when_none_available(): void
+    {
+        Queue::fake();
+        DeviceToken::factory()->create(['customer_email' => 'nocontent@example.com']);
+
+        $this->makeRecipientJob('nocontent@example.com')->handle();
+
+        $notification = PushNotification::first();
+        $this->assertArrayNotHasKey('content', (array) $notification->data);
+    }
+
     public function test_recipient_fanout_is_idempotent_on_repeat(): void
     {
         Queue::fake();

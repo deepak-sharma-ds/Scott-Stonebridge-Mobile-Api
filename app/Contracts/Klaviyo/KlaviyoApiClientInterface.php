@@ -13,9 +13,12 @@ interface KlaviyoApiClientInterface
      * same request — no extra API call) so pushes can carry real content
      * instead of generic defaults. If preview_text is blank or just repeats
      * the subject (marketer never customized it), it's replaced with a short
-     * excerpt pulled from the template's own rendered text.
+     * excerpt pulled from the template's own rendered text. `content` is the
+     * template's full cleaned plain-text rendering (for the in-app
+     * notification detail screen, not the push banner itself); null if the
+     * message has no template or the template fetch fails.
      *
-     * @return array<int, array{campaign_id: string, campaign_name: string|null, send_time: string|null, subject: string|null, preview_text: string|null}>
+     * @return array<int, array{campaign_id: string, campaign_name: string|null, send_time: string|null, subject: string|null, preview_text: string|null, content: string|null}>
      */
     public function getRecentlySentCampaigns(Carbon $since): array;
 

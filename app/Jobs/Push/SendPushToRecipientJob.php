@@ -29,6 +29,7 @@ class SendPushToRecipientJob implements ShouldQueue
         public string $title,
         public string $body,
         public string $deepLink,
+        public ?string $content = null,
     ) {}
 
     public function backoff(): array
@@ -61,7 +62,7 @@ class SendPushToRecipientJob implements ShouldQueue
                         'message_id' => $this->messageId,
                         'title' => $this->title,
                         'body' => $this->body,
-                        'data' => ['deep_link' => $this->deepLink],
+                        'data' => $this->buildData(),
                         'status' => PushNotification::STATUS_SKIPPED,
                     ]
                 );
@@ -87,7 +88,7 @@ class SendPushToRecipientJob implements ShouldQueue
                     'message_id' => $this->messageId,
                     'title' => $this->title,
                     'body' => $this->body,
-                    'data' => ['deep_link' => $this->deepLink],
+                    'data' => $this->buildData(),
                     'status' => PushNotification::STATUS_PENDING,
                 ]
             );
@@ -98,5 +99,25 @@ class SendPushToRecipientJob implements ShouldQueue
                     ->onQueue(config('push.queue.default'));
             }
         }
+    }
+
+    /**
+     * `content` (the full template text, when known) rides along in this
+     * JSON column purely for the in-app notification detail screen —
+     * PushNotificationService::buildData() only ever forwards deep_link/url
+     * from here into the actual FCM payload, so it never inflates the push
+     * itself or risks FCM's data-payload size limit.
+     *
+     * @return array<string, string|null>
+     */
+    protected function buildData(): array
+    {
+        $data = ['deep_link' => $this->deepLink];
+
+        if ($this->content !== null) {
+            $data['content'] = $this->content;
+        }
+
+        return $data;
     }
 }

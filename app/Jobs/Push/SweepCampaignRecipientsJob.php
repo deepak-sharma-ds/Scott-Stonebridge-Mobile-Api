@@ -72,6 +72,7 @@ class SweepCampaignRecipientsJob implements ShouldQueue
                     (string) ($sweep->title ?? config('push.defaults.title')),
                     (string) ($sweep->body ?? config('push.defaults.body')),
                     (string) config('push.defaults.deep_link'),
+                    $sweep->content,
                 )
                     ->onConnection(config('push.queue.connection'))
                     ->onQueue(config('push.queue.default'));

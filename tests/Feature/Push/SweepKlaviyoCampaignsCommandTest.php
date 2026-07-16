@@ -132,21 +132,44 @@ class SweepKlaviyoCampaignsCommandTest extends TestCase
         $sweep = KlaviyoCampaignSweep::where('campaign_id', 'CAMP5')->first();
         $this->assertSame('QA Testing Push Notification', $sweep->title);
         $this->assertSame('I just wanted to send a gentle reminder that your 20% welcome gift is still here for you.', $sweep->body);
+        $this->assertStringContainsString('gentle reminder that your 20% welcome gift', $sweep->content);
+        // Liquid tags never resolve on a generic template fetch — must be stripped, not shown raw.
+        $this->assertStringNotContainsString('{{', $sweep->content);
     }
 
-    public function test_sweep_keeps_meaningful_preview_text_without_fetching_template(): void
+    public function test_sweep_strips_both_liquid_tag_styles_from_full_content(): void
+    {
+        Queue::fake();
+        $this->fakeCampaigns(
+            [$this->campaign('CAMP7', 'Sent', Carbon::now()->subMinutes(30), 'MSG7')],
+            [$this->campaignMessage('MSG7', 'Subject', 'Subject', 'TPL7')],
+            ['TPL7' => "Real message body here.\n\nUnsubscribe: [Unsubscribe]({% unsubscribe_link %})."]
+        );
+
+        $this->artisan('push:sweep-klaviyo-campaigns')->assertExitCode(0);
+
+        $sweep = KlaviyoCampaignSweep::where('campaign_id', 'CAMP7')->first();
+        $this->assertStringNotContainsString('{%', $sweep->content);
+        $this->assertStringNotContainsString('%}', $sweep->content);
+    }
+
+    public function test_sweep_keeps_meaningful_preview_text_but_still_stores_full_content(): void
     {
         Queue::fake();
         $this->fakeCampaigns(
             [$this->campaign('CAMP6', 'Sent', Carbon::now()->subMinutes(30), 'MSG6')],
-            [$this->campaignMessage('MSG6', 'QA Testing Push Notification', 'Your 20% off code is waiting', 'TPL6')]
+            [$this->campaignMessage('MSG6', 'QA Testing Push Notification', 'Your 20% off code is waiting', 'TPL6')],
+            ['TPL6' => "[Logo](http://example.com)\n\nQA Testing Push Notification\n\nHere is the full email body, in full.\n\n[Redeem now](http://example.com)"]
         );
 
         $this->artisan('push:sweep-klaviyo-campaigns')->assertExitCode(0);
 
         $sweep = KlaviyoCampaignSweep::where('campaign_id', 'CAMP6')->first();
+        // Marketer's real preview_text is respected for the push body...
         $this->assertSame('Your 20% off code is waiting', $sweep->body);
-        Http::assertNotSent(fn ($request) => str_contains($request->url(), '/templates/'));
+        // ...but the full template is still fetched and stored for the
+        // in-app notification detail screen.
+        $this->assertStringContainsString('Here is the full email body, in full.', $sweep->content);
     }
 
     public function test_campaign_within_settle_window_is_not_swept_yet(): void

@@ -107,6 +107,28 @@ class SweepCampaignRecipientsJobTest extends TestCase
         });
     }
 
+    public function test_dispatched_push_carries_the_sweeps_full_content(): void
+    {
+        Queue::fake();
+        Http::fake([
+            'a.klaviyo.com/api/events*' => Http::response($this->eventPage(['a@example.com'], null), 200),
+        ]);
+
+        $sweep = KlaviyoCampaignSweep::factory()->create([
+            'campaign_id' => 'CAMP1',
+            'status' => KlaviyoCampaignSweep::STATUS_SWEEPING,
+            'title' => 'Real campaign subject',
+            'body' => 'Real campaign preview',
+            'content' => 'The full email body, in full.',
+        ]);
+
+        (new SweepCampaignRecipientsJob($sweep->id))->handle(app(KlaviyoApiClientInterface::class));
+
+        Queue::assertPushed(SendPushToRecipientJob::class, function (SendPushToRecipientJob $job) {
+            return $job->content === 'The full email body, in full.';
+        });
+    }
+
     public function test_events_attributed_to_a_different_campaign_are_excluded(): void
     {
         Queue::fake();

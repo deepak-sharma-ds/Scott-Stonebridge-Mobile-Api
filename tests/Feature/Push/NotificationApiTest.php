@@ -67,6 +67,19 @@ class NotificationApiTest extends TestCase
         $this->assertNotNull($notification->fresh()->read_at);
     }
 
+    public function test_show_exposes_full_content_when_present(): void
+    {
+        $notification = PushNotification::factory()->sent()->create([
+            'recipient_email' => 'buyer@example.com',
+            'data' => ['deep_link' => 'app://home', 'content' => 'The full email body, in full.'],
+        ]);
+
+        $response = $this->getJson('/api/v1/push/notifications/'.$notification->id.'?'.http_build_query($this->asCustomer()));
+
+        $response->assertStatus(200);
+        $this->assertSame('The full email body, in full.', $response->json('data.data.content'));
+    }
+
     public function test_show_hides_other_customers_notification(): void
     {
         $notification = PushNotification::factory()->sent()->create(['recipient_email' => 'other@example.com']);

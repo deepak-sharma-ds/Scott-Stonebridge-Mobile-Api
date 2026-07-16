@@ -52,6 +52,9 @@ class SweepKlaviyoCampaignsCommand extends Command
                     // recipient of this campaign gets identical content.
                     'title' => ($campaign['subject'] ?: null) ?? config('push.defaults.title'),
                     'body' => ($campaign['preview_text'] ?: null) ?? config('push.defaults.body'),
+                    // Full template text for the in-app notification detail
+                    // screen; the push banner itself only ever uses title/body.
+                    'content' => $campaign['content'] ?: null,
                     'send_time' => $sendTime,
                     // Campaigns older than the lookback window predate the
                     // feature; mark them completed so they never push.

@@ -23,6 +23,7 @@ class KlaviyoCampaignSweep extends Model
         'campaign_name',
         'title',
         'body',
+        'content',
         'send_time',
         'status',
         'events_cursor',

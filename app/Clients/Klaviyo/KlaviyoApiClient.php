@@ -23,6 +23,13 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
 
     protected const MAX_ATTEMPTS = 3;
 
+    // Matches both Liquid tag styles Klaviyo templates use: `{{ output }}`
+    // (merge fields) and `{% tag %}` (e.g. the unsubscribe link). Neither
+    // ever resolves via the templates/flow-messages endpoints — they only
+    // return the generic template, not a per-recipient rendering — so both
+    // are stripped rather than shown raw.
+    protected const LIQUID_TAG_PATTERN = '/\{\{.*?\}\}|\{%.*?%\}/';
+
     public function getRecentlySentCampaigns(Carbon $since): array
     {
         // Klaviyo's filter operators are kebab-case ("greater-than", not
@@ -77,9 +84,18 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
 
             $subject = $content['subject'];
             $previewText = $content['preview_text'];
+            $fullContent = null;
 
-            if (! $this->isMeaningfulPreviewText($previewText, $subject) && ! empty($content['template_id'])) {
-                $previewText = $this->getTemplateExcerpt($content['template_id'], (string) $subject) ?? $previewText;
+            if (! empty($content['template_id'])) {
+                $templateText = $this->getTemplateText($content['template_id']);
+
+                if ($templateText !== null) {
+                    $fullContent = $this->cleanFullText($templateText);
+
+                    if (! $this->isMeaningfulPreviewText($previewText, $subject)) {
+                        $previewText = $this->extractExcerptLine($templateText, (string) $subject) ?? $previewText;
+                    }
+                }
             }
 
             $campaigns[] = [
@@ -90,6 +106,7 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
                     ?? null,
                 'subject' => $subject,
                 'preview_text' => $previewText,
+                'content' => $fullContent,
             ];
         }
 
@@ -201,8 +218,12 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
         }
 
         if (! $this->isMeaningfulPreviewText($content['preview_text'], $content['subject']) && ! empty($content['template_id'])) {
-            $content['preview_text'] = $this->getTemplateExcerpt($content['template_id'], (string) $content['subject'])
-                ?? $content['preview_text'];
+            $templateText = $this->getTemplateText($content['template_id']);
+
+            if ($templateText !== null) {
+                $content['preview_text'] = $this->extractExcerptLine($templateText, (string) $content['subject'])
+                    ?? $content['preview_text'];
+            }
         }
 
         return ['subject' => $content['subject'], 'preview_text' => $content['preview_text']];
@@ -223,17 +244,14 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
     }
 
     /**
-     * Derive a short, human-readable excerpt from a template's plain-text
-     * rendering — used as a preview_text fallback when Klaviyo's own
-     * preview_text is blank or just repeats the subject line. Cached per
-     * template id (subject-agnostic, since the same template can back
-     * multiple sends); returns null if nothing usable is found or the API
-     * call fails.
+     * Fetch a template's raw plain-text rendering. Cached per template id
+     * (subject-agnostic, since the same template can back multiple sends);
+     * returns null if the API call fails.
      */
-    protected function getTemplateExcerpt(string $templateId, string $subject): ?string
+    protected function getTemplateText(string $templateId): ?string
     {
         try {
-            $text = Cache::remember(
+            return Cache::remember(
                 "klaviyo:template-text:{$templateId}",
                 (int) config('push.klaviyo.message_content_cache_ttl', 900),
                 function () use ($templateId) {
@@ -250,8 +268,23 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
 
             return null;
         }
+    }
 
-        return $this->extractExcerptLine($text, $subject);
+    /**
+     * Clean a template's raw plain-text rendering for full display (the
+     * in-app notification detail screen) without dropping any content:
+     * normalizes non-breaking spaces, strips unresolved Liquid tags, and
+     * collapses long runs of blank lines. Markdown links are left as-is so
+     * the app can still show/tap them.
+     */
+    protected function cleanFullText(string $text): string
+    {
+        $normalized = str_replace("\xc2\xa0", ' ', $text);
+        $normalized = (string) preg_replace(self::LIQUID_TAG_PATTERN, '', $normalized);
+        $lines = array_map('rtrim', explode("\n", $normalized));
+        $collapsed = (string) preg_replace('/\n{3,}/', "\n\n", implode("\n", $lines));
+
+        return trim($collapsed);
     }
 
     /**
@@ -274,7 +307,7 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
                 continue;
             }
 
-            $line = trim((string) preg_replace('/\{\{.*?\}\}/', '', $line));
+            $line = trim((string) preg_replace(self::LIQUID_TAG_PATTERN, '', $line));
 
             if ($line === '' || mb_strlen($line) < 15 || strcasecmp($line, $subject) === 0) {
                 continue;
