@@ -36,9 +36,17 @@ class SweepKlaviyoCampaignsCommandTest extends TestCase
             'a.klaviyo.com/api/campaigns*' => Http::response(['data' => $campaigns, 'included' => $included], 200),
         ];
 
-        foreach ($templates as $templateId => $text) {
+        foreach ($templates as $templateId => $fixture) {
+            // A plain string fixture doubles as both the html and text
+            // renderings (sufficient for asserting the tag-stripping/excerpt
+            // logic, which is markup-agnostic); pass an array to give each a
+            // distinct value when a test needs to tell them apart.
+            $attributes = is_array($fixture)
+                ? $fixture
+                : ['html' => $fixture, 'text' => $fixture];
+
             $fakes["a.klaviyo.com/api/templates/{$templateId}*"] = Http::response(
-                ['data' => ['type' => 'template', 'id' => $templateId, 'attributes' => ['text' => $text]]],
+                ['data' => ['type' => 'template', 'id' => $templateId, 'attributes' => $attributes]],
                 200
             );
         }
@@ -151,6 +159,33 @@ class SweepKlaviyoCampaignsCommandTest extends TestCase
         $sweep = KlaviyoCampaignSweep::where('campaign_id', 'CAMP7')->first();
         $this->assertStringNotContainsString('{%', $sweep->content);
         $this->assertStringNotContainsString('%}', $sweep->content);
+    }
+
+    public function test_sweep_stores_full_html_design_while_push_copy_stays_plain_and_short(): void
+    {
+        Queue::fake();
+        $this->fakeCampaigns(
+            [$this->campaign('CAMP8', 'Sent', Carbon::now()->subMinutes(30), 'MSG8')],
+            [$this->campaignMessage('MSG8', 'QA Testing Push Notification', 'Your 20% off code is waiting', 'TPL8')],
+            ['TPL8' => [
+                'html' => '<!DOCTYPE html><html><body><div class="hero"><h1>Welcome</h1><p>Your 20% off code: WELCOME20</p></div>{% unsubscribe_link %}</body></html>',
+                'text' => "QA Testing Push Notification\n\nYour 20% off code: WELCOME20",
+            ]]
+        );
+
+        $this->artisan('push:sweep-klaviyo-campaigns')->assertExitCode(0);
+
+        $sweep = KlaviyoCampaignSweep::where('campaign_id', 'CAMP8')->first();
+        // Full design (markup, structure) preserved for the in-app detail screen.
+        $this->assertStringContainsString('<!DOCTYPE html>', $sweep->content);
+        $this->assertStringContainsString('<div class="hero">', $sweep->content);
+        $this->assertStringContainsString('<h1>Welcome</h1>', $sweep->content);
+        $this->assertStringNotContainsString('{%', $sweep->content);
+        // The actual push banner (title/body) never carries HTML — it stays
+        // the marketer's plain subject/preview_text, untouched by this change.
+        $this->assertSame('QA Testing Push Notification', $sweep->title);
+        $this->assertSame('Your 20% off code is waiting', $sweep->body);
+        $this->assertStringNotContainsString('<', $sweep->body);
     }
 
     public function test_sweep_keeps_meaningful_preview_text_but_still_stores_full_content(): void

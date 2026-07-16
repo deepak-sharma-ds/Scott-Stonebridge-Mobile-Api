@@ -87,14 +87,17 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
             $fullContent = null;
 
             if (! empty($content['template_id'])) {
-                $templateText = $this->getTemplateText($content['template_id']);
+                $template = $this->getTemplateContent($content['template_id']);
 
-                if ($templateText !== null) {
-                    $fullContent = $this->cleanFullText($templateText);
+                if ($template !== null && $template['html'] !== null) {
+                    // Entire rendered HTML document (design intact) for the
+                    // in-app notification detail screen — the mobile app can
+                    // render the marketer's actual design without rebuilding it.
+                    $fullContent = $this->cleanFullText($template['html']);
+                }
 
-                    if (! $this->isMeaningfulPreviewText($previewText, $subject)) {
-                        $previewText = $this->extractExcerptLine($templateText, (string) $subject) ?? $previewText;
-                    }
+                if ($template !== null && $template['text'] !== null && ! $this->isMeaningfulPreviewText($previewText, $subject)) {
+                    $previewText = $this->extractExcerptLine($template['text'], (string) $subject) ?? $previewText;
                 }
             }
 
@@ -218,10 +221,10 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
         }
 
         if (! $this->isMeaningfulPreviewText($content['preview_text'], $content['subject']) && ! empty($content['template_id'])) {
-            $templateText = $this->getTemplateText($content['template_id']);
+            $template = $this->getTemplateContent($content['template_id']);
 
-            if ($templateText !== null) {
-                $content['preview_text'] = $this->extractExcerptLine($templateText, (string) $content['subject'])
+            if ($template !== null && $template['text'] !== null) {
+                $content['preview_text'] = $this->extractExcerptLine($template['text'], (string) $content['subject'])
                     ?? $content['preview_text'];
             }
         }
@@ -244,24 +247,30 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
     }
 
     /**
-     * Fetch a template's raw plain-text rendering. Cached per template id
-     * (subject-agnostic, since the same template can back multiple sends);
-     * returns null if the API call fails.
+     * Fetch a template's rendered HTML (full design) and plain-text
+     * renderings in a single request (Klaviyo returns both from one sparse
+     * fieldset). Cached per template id (subject-agnostic, since the same
+     * template can back multiple sends); returns null if the API call fails.
+     *
+     * @return array{html: string|null, text: string|null}|null
      */
-    protected function getTemplateText(string $templateId): ?string
+    protected function getTemplateContent(string $templateId): ?array
     {
         try {
             return Cache::remember(
-                "klaviyo:template-text:{$templateId}",
+                "klaviyo:template-content:{$templateId}",
                 (int) config('push.klaviyo.message_content_cache_ttl', 900),
                 function () use ($templateId) {
-                    $response = $this->get("templates/{$templateId}", ['fields[template]' => 'text']);
+                    $response = $this->get("templates/{$templateId}", ['fields[template]' => 'html,text']);
 
-                    return (string) ($response['data']['attributes']['text'] ?? '');
+                    return [
+                        'html' => $response['data']['attributes']['html'] ?? null,
+                        'text' => $response['data']['attributes']['text'] ?? null,
+                    ];
                 }
             );
         } catch (KlaviyoApiException $e) {
-            Log::channel('push')->warning('Failed to fetch Klaviyo template text', [
+            Log::channel('push')->warning('Failed to fetch Klaviyo template content', [
                 'template_id' => $templateId,
                 'error' => $e->getMessage(),
             ]);
@@ -271,11 +280,12 @@ class KlaviyoApiClient implements KlaviyoApiClientInterface
     }
 
     /**
-     * Clean a template's raw plain-text rendering for full display (the
-     * in-app notification detail screen) without dropping any content:
-     * normalizes non-breaking spaces, strips unresolved Liquid tags, and
-     * collapses long runs of blank lines. Markdown links are left as-is so
-     * the app can still show/tap them.
+     * Clean a template's rendered HTML (or plain text) for full display (the
+     * in-app notification detail screen) without dropping any markup:
+     * normalizes non-breaking spaces, strips unresolved Liquid tags — they
+     * never resolve on a generic template fetch, only on a per-recipient
+     * send — and collapses long runs of blank lines. Everything else
+     * (structure, styles, links, images) is left intact.
      */
     protected function cleanFullText(string $text): string
     {
