@@ -21,6 +21,32 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Queues
+    |--------------------------------------------------------------------------
+    | Dedicated queue names, isolated from the reading flow's `readings` /
+    | `readings-mail` queues.
+    */
+    'queue' => [
+        'connection' => env('CAMPAIGN_EMAIL_QUEUE_CONNECTION', env('QUEUE_CONNECTION', 'database')),
+        'process' => env('CAMPAIGN_EMAIL_QUEUE', 'campaign-emails'),
+        'mail' => env('CAMPAIGN_EMAIL_MAIL_QUEUE', 'campaign-emails-mail'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Mail
+    |--------------------------------------------------------------------------
+    | admin_notify_email — recipient for delivery-failure notifications.
+    | Falls back through the reading flow's admin email before MAIL_FROM_ADDRESS.
+    */
+    'admin_notify_email' => env('CAMPAIGN_EMAIL_ADMIN_EMAIL')
+        ?: env('READINGS_ADMIN_EMAIL')
+            ?: env('ADMIN_EMAIL')
+                ?: env('CONTACT_ADMIN_EMAIL')
+                    ?: env('MAIL_FROM_ADDRESS'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Scheduled send
     |--------------------------------------------------------------------------
     | Same algorithm as email_reading.schedule (shared via
