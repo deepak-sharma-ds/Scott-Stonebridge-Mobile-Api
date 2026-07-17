@@ -8,12 +8,14 @@ use App\Http\Controllers\Admin\AvailabilityGenerationController;
 use App\Http\Controllers\Admin\AvailabilitySlotController;
 use App\Http\Controllers\Admin\AvailabilityTemplateController;
 use App\Http\Controllers\Admin\BookingController;
+use App\Http\Controllers\Admin\CampaignProductController;
 use App\Http\Controllers\Admin\ConfigurationsController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\CustomerEntitlementController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\EmailReadingController;
 use App\Http\Controllers\Admin\EmailReadingProductController;
+use App\Http\Controllers\Admin\MarketingCampaignController;
 use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\ReportingController;
 use App\Http\Controllers\Admin\UserController;
@@ -125,6 +127,12 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
         Route::post('email-reading-products/test', [EmailReadingProductController::class, 'test'])->name('email-reading-products.test');
         Route::post('email-reading-products/{emailReadingProduct}/toggle', [EmailReadingProductController::class, 'toggleActive'])->name('email-reading-products.toggle');
         Route::resource('email-reading-products', EmailReadingProductController::class)->except(['show']);
+
+        // Marketing Campaigns (Campaign Email Automation admin registry)
+        Route::post('marketing-campaigns/{marketingCampaign}/products', [CampaignProductController::class, 'store'])->name('marketing-campaigns.products.store');
+        Route::delete('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}', [CampaignProductController::class, 'destroy'])->name('marketing-campaigns.products.destroy');
+        Route::post('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}/generate', [CampaignProductController::class, 'generate'])->name('marketing-campaigns.products.generate');
+        Route::resource('marketing-campaigns', MarketingCampaignController::class);
     });
 
     // Booking Inquiries

@@ -26,6 +26,7 @@ yarn-error.log
 /.cursor
 /.github
 /.agents
+/.scratch
 /.ai
 /.kiro
 /postman

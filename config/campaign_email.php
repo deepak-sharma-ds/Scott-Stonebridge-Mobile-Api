@@ -4,6 +4,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | OpenAI
+    |--------------------------------------------------------------------------
+    | Reuses the global OPENAI_MODEL env (currently gpt-4.1-mini). A row in
+    | the campaign_products table may override `model`/`max_tokens` per
+    | (campaign, product) pairing.
+    */
+    'openai_model' => env('OPENAI_MODEL', 'gpt-4.1-mini'),
+    'max_tokens' => env('CAMPAIGN_EMAIL_MAX_TOKENS', 1500),
+    'system_prompt' => env(
+        'CAMPAIGN_EMAIL_SYSTEM_PROMPT',
+        'You are Scott Stonebridge, an award-winning UK psychic medium. '
+        .'Write a warm, compelling marketing email promoting the given product, addressed to the customer. '
+        .'Use clear paragraphs, no headings, no markdown. Sign off as "Warm blessings, Scott Stonebridge".'
+    ),
+
+    /*
+    |--------------------------------------------------------------------------
     | Scheduled send
     |--------------------------------------------------------------------------
     | Same algorithm as email_reading.schedule (shared via
