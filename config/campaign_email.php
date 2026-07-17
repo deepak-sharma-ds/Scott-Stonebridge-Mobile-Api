@@ -79,4 +79,19 @@ return [
         ))),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Shopify fulfillment on send
+    |--------------------------------------------------------------------------
+    | After a campaign email is sent, the matching Shopify order LINE ITEM is
+    | fulfilled via the Admin GraphQL API (AdminApiClient), reusing the same
+    | OrderFulfillmentService the reading flow uses. Runs in its own job after
+    | the send is marked complete, so a fulfillment failure never blocks or
+    | re-sends the email. A per-delivery `fulfilled_at` flag keeps it idempotent.
+    */
+    'fulfillment' => [
+        'enabled' => (bool) env('CAMPAIGN_EMAIL_FULFILL_ENABLED', true),
+        'notify_customer' => (bool) env('CAMPAIGN_EMAIL_FULFILL_NOTIFY_CUSTOMER', false),
+    ],
+
 ];

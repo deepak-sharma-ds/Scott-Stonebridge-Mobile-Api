@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Webhook\Campaign;
 
 use App\Http\Controllers\Controller;
 use App\Jobs\Campaign\NotifyCampaignFailureJob;
+use App\Jobs\Campaign\SendCampaignEmailJob;
 use App\Models\CampaignDelivery;
 use App\Models\CampaignProduct;
 use App\Models\MarketingCampaign;
@@ -195,6 +196,14 @@ class CampaignPaidWebhookController extends Controller
 
             if ($delivery->wasRecentlyCreated) {
                 $created++;
+
+                $send = SendCampaignEmailJob::dispatch($delivery->id)
+                    ->onConnection(config('campaign_email.queue.connection'))
+                    ->onQueue(config('campaign_email.queue.mail'));
+
+                if ($scheduledAt && $scheduledAt->isFuture()) {
+                    $send->delay($scheduledAt);
+                }
             }
         }
 

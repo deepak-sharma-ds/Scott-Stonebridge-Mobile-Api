@@ -3,6 +3,7 @@
 namespace Tests\Feature\Webhook\Campaign;
 
 use App\Jobs\Campaign\NotifyCampaignFailureJob;
+use App\Jobs\Campaign\SendCampaignEmailJob;
 use App\Models\CampaignDelivery;
 use App\Models\CampaignProduct;
 use App\Models\CampaignProductResponse;
@@ -64,6 +65,7 @@ class CampaignPaidWebhookControllerTest extends TestCase
 
     public function test_resolves_active_campaign_and_creates_pending_delivery(): void
     {
+        Queue::fake();
         $campaignProduct = $this->activeCampaignWithResponse();
 
         $response = $this->postJson(route('webhook.shopify.campaign'), $this->orderPayload([
@@ -81,6 +83,20 @@ class CampaignPaidWebhookControllerTest extends TestCase
 
         $delivery = CampaignDelivery::where('shopify_line_item_id', 501)->firstOrFail();
         $this->assertNotNull($delivery->scheduled_at);
+
+        Queue::assertPushed(SendCampaignEmailJob::class, fn ($job) => $job->deliveryId === $delivery->id);
+    }
+
+    public function test_does_not_dispatch_send_job_for_failed_delivery(): void
+    {
+        Queue::fake();
+        $this->activeCampaignWithResponse();
+
+        $this->postJson(route('webhook.shopify.campaign'), $this->orderPayload([
+            $this->lineItem(111, 510, null),
+        ]));
+
+        Queue::assertNotPushed(SendCampaignEmailJob::class);
     }
 
     public function test_missing_campaign_key_creates_failed_delivery_and_notifies_admin(): void
