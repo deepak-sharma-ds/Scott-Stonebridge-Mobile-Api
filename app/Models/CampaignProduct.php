@@ -11,6 +11,7 @@ class CampaignProduct extends Model
     protected $fillable = [
         'marketing_campaign_id',
         'shopify_product_id',
+        'shopify_variant_id',
         'product_title',
         'prompt_template',
         'email_subject',
@@ -22,6 +23,7 @@ class CampaignProduct extends Model
     {
         return [
             'shopify_product_id' => 'integer',
+            'shopify_variant_id' => 'integer',
             'max_tokens' => 'integer',
         ];
     }

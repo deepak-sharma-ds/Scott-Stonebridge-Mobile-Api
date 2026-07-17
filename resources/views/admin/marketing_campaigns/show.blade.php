@@ -30,10 +30,14 @@
         <h3 style="margin-top:0;">Link a product</h3>
         <form action="{{ route('admin.marketing-campaigns.products.store', $campaign) }}" method="POST">
             @csrf
-            <div class="row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;">
+            <div class="row" style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:1rem;">
                 <div class="mb-3">
                     <label for="shopify_product_id" class="form-label">Shopify Product ID</label>
                     <input type="number" name="shopify_product_id" id="shopify_product_id" class="form-control" required>
+                </div>
+                <div class="mb-3">
+                    <label for="shopify_variant_id" class="form-label">Shopify Variant ID <small style="color:var(--text-muted);">(for the campaign link)</small></label>
+                    <input type="number" name="shopify_variant_id" id="shopify_variant_id" class="form-control" required>
                 </div>
                 <div class="mb-3">
                     <label for="product_title" class="form-label">Product Title <small style="color:var(--text-muted);">(display only)</small></label>
@@ -45,7 +49,7 @@
                 </div>
             </div>
             <div class="mb-3">
-                <label for="prompt_template" class="form-label">Prompt Template <small style="color:var(--text-muted);">(Blade template; {{ '{{ $productTitle }}' }} / {{ '{{ $campaignName }}' }} available)</small></label>
+                <label for="prompt_template" class="form-label">Prompt Template <small style="color:var(--text-muted);">(Blade template; @{{ $productTitle }} / @{{ $campaignName }} available)</small></label>
                 <textarea name="prompt_template" id="prompt_template" class="form-control" rows="3"></textarea>
             </div>
             <button type="submit" class="btn btn-primary">Link Product</button>
@@ -61,6 +65,7 @@
                         <th>Product</th>
                         <th>Shopify ID</th>
                         <th class="text-center">Response</th>
+                        <th>Campaign Link</th>
                         <th class="text-end" style="width:280px;">Actions</th>
                     </tr>
                 </thead>
@@ -73,6 +78,22 @@
                                 <x-admin.badge :type="$campaignProduct->response ? 'success' : 'secondary'">
                                     {{ $campaignProduct->response ? 'Generated' : 'Not generated' }}
                                 </x-admin.badge>
+                            </td>
+                            <td style="max-width:220px;">
+                                @if($campaignLinks[$campaignProduct->id] ?? null)
+                                    <div x-data="{ copied: false }" style="display:flex;gap:0.5rem;align-items:center;">
+                                        <input type="text" readonly value="{{ $campaignLinks[$campaignProduct->id] }}"
+                                               class="form-control form-control-sm" style="font-size:0.75rem;"
+                                               onclick="this.select()">
+                                        <button type="button" class="btn btn-sm btn-secondary"
+                                                x-on:click="navigator.clipboard.writeText('{{ $campaignLinks[$campaignProduct->id] }}'); copied = true; setTimeout(() => copied = false, 1500)">
+                                            <span x-show="!copied">Copy</span>
+                                            <span x-show="copied" x-cloak>Copied!</span>
+                                        </button>
+                                    </div>
+                                @else
+                                    <small style="color:var(--text-muted);">Set a Shopify Variant ID to generate a link.</small>
+                                @endif
                             </td>
                             <td class="text-end">
                                 <div style="display:inline-flex;gap:0.5rem;">
@@ -93,14 +114,14 @@
                         </tr>
                         @if($campaignProduct->response)
                             <tr>
-                                <td colspan="4" style="background:var(--surface-muted, rgba(0,0,0,0.02));white-space:pre-wrap;font-size:0.875rem;color:var(--text-secondary);">
+                                <td colspan="5" style="background:var(--surface-muted, rgba(0,0,0,0.02));white-space:pre-wrap;font-size:0.875rem;color:var(--text-secondary);">
                                     {{ $campaignProduct->response->ai_response }}
                                 </td>
                             </tr>
                         @endif
                     @empty
                         <tr>
-                            <td colspan="4">
+                            <td colspan="5">
                                 @include('admin.components.empty-state', ['message' => 'No products linked to this campaign yet.'])
                             </td>
                         </tr>

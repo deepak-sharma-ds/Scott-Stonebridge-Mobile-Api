@@ -25,6 +25,7 @@ class CampaignProductRequest extends FormRequest
                 Rule::unique('campaign_products', 'shopify_product_id')
                     ->where('marketing_campaign_id', $campaign?->id),
             ],
+            'shopify_variant_id' => ['required', 'integer', 'min:1'],
             'product_title' => ['nullable', 'string', 'max:255'],
             'prompt_template' => ['nullable', 'string'],
             'email_subject' => ['nullable', 'string', 'max:255'],

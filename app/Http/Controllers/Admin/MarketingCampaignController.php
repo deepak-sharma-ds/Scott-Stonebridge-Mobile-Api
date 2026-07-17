@@ -4,12 +4,18 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\MarketingCampaignRequest;
+use App\Models\CampaignProduct;
 use App\Models\MarketingCampaign;
+use App\Services\CampaignEmail\CampaignLinkGenerator;
 use Illuminate\Http\RedirectResponse;
 use Throwable;
 
 class MarketingCampaignController extends Controller
 {
+    public function __construct(
+        private readonly CampaignLinkGenerator $linkGenerator
+    ) {}
+
     public function index()
     {
         $campaigns = MarketingCampaign::withCount('campaignProducts')
@@ -43,7 +49,15 @@ class MarketingCampaignController extends Controller
     {
         $marketingCampaign->load(['campaignProducts.response']);
 
-        return view('admin.marketing_campaigns.show', ['campaign' => $marketingCampaign]);
+        $campaignLinks = $marketingCampaign->campaignProducts
+            ->mapWithKeys(fn (CampaignProduct $campaignProduct) => [
+                $campaignProduct->id => $this->linkGenerator->generate($campaignProduct),
+            ]);
+
+        return view('admin.marketing_campaigns.show', [
+            'campaign' => $marketingCampaign,
+            'campaignLinks' => $campaignLinks,
+        ]);
     }
 
     public function edit(MarketingCampaign $marketingCampaign)

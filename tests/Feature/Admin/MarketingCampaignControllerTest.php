@@ -108,10 +108,12 @@ class MarketingCampaignControllerTest extends TestCase
 
         $this->actingAs($user)->post(route('admin.marketing-campaigns.products.store', $campaignA), [
             'shopify_product_id' => 999,
+            'shopify_variant_id' => 5001,
         ])->assertRedirect(route('admin.marketing-campaigns.show', $campaignA));
 
         $this->actingAs($user)->post(route('admin.marketing-campaigns.products.store', $campaignB), [
             'shopify_product_id' => 999,
+            'shopify_variant_id' => 5002,
         ])->assertRedirect(route('admin.marketing-campaigns.show', $campaignB));
 
         $this->assertDatabaseCount('campaign_products', 2);
@@ -126,12 +128,14 @@ class MarketingCampaignControllerTest extends TestCase
 
         $this->actingAs($user)->post(route('admin.marketing-campaigns.products.store', $campaign), [
             'shopify_product_id' => 999,
+            'shopify_variant_id' => 5001,
         ]);
 
         $response = $this->actingAs($user)
             ->from(route('admin.marketing-campaigns.show', $campaign))
             ->post(route('admin.marketing-campaigns.products.store', $campaign), [
                 'shopify_product_id' => 999,
+                'shopify_variant_id' => 5002,
             ]);
 
         $response->assertSessionHasErrors(['shopify_product_id']);
@@ -197,6 +201,38 @@ class MarketingCampaignControllerTest extends TestCase
             ->post(route('admin.marketing-campaigns.products.generate', [$campaign, $campaignProduct]));
 
         $this->assertSame(MarketingCampaign::STATUS_DRAFT, $campaign->fresh()->status);
+    }
+
+    public function test_linking_a_product_requires_a_shopify_variant_id(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->from(route('admin.marketing-campaigns.show', $campaign))
+            ->post(route('admin.marketing-campaigns.products.store', $campaign), [
+                'shopify_product_id' => 999,
+            ]);
+
+        $response->assertSessionHasErrors(['shopify_variant_id']);
+        $this->assertDatabaseCount('campaign_products', 0);
+    }
+
+    public function test_campaign_show_page_displays_the_generated_campaign_link(): void
+    {
+        config()->set('shopify.store_domain', 'test-shop.myshopify.com');
+
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        CampaignProduct::create([
+            'marketing_campaign_id' => $campaign->id,
+            'shopify_product_id' => 111,
+            'shopify_variant_id' => 5001,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('admin.marketing-campaigns.show', $campaign));
+
+        $response->assertOk();
+        $response->assertSee('https://test-shop.myshopify.com/cart/5001:1?properties=', false);
     }
 
     public function test_admin_can_unlink_a_product_from_a_campaign(): void
