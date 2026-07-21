@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ShopifyController;
+use App\Http\Controllers\Webhook\Campaign\CampaignOrderCancelledWebhookController;
 use App\Http\Controllers\Webhook\Campaign\CampaignOrderUpdatedWebhookController;
 use App\Http\Controllers\Webhook\Campaign\CampaignPaidWebhookController;
 use App\Http\Controllers\Webhook\KlaviyoFlowWebhookController;
@@ -36,6 +37,10 @@ Route::prefix('webhook')->group(function () {
     Route::post('/order-updated-campaign', [CampaignOrderUpdatedWebhookController::class, 'handle'])
         ->middleware('shopify.hmac')
         ->name('webhook.shopify.campaign.updated');
+
+    Route::post('/order-cancelled-campaign', [CampaignOrderCancelledWebhookController::class, 'handle'])
+        ->middleware('shopify.hmac')
+        ->name('webhook.shopify.campaign.cancelled');
 
     /**
      * KLAVIYO Webhooks (marketing push notifications)

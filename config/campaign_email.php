@@ -94,4 +94,15 @@ return [
         'notify_customer' => (bool) env('CAMPAIGN_EMAIL_FULFILL_NOTIFY_CUSTOMER', false),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Cancel on refund / cancellation
+    |--------------------------------------------------------------------------
+    | Same algorithm as email_reading.cancel, tuned independently for the
+    | campaign flow. Set `enabled` false to make the cancel webhook inert.
+    */
+    'cancel' => [
+        'enabled' => (bool) env('CAMPAIGN_EMAIL_CANCEL_ENABLED', true),
+    ],
+
 ];
