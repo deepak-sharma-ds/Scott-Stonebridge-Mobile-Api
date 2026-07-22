@@ -131,7 +131,7 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
         // Marketing Campaigns (Campaign Email Automation admin registry)
         Route::post('marketing-campaigns/{marketingCampaign}/products', [CampaignProductController::class, 'store'])->name('marketing-campaigns.products.store');
         Route::delete('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}', [CampaignProductController::class, 'destroy'])->name('marketing-campaigns.products.destroy');
-        Route::post('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}/generate', [CampaignProductController::class, 'generate'])->name('marketing-campaigns.products.generate');
+        Route::post('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}/respond', [CampaignProductController::class, 'respond'])->name('marketing-campaigns.products.respond');
         Route::resource('marketing-campaigns', MarketingCampaignController::class);
     });
 

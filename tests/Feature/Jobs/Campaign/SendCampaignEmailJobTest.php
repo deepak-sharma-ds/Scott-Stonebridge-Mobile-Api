@@ -37,7 +37,8 @@ class SendCampaignEmailJobTest extends TestCase
 
         CampaignProductResponse::create([
             'campaign_product_id' => $campaignProduct->id,
-            'ai_response' => 'Generated marketing copy.',
+            'source' => CampaignProductResponse::SOURCE_AI,
+            'body' => 'Generated marketing copy.',
             'generated_at' => now(),
         ]);
 

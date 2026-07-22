@@ -69,14 +69,14 @@
                         <th class="text-end" style="width:280px;">Actions</th>
                     </tr>
                 </thead>
-                <tbody>
-                    @forelse($campaign->campaignProducts as $campaignProduct)
+                @forelse($campaign->campaignProducts as $campaignProduct)
+                    <tbody x-data="{ formOpen: false, source: '{{ $campaignProduct->response->source ?? 'manual' }}' }">
                         <tr>
                             <td style="font-weight:600;color:var(--text-primary);">{{ $campaignProduct->product_title ?: '—' }}</td>
                             <td style="font-size:0.8125rem;color:var(--text-secondary);">{{ $campaignProduct->shopify_product_id }}</td>
                             <td class="text-center">
-                                <x-admin.badge :type="$campaignProduct->response ? 'success' : 'secondary'">
-                                    {{ $campaignProduct->response ? 'Generated' : 'Not generated' }}
+                                <x-admin.badge :type="$campaignProduct->response ? ($campaignProduct->response->source === 'ai' ? 'success' : 'info') : 'secondary'">
+                                    {{ $campaignProduct->response ? \App\Models\CampaignProductResponse::sourceLabels()[$campaignProduct->response->source] : 'Not generated' }}
                                 </x-admin.badge>
                             </td>
                             <td style="max-width:220px;">
@@ -97,12 +97,9 @@
                             </td>
                             <td class="text-end">
                                 <div style="display:inline-flex;gap:0.5rem;">
-                                    <form action="{{ route('admin.marketing-campaigns.products.generate', [$campaign, $campaignProduct]) }}" method="POST" style="display:inline;">
-                                        @csrf
-                                        <button type="submit" class="btn btn-sm btn-primary">
-                                            {{ $campaignProduct->response ? 'Regenerate' : 'Generate' }}
-                                        </button>
-                                    </form>
+                                    <button type="button" class="btn btn-sm btn-primary" x-on:click="formOpen = !formOpen">
+                                        {{ $campaignProduct->response ? 'Edit Response' : 'Add Response' }}
+                                    </button>
                                     <form action="{{ route('admin.marketing-campaigns.products.destroy', [$campaign, $campaignProduct]) }}" method="POST" style="display:inline;">
                                         @csrf
                                         @method('DELETE')
@@ -115,18 +112,40 @@
                         @if($campaignProduct->response)
                             <tr>
                                 <td colspan="5" style="background:var(--surface-muted, rgba(0,0,0,0.02));white-space:pre-wrap;font-size:0.875rem;color:var(--text-secondary);">
-                                    {{ $campaignProduct->response->ai_response }}
+                                    {{ $campaignProduct->response->body }}
                                 </td>
                             </tr>
                         @endif
-                    @empty
+                        <tr x-show="formOpen" x-cloak>
+                            <td colspan="5" style="background:var(--surface-muted, rgba(0,0,0,0.02));">
+                                <form action="{{ route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]) }}" method="POST">
+                                    @csrf
+                                    <div style="display:flex;gap:1.5rem;margin-bottom:0.75rem;">
+                                        <label><input type="radio" name="source" value="ai" x-model="source"> Generate with AI</label>
+                                        <label><input type="radio" name="source" value="manual" x-model="source"> Paste manual response</label>
+                                    </div>
+                                    <div x-show="source === 'ai'" x-cloak>
+                                        <label class="form-label">Prompt Template <small style="color:var(--text-muted);">(Blade template; @{{ $productTitle }} / @{{ $campaignName }} available)</small></label>
+                                        <textarea name="prompt_template" class="form-control" rows="3">{{ $campaignProduct->prompt_template }}</textarea>
+                                    </div>
+                                    <div x-show="source === 'manual'" x-cloak>
+                                        <label class="form-label">Response Body</label>
+                                        <textarea name="body" class="form-control" rows="5"></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-sm btn-primary" style="margin-top:0.75rem;">Save Response</button>
+                                </form>
+                            </td>
+                        </tr>
+                    </tbody>
+                @empty
+                    <tbody>
                         <tr>
                             <td colspan="5">
                                 @include('admin.components.empty-state', ['message' => 'No products linked to this campaign yet.'])
                             </td>
                         </tr>
-                    @endforelse
-                </tbody>
+                    </tbody>
+                @endforelse
             </table>
         </div>
     </div>

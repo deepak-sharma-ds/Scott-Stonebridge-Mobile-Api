@@ -7,9 +7,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CampaignProductResponse extends Model
 {
+    public const SOURCE_AI = 'ai';
+
+    public const SOURCE_MANUAL = 'manual';
+
     protected $fillable = [
         'campaign_product_id',
-        'ai_response',
+        'source',
+        'body',
         'model_used',
         'prompt_tokens',
         'completion_tokens',
@@ -28,5 +33,18 @@ class CampaignProductResponse extends Model
     public function campaignProduct(): BelongsTo
     {
         return $this->belongsTo(CampaignProduct::class);
+    }
+
+    /**
+     * Human-readable source labels for the admin UI.
+     *
+     * @return array<string,string>
+     */
+    public static function sourceLabels(): array
+    {
+        return [
+            self::SOURCE_AI => 'AI Generated',
+            self::SOURCE_MANUAL => 'Manual',
+        ];
     }
 }

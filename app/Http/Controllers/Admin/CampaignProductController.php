@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CampaignProductRequest;
+use App\Http\Requests\CampaignProductResponseRequest;
 use App\Models\CampaignProduct;
+use App\Models\CampaignProductResponse;
 use App\Models\MarketingCampaign;
 use App\Services\CampaignEmail\CampaignResponseGenerationService;
 use Illuminate\Http\RedirectResponse;
@@ -37,12 +39,36 @@ class CampaignProductController extends Controller
     }
 
     /**
-     * Generate (or regenerate) the pre-generated response for this pairing.
-     * A prior response is replaced in place, never duplicated.
+     * Save the pre-generated response for this pairing — either by calling
+     * OpenAI (source=ai) or persisting an admin-authored body directly
+     * (source=manual). A prior response is replaced in place, never
+     * duplicated.
      */
-    public function generate(MarketingCampaign $marketingCampaign, CampaignProduct $campaignProduct): RedirectResponse
+    public function respond(CampaignProductResponseRequest $request, MarketingCampaign $marketingCampaign, CampaignProduct $campaignProduct): RedirectResponse
     {
         abort_unless($campaignProduct->marketing_campaign_id === $marketingCampaign->id, 404);
+
+        $data = $request->validated();
+
+        if ($data['source'] === CampaignProductResponse::SOURCE_MANUAL) {
+            $campaignProduct->response()->updateOrCreate(
+                ['campaign_product_id' => $campaignProduct->id],
+                [
+                    'source' => CampaignProductResponse::SOURCE_MANUAL,
+                    'body' => $data['body'],
+                    'model_used' => null,
+                    'prompt_tokens' => null,
+                    'completion_tokens' => null,
+                    'generated_at' => null,
+                ]
+            );
+
+            return redirect()
+                ->route('admin.marketing-campaigns.show', $marketingCampaign)
+                ->with('success', 'Manual response saved.');
+        }
+
+        $campaignProduct->update(['prompt_template' => $data['prompt_template'] ?? null]);
 
         try {
             $this->generation->generate($campaignProduct);

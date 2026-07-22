@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\CampaignEmail;
 
 use App\Models\CampaignProduct;
+use App\Models\CampaignProductResponse;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Log;
@@ -56,7 +57,8 @@ class CampaignResponseGenerationService
         $campaignProduct->response()->updateOrCreate(
             ['campaign_product_id' => $campaignProduct->id],
             [
-                'ai_response' => $result['content'],
+                'source' => CampaignProductResponse::SOURCE_AI,
+                'body' => $result['content'],
                 'prompt_tokens' => $result['prompt_tokens'],
                 'completion_tokens' => $result['completion_tokens'],
                 'model_used' => $result['model'],

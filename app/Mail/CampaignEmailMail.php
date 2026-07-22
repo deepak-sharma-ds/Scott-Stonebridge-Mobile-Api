@@ -32,7 +32,7 @@ class CampaignEmailMail extends Mailable
             with: [
                 'delivery' => $this->delivery,
                 'customerName' => $this->delivery->customer_name ?: 'Dear Friend',
-                'campaignBody' => (string) $this->delivery->campaignProduct?->response?->ai_response,
+                'campaignBody' => (string) $this->delivery->campaignProduct?->response?->body,
             ],
         );
     }

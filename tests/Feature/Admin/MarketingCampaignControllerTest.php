@@ -3,6 +3,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\CampaignProduct;
+use App\Models\CampaignProductResponse;
 use App\Models\MarketingCampaign;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -142,7 +143,7 @@ class MarketingCampaignControllerTest extends TestCase
         $this->assertDatabaseCount('campaign_products', 1);
     }
 
-    public function test_admin_can_generate_a_response_for_a_campaign_product_pairing(): void
+    public function test_admin_can_generate_an_ai_response_for_a_campaign_product_pairing(): void
     {
         $this->fakeOpenAiResponse('Discover your future with our love reading.');
 
@@ -154,13 +155,16 @@ class MarketingCampaignControllerTest extends TestCase
         ]);
 
         $response = $this->actingAs(User::factory()->create())
-            ->post(route('admin.marketing-campaigns.products.generate', [$campaign, $campaignProduct]));
+            ->post(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
+                'source' => CampaignProductResponse::SOURCE_AI,
+            ]);
 
         $response->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
 
         $this->assertDatabaseHas('campaign_product_responses', [
             'campaign_product_id' => $campaignProduct->id,
-            'ai_response' => 'Discover your future with our love reading.',
+            'source' => CampaignProductResponse::SOURCE_AI,
+            'body' => 'Discover your future with our love reading.',
         ]);
         $this->assertDatabaseCount('campaign_product_responses', 1);
     }
@@ -175,15 +179,19 @@ class MarketingCampaignControllerTest extends TestCase
         $user = User::factory()->create();
 
         $this->fakeOpenAiResponse('First draft.');
-        $this->actingAs($user)->post(route('admin.marketing-campaigns.products.generate', [$campaign, $campaignProduct]));
+        $this->actingAs($user)->post(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
+            'source' => CampaignProductResponse::SOURCE_AI,
+        ]);
 
         $this->fakeOpenAiResponse('Second draft.');
-        $this->actingAs($user)->post(route('admin.marketing-campaigns.products.generate', [$campaign, $campaignProduct]));
+        $this->actingAs($user)->post(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
+            'source' => CampaignProductResponse::SOURCE_AI,
+        ]);
 
         $this->assertDatabaseCount('campaign_product_responses', 1);
         $this->assertDatabaseHas('campaign_product_responses', [
             'campaign_product_id' => $campaignProduct->id,
-            'ai_response' => 'Second draft.',
+            'body' => 'Second draft.',
         ]);
     }
 
@@ -198,9 +206,111 @@ class MarketingCampaignControllerTest extends TestCase
         ]);
 
         $this->actingAs(User::factory()->create())
-            ->post(route('admin.marketing-campaigns.products.generate', [$campaign, $campaignProduct]));
+            ->post(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
+                'source' => CampaignProductResponse::SOURCE_AI,
+            ]);
 
         $this->assertSame(MarketingCampaign::STATUS_DRAFT, $campaign->fresh()->status);
+    }
+
+    public function test_regenerating_updates_the_prompt_template_before_calling_openai(): void
+    {
+        $this->fakeOpenAiResponse('Draft using new prompt.');
+
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        $campaignProduct = CampaignProduct::create([
+            'marketing_campaign_id' => $campaign->id,
+            'shopify_product_id' => 111,
+            'prompt_template' => 'Old prompt.',
+        ]);
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
+                'source' => CampaignProductResponse::SOURCE_AI,
+                'prompt_template' => 'Updated prompt for {{ $productTitle }}.',
+            ]);
+
+        $this->assertSame('Updated prompt for {{ $productTitle }}.', $campaignProduct->fresh()->prompt_template);
+    }
+
+    public function test_admin_can_save_a_manual_response_without_calling_openai(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        $campaignProduct = CampaignProduct::create([
+            'marketing_campaign_id' => $campaign->id,
+            'shopify_product_id' => 111,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->post(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
+                'source' => CampaignProductResponse::SOURCE_MANUAL,
+                'body' => 'Hand-written copy for this product.',
+            ]);
+
+        $response->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
+
+        $this->assertDatabaseHas('campaign_product_responses', [
+            'campaign_product_id' => $campaignProduct->id,
+            'source' => CampaignProductResponse::SOURCE_MANUAL,
+            'body' => 'Hand-written copy for this product.',
+            'model_used' => null,
+            'prompt_tokens' => null,
+            'completion_tokens' => null,
+            'generated_at' => null,
+        ]);
+    }
+
+    public function test_manual_response_is_required_when_source_is_manual(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        $campaignProduct = CampaignProduct::create([
+            'marketing_campaign_id' => $campaign->id,
+            'shopify_product_id' => 111,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->from(route('admin.marketing-campaigns.show', $campaign))
+            ->post(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
+                'source' => CampaignProductResponse::SOURCE_MANUAL,
+            ]);
+
+        $response->assertSessionHasErrors(['body']);
+        $this->assertDatabaseCount('campaign_product_responses', 0);
+    }
+
+    public function test_switching_an_ai_response_to_manual_clears_ai_metadata(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        $campaignProduct = CampaignProduct::create([
+            'marketing_campaign_id' => $campaign->id,
+            'shopify_product_id' => 111,
+        ]);
+        CampaignProductResponse::create([
+            'campaign_product_id' => $campaignProduct->id,
+            'source' => CampaignProductResponse::SOURCE_AI,
+            'body' => 'AI draft.',
+            'model_used' => 'gpt-4o',
+            'prompt_tokens' => 12,
+            'completion_tokens' => 8,
+            'generated_at' => now(),
+        ]);
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
+                'source' => CampaignProductResponse::SOURCE_MANUAL,
+                'body' => 'Hand-edited replacement.',
+            ]);
+
+        $this->assertDatabaseHas('campaign_product_responses', [
+            'campaign_product_id' => $campaignProduct->id,
+            'source' => CampaignProductResponse::SOURCE_MANUAL,
+            'body' => 'Hand-edited replacement.',
+            'model_used' => null,
+            'prompt_tokens' => null,
+            'completion_tokens' => null,
+            'generated_at' => null,
+        ]);
+        $this->assertDatabaseCount('campaign_product_responses', 1);
     }
 
     public function test_linking_a_product_requires_a_shopify_variant_id(): void
