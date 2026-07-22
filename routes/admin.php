@@ -129,6 +129,7 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
         Route::resource('email-reading-products', EmailReadingProductController::class)->except(['show']);
 
         // Marketing Campaigns (Campaign Email Automation admin registry)
+        Route::get('marketing-campaigns/{marketingCampaign}/products/available', [CampaignProductController::class, 'available'])->name('marketing-campaigns.products.available');
         Route::post('marketing-campaigns/{marketingCampaign}/products', [CampaignProductController::class, 'store'])->name('marketing-campaigns.products.store');
         Route::delete('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}', [CampaignProductController::class, 'destroy'])->name('marketing-campaigns.products.destroy');
         Route::post('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}/respond', [CampaignProductController::class, 'respond'])->name('marketing-campaigns.products.respond');

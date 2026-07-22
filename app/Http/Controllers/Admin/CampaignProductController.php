@@ -8,19 +8,45 @@ use App\Http\Requests\CampaignProductResponseRequest;
 use App\Models\CampaignProduct;
 use App\Models\CampaignProductResponse;
 use App\Models\MarketingCampaign;
+use App\Services\CampaignEmail\CampaignProductCatalogService;
 use App\Services\CampaignEmail\CampaignResponseGenerationService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Throwable;
 
 class CampaignProductController extends Controller
 {
     public function __construct(
-        private readonly CampaignResponseGenerationService $generation
+        private readonly CampaignResponseGenerationService $generation,
+        private readonly CampaignProductCatalogService $catalog
     ) {}
+
+    /**
+     * List unlisted Shopify products eligible to be linked to this campaign,
+     * for the admin product picker.
+     */
+    public function available(MarketingCampaign $marketingCampaign): JsonResponse
+    {
+        return response()->json([
+            'products' => $this->catalog->availableFor($marketingCampaign),
+        ]);
+    }
 
     public function store(CampaignProductRequest $request, MarketingCampaign $marketingCampaign): RedirectResponse
     {
-        $marketingCampaign->campaignProducts()->create($request->validated());
+        $data = $request->validated();
+        $source = $data['source'] ?? CampaignProductResponse::SOURCE_MANUAL;
+        $body = $data['body'] ?? null;
+        unset($data['source'], $data['body']);
+
+        $campaignProduct = $marketingCampaign->campaignProducts()->create($data);
+
+        if ($source === CampaignProductResponse::SOURCE_MANUAL && filled($body)) {
+            $campaignProduct->response()->create([
+                'source' => CampaignProductResponse::SOURCE_MANUAL,
+                'body' => $body,
+            ]);
+        }
 
         return redirect()
             ->route('admin.marketing-campaigns.show', $marketingCampaign)

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\CampaignProductResponse;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -31,6 +32,8 @@ class CampaignProductRequest extends FormRequest
             'email_subject' => ['nullable', 'string', 'max:255'],
             'model' => ['nullable', 'string', 'max:255'],
             'max_tokens' => ['nullable', 'integer', 'min:1', 'max:8000'],
+            'source' => ['nullable', Rule::in([CampaignProductResponse::SOURCE_AI, CampaignProductResponse::SOURCE_MANUAL])],
+            'body' => ['nullable', 'string'],
         ];
     }
 
