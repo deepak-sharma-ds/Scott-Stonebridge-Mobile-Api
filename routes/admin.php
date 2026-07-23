@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\AvailabilityGenerationController;
 use App\Http\Controllers\Admin\AvailabilitySlotController;
 use App\Http\Controllers\Admin\AvailabilityTemplateController;
 use App\Http\Controllers\Admin\BookingController;
+use App\Http\Controllers\Admin\CampaignDeliveryController;
 use App\Http\Controllers\Admin\CampaignProductController;
 use App\Http\Controllers\Admin\ConfigurationsController;
 use App\Http\Controllers\Admin\CustomerController;
@@ -134,6 +135,18 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
         Route::delete('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}', [CampaignProductController::class, 'destroy'])->name('marketing-campaigns.products.destroy');
         Route::post('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}/respond', [CampaignProductController::class, 'respond'])->name('marketing-campaigns.products.respond');
         Route::resource('marketing-campaigns', MarketingCampaignController::class);
+
+        // Campaign Deliveries (Campaign Email Automation admin listing)
+        Route::prefix('campaign-deliveries')->name('campaign_deliveries.')->group(function () {
+            Route::get('/', [CampaignDeliveryController::class, 'index'])->name('index');
+            Route::get('/export', [CampaignDeliveryController::class, 'export'])->name('export');
+            Route::get('/{delivery}', [CampaignDeliveryController::class, 'show'])->name('show');
+            Route::get('/{delivery}/edit', [CampaignDeliveryController::class, 'edit'])->name('edit');
+            Route::put('/{delivery}', [CampaignDeliveryController::class, 'update'])->name('update');
+            Route::post('/{delivery}/send', [CampaignDeliveryController::class, 'send'])->name('send');
+            Route::post('/{delivery}/cancel', [CampaignDeliveryController::class, 'cancel'])->name('cancel');
+            Route::delete('/{delivery}', [CampaignDeliveryController::class, 'destroy'])->name('destroy');
+        });
     });
 
     // Booking Inquiries

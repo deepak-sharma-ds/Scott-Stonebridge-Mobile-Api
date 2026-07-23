@@ -233,6 +233,55 @@
             </div>
         </div>
 
+        {{-- ── Campaigns ── --}}
+        <div class="admin-sidebar-heading">Campaigns</div>
+
+        @php
+            $campaignActive = request()->routeIs('admin.marketing-campaigns.*')
+                        || request()->routeIs('admin.campaign_deliveries.*');
+        @endphp
+
+        <div x-data="{ open: {{ $campaignActive ? 'true' : 'false' }} }">
+            <button @click="open = !open"
+                    class="admin-nav-link {{ $campaignActive ? 'active' : '' }}"
+                    aria-expanded="open">
+                <span class="admin-nav-link-icon">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+                    </svg>
+                </span>
+                <span class="admin-nav-link-text">Campaigns</span>
+                <span class="admin-nav-link-arrow">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2"
+                         :style="open ? 'transform:rotate(180deg)' : ''"
+                         style="transition:transform 0.2s;">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </span>
+            </button>
+
+            <div class="admin-nav-submenu" :class="{ 'open': open }">
+                <div class="admin-nav-submenu-inner">
+                    <a href="{{ route('admin.marketing-campaigns.index') }}"
+                       class="admin-nav-sublink {{ request()->routeIs('admin.marketing-campaigns.*') ? 'active' : '' }}">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
+                            <polyline points="22,6 12,13 2,6"></polyline>
+                        </svg>
+                        Marketing Campaigns
+                    </a>
+                    <a href="{{ route('admin.campaign_deliveries.index') }}"
+                       class="admin-nav-sublink {{ request()->routeIs('admin.campaign_deliveries.*') ? 'active' : '' }}">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                        </svg>
+                        Deliveries
+                    </a>
+                </div>
+            </div>
+        </div>
+
         {{-- ── Global Configurations ── --}}
         @php
             $configuration_menu = getConfigurationMenu();
