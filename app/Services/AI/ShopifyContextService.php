@@ -23,10 +23,9 @@ use Throwable;
  */
 class ShopifyContextService extends BaseService implements ShopifyContextServiceInterface
 {
-    private const POLICY_SUMMARY_MAX_CHARS = 600;
-
     public function __construct(
         private readonly StorefrontApiClientInterface $storefront,
+        private readonly ChatbotConfigRepository $chatbotConfig,
     ) {
         parent::__construct();
     }
@@ -106,7 +105,7 @@ class ShopifyContextService extends BaseService implements ShopifyContextService
             try {
                 $response = $this->storefront->query('storefront/products/get_product_details', [
                     'handle' => $handle,
-                    'country' => $this->countryFromCurrency($context->currency),
+                    'country' => $this->chatbotConfig->countryFromCurrency($context->currency),
                 ]);
 
                 $node = $response['data']['productByHandle'] ?? null;
@@ -134,7 +133,7 @@ class ShopifyContextService extends BaseService implements ShopifyContextService
                         $node['options'] ?? [],
                     ),
                     // Strip HTML; cap to keep token usage sane.
-                    'description' => mb_strimwidth(strip_tags((string) ($node['description'] ?? '')), 0, 400, '…'),
+                    'description' => mb_strimwidth(strip_tags((string) ($node['description'] ?? '')), 0, $this->chatbotConfig->contextProductDescriptionMaxChars(), '…'),
                 ];
             } catch (Throwable $e) {
                 $this->logWarning('Storefront product fetch failed', [
@@ -192,18 +191,6 @@ class ShopifyContextService extends BaseService implements ShopifyContextService
         $body = strip_tags((string) $policy['body']);
         $body = trim((string) preg_replace('/\s+/u', ' ', $body));
 
-        return mb_strimwidth($body, 0, self::POLICY_SUMMARY_MAX_CHARS, '…');
-    }
-
-    private function countryFromCurrency(?string $currency): string
-    {
-        return match (strtoupper((string) $currency)) {
-            'USD' => 'US',
-            'EUR' => 'DE',
-            'CAD' => 'CA',
-            'AUD' => 'AU',
-            'INR' => 'IN',
-            default => 'GB',
-        };
+        return mb_strimwidth($body, 0, $this->chatbotConfig->contextPolicySummaryMaxChars(), '…');
     }
 }

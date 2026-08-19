@@ -45,10 +45,17 @@ class CampaignDeliveryAdminService
      * Persist edited fields on a delivery, including a manual re-pair of the
      * Campaign Product for recovering an Attribution Failure (see ADR 0005).
      *
+     * A stale `error_message` is cleared whenever the edit moves the delivery
+     * off `failed`, and re-pairing a previously failed delivery back to
+     * `pending` dispatches the send job itself — mirroring the webhook's own
+     * dispatch-on-create — instead of leaving it queued with nothing to move it.
+     *
      * @param  array<string,mixed>  $data
      */
     public function updateDelivery(CampaignDelivery $delivery, array $data): CampaignDelivery
     {
+        $previousStatus = $delivery->status;
+
         $delivery->fill([
             'customer_email' => $data['customer_email'] ?? $delivery->customer_email,
             'customer_name' => $data['customer_name'] ?? null,
@@ -64,7 +71,25 @@ class CampaignDeliveryAdminService
             $delivery->status = $data['status'];
         }
 
+        if ($delivery->status !== CampaignDelivery::STATUS_FAILED) {
+            $delivery->error_message = null;
+        }
+
         $delivery->save();
+
+        if ($previousStatus === CampaignDelivery::STATUS_FAILED && $delivery->status === CampaignDelivery::STATUS_PENDING) {
+            $delivery->loadMissing('campaignProduct.response');
+
+            if ($delivery->campaignProduct?->response) {
+                $send = SendCampaignEmailJob::dispatch($delivery->id)
+                    ->onConnection(config('campaign_email.queue.connection'))
+                    ->onQueue(config('campaign_email.queue.mail'));
+
+                if ($delivery->scheduled_at && $delivery->scheduled_at->isFuture()) {
+                    $send->delay($delivery->scheduled_at);
+                }
+            }
+        }
 
         return $delivery;
     }

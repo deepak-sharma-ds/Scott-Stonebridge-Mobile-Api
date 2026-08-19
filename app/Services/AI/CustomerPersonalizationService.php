@@ -25,11 +25,23 @@ use Throwable;
  */
 class CustomerPersonalizationService
 {
-    private const CACHE_TTL = 1800;
+    private ?ChatbotConfigRepository $chatbotConfig;
 
-    private const RECENT_LIMIT = 3;
+    public function __construct(
+        private readonly CustomerAccountGraphClient $graph,
+        ?ChatbotConfigRepository $chatbotConfig = null,
+    ) {
+        $this->chatbotConfig = $chatbotConfig;
+    }
 
-    public function __construct(private readonly CustomerAccountGraphClient $graph) {}
+    /**
+     * Lazily resolved so the existing 1-arg test constructions keep working
+     * without modification — same pattern as ToolExecutor.
+     */
+    private function chatbotConfig(): ChatbotConfigRepository
+    {
+        return $this->chatbotConfig ??= app(ChatbotConfigRepository::class);
+    }
 
     /**
      * @return array{order_count:int, recent_orders:list<array{number:string, total:?string, currency:?string, date:?string}>}|null
@@ -52,10 +64,10 @@ class CustomerPersonalizationService
 
         $cacheKey = sprintf('ai:session:%s:cust_summary', $sessionId);
 
-        return Cache::remember($cacheKey, self::CACHE_TTL, function () use ($shopDomain, $token): ?array {
+        return Cache::remember($cacheKey, $this->chatbotConfig()->personalizationCacheTtlSeconds(), function () use ($shopDomain, $token): ?array {
             try {
                 $data = $this->graph->query($shopDomain, $token, $this->recentOrdersQuery(), [
-                    'first' => self::RECENT_LIMIT,
+                    'first' => $this->chatbotConfig()->personalizationRecentOrdersLimit(),
                 ]);
 
                 return $this->mapSummary($data);

@@ -50,6 +50,12 @@ class IntentDetectionService extends BaseService implements IntentDetectionServi
         ],
     ];
 
+    public function __construct(
+        private readonly ChatbotConfigRepository $chatbotConfig,
+    ) {
+        parent::__construct();
+    }
+
     public function detect(string $message, ChatContextDTO $context): IntentDTO
     {
         $normalized = mb_strtolower(trim($message));
@@ -102,7 +108,7 @@ class IntentDetectionService extends BaseService implements IntentDetectionServi
         ) {
             return new IntentDTO(
                 name: IntentDTO::INTENT_CROSS_SELL_OPPORTUNITY,
-                confidence: 0.7,
+                confidence: $this->chatbotConfig->intentCrossSellPriorConfidence(),
                 keywords: $detected->keywords,
                 detectedBy: $detected->detectedBy,
             );
@@ -158,7 +164,7 @@ class IntentDetectionService extends BaseService implements IntentDetectionServi
         if ($bestIntent !== null) {
             return new IntentDTO(
                 name: $bestIntent,
-                confidence: 0.85,
+                confidence: $this->chatbotConfig->intentFastpathConfidence(),
                 keywords: [$bestKeyword],
                 detectedBy: 'regex',
             );
@@ -166,7 +172,9 @@ class IntentDetectionService extends BaseService implements IntentDetectionServi
 
         return new IntentDTO(
             name: $defaultIntent,
-            confidence: $defaultIntent === IntentDTO::INTENT_UNKNOWN ? 0.3 : 0.55,
+            confidence: $defaultIntent === IntentDTO::INTENT_UNKNOWN
+                ? $this->chatbotConfig->intentUnknownDefaultConfidence()
+                : $this->chatbotConfig->intentPageTypeDefaultConfidence(),
             keywords: [],
             detectedBy: 'regex',
         );
@@ -203,7 +211,9 @@ class IntentDetectionService extends BaseService implements IntentDetectionServi
             $raw = $response->choices[0]->message->content ?? '{}';
             $decoded = json_decode((string) $raw, true);
             $intent = is_array($decoded) ? (string) ($decoded['intent'] ?? IntentDTO::INTENT_UNKNOWN) : IntentDTO::INTENT_UNKNOWN;
-            $confidence = is_array($decoded) ? (float) ($decoded['confidence'] ?? 0.6) : 0.5;
+            $confidence = is_array($decoded)
+                ? (float) ($decoded['confidence'] ?? $this->chatbotConfig->intentMalformedFallbackConfidence())
+                : $this->chatbotConfig->intentErrorFallbackMinConfidence();
 
             if (! in_array($intent, $supported, true)) {
                 $intent = IntentDTO::INTENT_UNKNOWN;
@@ -222,7 +232,7 @@ class IntentDetectionService extends BaseService implements IntentDetectionServi
 
             return new IntentDTO(
                 name: $hint->name,
-                confidence: max(0.5, $hint->confidence),
+                confidence: max($this->chatbotConfig->intentErrorFallbackMinConfidence(), $hint->confidence),
                 keywords: $hint->keywords,
                 detectedBy: 'fallback',
             );

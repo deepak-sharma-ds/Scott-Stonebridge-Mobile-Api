@@ -44,6 +44,7 @@ use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\Models\Configuration;
 use App\Services\AI\AIResponseService;
 use App\Services\AI\AnalyticsService;
+use App\Services\AI\ChatbotConfigRepository;
 use App\Services\AI\ChatbotService;
 use App\Services\AI\ConversationService;
 use App\Services\AI\EscalationService;
@@ -326,6 +327,12 @@ class AppServiceProvider extends ServiceProvider
     {
         $perSession = (int) config('chatbot.rate_limits.per_session_per_minute', 20);
         $perIp = (int) config('chatbot.rate_limits.per_ip_per_minute', 60);
+        // Chatbot-specific limits are admin-tunable Chatbot.RateLimit.* rows
+        // (Configuration table), read through ChatbotConfigRepository so
+        // this closure is resolved lazily, once per request, at check time —
+        // see ADR 0006. `chatbot.rate_limits.*` above stays a plain config
+        // value; it predates this migration and was out of scope for it.
+        $chatbotConfig = app(ChatbotConfigRepository::class);
 
         RateLimiter::for('ai-chat-message', function (Request $request) use ($perSession, $perIp) {
             $sessionKey = (string) ($request->input('session_id') ?? $request->route('session') ?? '');
@@ -336,11 +343,11 @@ class AppServiceProvider extends ServiceProvider
             ];
         });
 
-        RateLimiter::for('ai-chat-stream', function (Request $request) use ($perIp) {
+        RateLimiter::for('ai-chat-stream', function (Request $request) use ($perIp, $chatbotConfig) {
             $session = (string) ($request->route('session') ?? $request->input('session_id') ?? '');
 
             return [
-                Limit::perMinute(30)->by($session !== '' ? 'stream:'.$session : 'stream-ip:'.$request->ip()),
+                Limit::perMinute($chatbotConfig->rateLimitStreamPerMinute())->by($session !== '' ? 'stream:'.$session : 'stream-ip:'.$request->ip()),
                 Limit::perMinute($perIp)->by('ip:'.$request->ip()),
             ];
         });
@@ -352,50 +359,50 @@ class AppServiceProvider extends ServiceProvider
 
         // Proactive trigger GET — high-frequency polling from page visits.
         RateLimiter::for('ai-triggers', fn (Request $request) => [
-            Limit::perMinute(30)->by('triggers-ip:'.$request->ip()),
+            Limit::perMinute($chatbotConfig->rateLimitTriggersPerMinute())->by('triggers-ip:'.$request->ip()),
         ]);
 
         // Trigger open/dismiss event — keyed by session so abusers can't drown
         // out a noisy IP shared across legitimate sessions.
-        RateLimiter::for('ai-triggers-event', function (Request $request) {
+        RateLimiter::for('ai-triggers-event', function (Request $request) use ($chatbotConfig) {
             $session = (string) ($request->input('session_id') ?? '');
 
             return [
-                Limit::perMinute(60)->by($session !== '' ? 'trig-evt:'.$session : 'trig-evt-ip:'.$request->ip()),
+                Limit::perMinute($chatbotConfig->rateLimitTriggersEventPerMinute())->by($session !== '' ? 'trig-evt:'.$session : 'trig-evt-ip:'.$request->ip()),
             ];
         });
 
         // Lead capture — intentionally strict to deter form abuse.
-        RateLimiter::for('ai-lead-capture', function (Request $request) {
+        RateLimiter::for('ai-lead-capture', function (Request $request) use ($chatbotConfig) {
             $session = (string) ($request->input('session_id') ?? '');
 
             return [
-                Limit::perMinute(5)->by($session !== '' ? 'lead:'.$session : 'lead-ip:'.$request->ip()),
+                Limit::perMinute($chatbotConfig->rateLimitLeadCapturePerMinute())->by($session !== '' ? 'lead:'.$session : 'lead-ip:'.$request->ip()),
             ];
         });
 
         // Upsell suggestions — same order-of-magnitude as message limiter.
-        RateLimiter::for('ai-upsell', function (Request $request) {
+        RateLimiter::for('ai-upsell', function (Request $request) use ($chatbotConfig) {
             $session = (string) ($request->input('session_id') ?? '');
 
             return [
-                Limit::perMinute(20)->by($session !== '' ? 'upsell:'.$session : 'upsell-ip:'.$request->ip()),
+                Limit::perMinute($chatbotConfig->rateLimitUpsellPerMinute())->by($session !== '' ? 'upsell:'.$session : 'upsell-ip:'.$request->ip()),
             ];
         });
 
         // Conversion event ingestion — high volume because every funnel step
         // emits one (chat opened, message sent, click, etc.).
-        RateLimiter::for('ai-analytics-event', function (Request $request) {
+        RateLimiter::for('ai-analytics-event', function (Request $request) use ($chatbotConfig) {
             $session = (string) ($request->input('session_id') ?? '');
 
             return [
-                Limit::perMinute(120)->by($session !== '' ? 'conv:'.$session : 'conv-ip:'.$request->ip()),
+                Limit::perMinute($chatbotConfig->rateLimitAnalyticsEventPerMinute())->by($session !== '' ? 'conv:'.$session : 'conv-ip:'.$request->ip()),
             ];
         });
 
         // Knowledge FAQ upsert — internal/admin endpoint, IP-bound.
         RateLimiter::for('ai-knowledge', fn (Request $request) => [
-            Limit::perMinute(30)->by('know-ip:'.$request->ip()),
+            Limit::perMinute($chatbotConfig->rateLimitKnowledgePerMinute())->by('know-ip:'.$request->ip()),
         ]);
 
         // -----------------------------------------------------------------
@@ -404,16 +411,16 @@ class AppServiceProvider extends ServiceProvider
 
         // OAuth start — strict IP cap to deter authorization-URL spamming.
         RateLimiter::for('ai-oauth-start', fn (Request $request) => [
-            Limit::perMinute(10)->by('oauth-ip:'.$request->ip()),
+            Limit::perMinute($chatbotConfig->rateLimitOauthStartPerMinute())->by('oauth-ip:'.$request->ip()),
         ]);
 
         // MCP tool calls (used by the streaming orchestrator for in-app
         // bucketing — falls back to IP when session is absent).
-        RateLimiter::for('ai-mcp', function (Request $request) {
+        RateLimiter::for('ai-mcp', function (Request $request) use ($chatbotConfig) {
             $session = (string) ($request->input('session_id') ?? '');
 
             return [
-                Limit::perMinute(60)->by($session !== '' ? 'mcp:'.$session : 'mcp-ip:'.$request->ip()),
+                Limit::perMinute($chatbotConfig->rateLimitMcpPerMinute())->by($session !== '' ? 'mcp:'.$session : 'mcp-ip:'.$request->ip()),
             ];
         });
     }

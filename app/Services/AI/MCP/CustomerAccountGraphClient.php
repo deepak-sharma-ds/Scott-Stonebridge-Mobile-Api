@@ -6,6 +6,7 @@ namespace App\Services\AI\MCP;
 
 use App\Exceptions\AI\AuthRequiredException;
 use App\Exceptions\AI\McpToolException;
+use App\Services\AI\ChatbotConfigRepository;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -25,7 +26,9 @@ use Illuminate\Support\Facades\Log;
  */
 class CustomerAccountGraphClient
 {
-    private const DISCOVERY_CACHE_TTL = 3600;
+    public function __construct(
+        private readonly ChatbotConfigRepository $chatbotConfig,
+    ) {}
 
     /**
      * Run a GraphQL query against the discovered Customer Account API endpoint.
@@ -124,7 +127,7 @@ class CustomerAccountGraphClient
 
         $cacheKey = "ai:customer_account:graphql_endpoint:{$shopDomain}";
 
-        return Cache::remember($cacheKey, self::DISCOVERY_CACHE_TTL, function () use ($shopDomain): string {
+        return Cache::remember($cacheKey, $this->chatbotConfig->mcpDiscoveryCacheTtlSeconds(), function () use ($shopDomain): string {
             $discoveryPath = (string) config('chatbot.mcp.customer_discovery', '/.well-known/customer-account-api');
             $url = "https://{$shopDomain}{$discoveryPath}";
 

@@ -55,6 +55,7 @@ class StreamingService extends BaseService implements StreamingServiceInterface
         private readonly ToolDefinitions $toolDefinitions,
         private readonly ToolExecutor $toolExecutor,
         private readonly CustomerPersonalizationService $personalization,
+        private readonly ChatbotConfigRepository $chatbotConfig,
     ) {
         parent::__construct();
     }
@@ -385,7 +386,7 @@ class StreamingService extends BaseService implements StreamingServiceInterface
                     'max_attempts' => $maxAttempts,
                     'error' => $e->getMessage(),
                 ], 'ai');
-                usleep(200_000 * $attempt);
+                usleep($this->chatbotConfig->streamingRetryBackoffBaseMs() * 1000 * $attempt);
             }
         }
     }

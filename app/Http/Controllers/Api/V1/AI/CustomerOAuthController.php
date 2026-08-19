@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1\AI;
 
 use App\Models\AiCustomerSession;
+use App\Services\AI\ChatbotConfigRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -26,7 +27,9 @@ class CustomerOAuthController
 {
     private const STATE_PREFIX = 'ai:oauth:state:';
 
-    private const DISCOVERY_CACHE_TTL = 3600;
+    public function __construct(
+        private readonly ChatbotConfigRepository $chatbotConfig,
+    ) {}
 
     public function start(Request $request): RedirectResponse
     {
@@ -258,7 +261,7 @@ class CustomerOAuthController
     {
         $cacheKey = "ai:oauth:oidc:{$shopDomain}";
 
-        return Cache::remember($cacheKey, self::DISCOVERY_CACHE_TTL, function () use ($shopDomain): array {
+        return Cache::remember($cacheKey, $this->chatbotConfig->mcpDiscoveryCacheTtlSeconds(), function () use ($shopDomain): array {
             $url = "https://{$shopDomain}/.well-known/openid-configuration";
             $response = Http::timeout(10)->acceptJson()->get($url);
             abort_unless($response->successful(), 502, 'OIDC discovery failed.');

@@ -94,6 +94,8 @@ class CampaignDeliveryControllerTest extends TestCase
 
     public function test_admin_can_repair_attribution_failure_by_reassigning_campaign_product(): void
     {
+        Queue::fake();
+
         $campaign = MarketingCampaign::create(['campaign_key' => 'spring', 'name' => 'Spring', 'status' => MarketingCampaign::STATUS_ACTIVE]);
         $campaignProduct = $this->campaignProductWithResponse($campaign);
         $delivery = $this->delivery([
@@ -113,6 +115,30 @@ class CampaignDeliveryControllerTest extends TestCase
         $response->assertRedirect(route('admin.campaign_deliveries.show', $delivery));
         $this->assertSame($campaignProduct->id, $delivery->fresh()->campaign_product_id);
         $this->assertSame(CampaignDelivery::STATUS_PENDING, $delivery->fresh()->status);
+        $this->assertNull($delivery->fresh()->error_message);
+
+        Queue::assertPushed(SendCampaignEmailJob::class, fn ($job) => $job->deliveryId === $delivery->id);
+    }
+
+    public function test_updating_a_non_failed_delivery_does_not_dispatch_a_duplicate_send(): void
+    {
+        Queue::fake();
+
+        $campaign = MarketingCampaign::create(['campaign_key' => 'spring', 'name' => 'Spring', 'status' => MarketingCampaign::STATUS_ACTIVE]);
+        $campaignProduct = $this->campaignProductWithResponse($campaign);
+        $delivery = $this->delivery(['campaign_product_id' => $campaignProduct->id, 'status' => CampaignDelivery::STATUS_PENDING]);
+
+        $this->actingAs(User::factory()->create())
+            ->put(route('admin.campaign_deliveries.update', $delivery), [
+                'customer_email' => $delivery->customer_email,
+                'customer_name' => 'Updated Name',
+                'campaign_product_id' => $campaignProduct->id,
+                'status' => CampaignDelivery::STATUS_PENDING,
+            ]);
+
+        $this->assertSame('Updated Name', $delivery->fresh()->customer_name);
+
+        Queue::assertNotPushed(SendCampaignEmailJob::class);
     }
 
     public function test_send_forces_status_to_pending_and_dispatches_the_job(): void

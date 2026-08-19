@@ -7,6 +7,7 @@ namespace App\Services\AI\MCP;
 use App\Exceptions\AI\AIServiceUnavailableException;
 use App\Exceptions\AI\AuthRequiredException;
 use App\Exceptions\AI\McpToolException;
+use App\Services\AI\ChatbotConfigRepository;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Factory as HttpFactory;
 use Illuminate\Http\Client\RequestException;
@@ -16,9 +17,23 @@ use Throwable;
 
 class McpClient
 {
+    private ?ChatbotConfigRepository $chatbotConfig;
+
     public function __construct(
         private readonly HttpFactory $http,
-    ) {}
+        ?ChatbotConfigRepository $chatbotConfig = null,
+    ) {
+        $this->chatbotConfig = $chatbotConfig;
+    }
+
+    /**
+     * Lazily resolve so existing 1-arg constructions (tests, older bindings)
+     * keep working without modification — same pattern as ToolExecutor.
+     */
+    private function chatbotConfig(): ChatbotConfigRepository
+    {
+        return $this->chatbotConfig ??= app(ChatbotConfigRepository::class);
+    }
 
     /**
      * Call a single MCP tool over JSON-RPC 2.0.
@@ -63,7 +78,7 @@ class McpClient
         $request = $this->http
             ->withHeaders($headers)
             ->timeout((int) max(1, ceil($timeoutMs / 1000)))
-            ->retry(2, 200, function (Throwable $exception) use ($retryOn) {
+            ->retry($this->chatbotConfig()->mcpRetryCount(), $this->chatbotConfig()->mcpRetryDelayMs(), function (Throwable $exception) use ($retryOn) {
                 if ($exception instanceof ConnectionException) {
                     return true;
                 }

@@ -23,6 +23,7 @@ class ProductRecommendationService extends BaseService implements ProductRecomme
 {
     public function __construct(
         private readonly StorefrontApiClientInterface $storefront,
+        private readonly ChatbotConfigRepository $chatbotConfig,
     ) {
         parent::__construct();
     }
@@ -54,13 +55,13 @@ class ProductRecommendationService extends BaseService implements ProductRecomme
         $cacheKey = sprintf('ai:rec:%s:%s:%s:%d', $shop, $sortKey, md5(mb_strtolower($trimmedQuery)), $limit);
 
         try {
-            return Cache::remember($cacheKey, 300, function () use ($trimmedQuery, $limit, $shop, $context, $sortKey, $reverse): array {
+            return Cache::remember($cacheKey, $this->chatbotConfig->recommendationCacheTtlSeconds(), function () use ($trimmedQuery, $limit, $shop, $context, $sortKey, $reverse): array {
                 $response = $this->storefront->query('storefront/products/get_all_products', [
                     'limit' => $limit,
                     'sortKey' => $sortKey,
                     'reverse' => $reverse,
                     'query' => $trimmedQuery,
-                    'country' => $this->countryFromCurrency($context->currency),
+                    'country' => $this->chatbotConfig->countryFromCurrency($context->currency),
                 ]);
 
                 $edges = $response['data']['products']['edges'] ?? [];
@@ -160,18 +161,6 @@ class ProductRecommendationService extends BaseService implements ProductRecomme
             $kept = preg_split('/\s+/u', mb_strtolower($context->product->title)) ?: [];
         }
 
-        return implode(' ', array_slice($kept, 0, 6));
-    }
-
-    private function countryFromCurrency(?string $currency): string
-    {
-        return match (strtoupper((string) $currency)) {
-            'USD' => 'US',
-            'EUR' => 'DE',
-            'CAD' => 'CA',
-            'AUD' => 'AU',
-            'INR' => 'IN',
-            default => 'GB',
-        };
+        return implode(' ', array_slice($kept, 0, $this->chatbotConfig->recommendationMaxKeywords()));
     }
 }

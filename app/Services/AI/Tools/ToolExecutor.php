@@ -13,6 +13,7 @@ use App\Exceptions\AI\AIServiceUnavailableException;
 use App\Exceptions\AI\AuthRequiredException;
 use App\Exceptions\AI\McpToolException;
 use App\Models\AiCustomerSession;
+use App\Services\AI\ChatbotConfigRepository;
 use App\Services\AI\ChatSessionContext;
 use App\Services\AI\MCP\CustomerAccountGraphClient;
 use App\Services\AI\MCP\CustomerMcpClient;
@@ -38,10 +39,6 @@ class ToolExecutor
 {
     private const RATE_LIMIT_KEY = 'ai:rate:%s:mcp';
 
-    private const RATE_LIMIT_TTL = 60;
-
-    private const RATE_LIMIT_MAX = 60;
-
     /**
      * Cache key for the per-session Shopify Storefront Cart GID. Shopify
      * carts expire roughly 10 days after last touch, so we keep ours 7 days
@@ -50,11 +47,11 @@ class ToolExecutor
      */
     private const SESSION_CART_KEY = 'ai:session:%s:cart_id';
 
-    private const SESSION_CART_TTL = 604800;
-
     private ?StorefrontApiClientInterface $storefrontApi;
 
     private ?CustomerAccountGraphClient $customerGraph;
+
+    private ?ChatbotConfigRepository $chatbotConfig;
 
     public function __construct(
         private readonly StorefrontMcpClient $storefront,
@@ -63,9 +60,20 @@ class ToolExecutor
         private readonly UpsellServiceInterface $upsell,
         ?StorefrontApiClientInterface $storefrontApi = null,
         ?CustomerAccountGraphClient $customerGraph = null,
+        ?ChatbotConfigRepository $chatbotConfig = null,
     ) {
         $this->storefrontApi = $storefrontApi;
         $this->customerGraph = $customerGraph;
+        $this->chatbotConfig = $chatbotConfig;
+    }
+
+    /**
+     * Lazily resolved so older 4/5/6-arg constructions (tests, existing
+     * container bindings) keep working without modification.
+     */
+    private function chatbotConfig(): ChatbotConfigRepository
+    {
+        return $this->chatbotConfig ??= app(ChatbotConfigRepository::class);
     }
 
     /**
@@ -1184,7 +1192,7 @@ class ToolExecutor
             return;
         }
 
-        Cache::put(sprintf(self::SESSION_CART_KEY, $sessionId), $cartId, self::SESSION_CART_TTL);
+        Cache::put(sprintf(self::SESSION_CART_KEY, $sessionId), $cartId, $this->chatbotConfig()->toolExecutorSessionCartTtlSeconds());
     }
 
     private function recallSessionCartId(string $sessionId): ?string
@@ -1792,10 +1800,10 @@ class ToolExecutor
         $key = sprintf(self::RATE_LIMIT_KEY, $sessionId);
         $count = (int) Cache::increment($key);
         if ($count === 1) {
-            Cache::put($key, 1, self::RATE_LIMIT_TTL);
+            Cache::put($key, 1, $this->chatbotConfig()->toolExecutorRateLimitTtlSeconds());
         }
 
-        return $count <= self::RATE_LIMIT_MAX;
+        return $count <= $this->chatbotConfig()->toolExecutorRateLimitMax();
     }
 
     /**
