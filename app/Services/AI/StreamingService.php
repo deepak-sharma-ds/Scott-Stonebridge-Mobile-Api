@@ -130,6 +130,13 @@ class StreamingService extends BaseService implements StreamingServiceInterface
             sessionId: $request->sessionId,
             shopDomain: (string) ($request->context->shopDomain ?? $conversation->shop_domain),
             cartId: $request->context->cart?->id,
+            // Bridges an already-logged-in storefront customer straight
+            // through to the tool layer, skipping the Customer MCP OAuth
+            // popup for this turn — see ADR 0008. The storefront must
+            // actually send the shopper's Shopify Customer Account access
+            // token as `Authorization: Bearer <token>`; until the theme
+            // does so, this stays null and behaviour is unchanged.
+            customerAccessToken: $request->accessToken === '' ? null : $request->accessToken,
             locale: $request->context->locale ?? 'en',
             pageType: $request->context->pageType,
         );

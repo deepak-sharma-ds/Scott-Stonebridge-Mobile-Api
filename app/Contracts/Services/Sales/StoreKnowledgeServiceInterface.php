@@ -39,6 +39,18 @@ interface StoreKnowledgeServiceInterface
     public function getKnowledgeForPrompt(string $shopDomain, array $intents, ?string $userQuery = null): string;
 
     /**
+     * Whether semantic (embedding-based) search degraded to keyword-only
+     * during the most recent getKnowledgeForPrompt()/searchForTool() call on
+     * this instance — i.e. the query embedding call failed even after a
+     * retry. Always false when semantic search wasn't attempted (no query,
+     * feature disabled, or the block-level cache already had this exact
+     * query's result and never needed to call OpenAI). Callers use this to
+     * decide whether the model should be told results may be incomplete,
+     * rather than asserting no information exists.
+     */
+    public function wasLastRetrievalDegraded(): bool;
+
+    /**
      * Return ranked knowledge rows for the LLM-callable
      * `search_knowledge_base` tool. Same hybrid ranking pipeline as
      * `getKnowledgeForPrompt` but returns structured rows (not the

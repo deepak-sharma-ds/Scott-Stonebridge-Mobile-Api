@@ -45,6 +45,13 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
 {
     private const CHARS_PER_TOKEN = 4;
 
+    /**
+     * Set by embedQuery() when the query-embedding call still fails after
+     * its retry. Reset at the start of every getKnowledgeForPrompt() /
+     * searchForTool() call so it always reflects only the most recent one.
+     */
+    private bool $lastRetrievalDegraded = false;
+
     public function __construct(
         private readonly AdminApiClientInterface $admin,
         // Nullable so legacy test factories that hand-construct the
@@ -148,6 +155,8 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
 
     public function getKnowledgeForPrompt(string $shopDomain, array $intents, ?string $userQuery = null): string
     {
+        $this->lastRetrievalDegraded = false;
+
         if ($shopDomain === '' || $intents === []) {
             return '';
         }
@@ -202,6 +211,8 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
 
     public function searchForTool(string $shopDomain, string $query, ?array $contentTypes = null, int $limit = 5): array
     {
+        $this->lastRetrievalDegraded = false;
+
         $shopDomain = trim($shopDomain);
         $query = trim($query);
         if ($shopDomain === '' || $query === '') {
@@ -218,6 +229,11 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
         $limit = max(1, min($limit, 8));
 
         return $this->rankedRows($shopDomain, $types, $query, $limit);
+    }
+
+    public function wasLastRetrievalDegraded(): bool
+    {
+        return $this->lastRetrievalDegraded;
     }
 
     public function invalidateCache(string $shopDomain): void
@@ -471,32 +487,62 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
      *
      * @return list<float>|null
      */
+    /**
+     * Resolves the query embedding, retrying once after a short delay on
+     * failure — most OpenAI embedding failures in the chat request path are
+     * transient (rate limit, brief hiccup) and a single retry recovers them
+     * outright. Only sets $lastRetrievalDegraded when every attempt fails,
+     * so the caller can tell the model results may be incomplete rather
+     * than asserting no information exists. The null result (degraded or
+     * not) is cached same as a success so a genuinely down embeddings API
+     * isn't hammered for the same query within the TTL.
+     */
     private function embedQuery(string $query): ?array
     {
         $model = (string) config('sales.knowledge.embedding.model', 'text-embedding-3-small');
         $ttl = (int) config('sales.knowledge.embedding.query_cache_ttl', 3600);
         $cacheKey = sprintf('ai:knowledge:qemb:%s:%s', $model, md5($query));
 
-        return Cache::remember($cacheKey, $ttl, function () use ($query, $model): ?array {
-            try {
-                $response = OpenAI::embeddings()->create([
-                    'model' => $model,
-                    'input' => $query,
-                ]);
-                $vector = $response->embeddings[0]->embedding ?? null;
-                if (! is_array($vector) || $vector === []) {
-                    return null;
+        $vector = Cache::remember($cacheKey, $ttl, function () use ($query, $model): ?array {
+            $attempts = max(1, (int) config('sales.knowledge.embedding.query_retry_attempts', 1)) + 1;
+            $delayMs = max(0, (int) config('sales.knowledge.embedding.query_retry_delay_ms', 150));
+
+            for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+                try {
+                    $response = OpenAI::embeddings()->create([
+                        'model' => $model,
+                        'input' => $query,
+                    ]);
+                    $vector = $response->embeddings[0]->embedding ?? null;
+                    if (! is_array($vector) || $vector === []) {
+                        throw new \RuntimeException('Empty embedding vector returned.');
+                    }
+
+                    return array_map('floatval', $vector);
+                } catch (Throwable $e) {
+                    $isLastAttempt = $attempt >= $attempts;
+                    Log::channel('ai')->warning('knowledge: query embedding failed', [
+                        'attempt' => $attempt,
+                        'max_attempts' => $attempts,
+                        'error' => $e->getMessage(),
+                    ]);
+
+                    if ($isLastAttempt) {
+                        return null;
+                    }
+
+                    usleep($delayMs * 1000);
                 }
-
-                return array_map('floatval', $vector);
-            } catch (Throwable $e) {
-                Log::channel('ai')->warning('knowledge: query embedding failed', [
-                    'error' => $e->getMessage(),
-                ]);
-
-                return null;
             }
+
+            return null;
         });
+
+        if ($vector === null) {
+            $this->lastRetrievalDegraded = true;
+        }
+
+        return $vector;
     }
 
     /**

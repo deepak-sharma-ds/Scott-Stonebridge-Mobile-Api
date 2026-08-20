@@ -195,6 +195,11 @@ return [
             'query_cache_ttl' => (int) env('SALES_KNOWLEDGE_EMBEDDING_TTL', 3600),
             'batch_size' => (int) env('SALES_KNOWLEDGE_EMBEDDING_BATCH', 50),
             'batch_sleep_ms' => (int) env('SALES_KNOWLEDGE_EMBEDDING_BATCH_SLEEP_MS', 0),
+            // A single query-embedding retry recovers most transient OpenAI
+            // hiccups outright; the delay is deliberately short since this
+            // runs synchronously in the chat request path.
+            'query_retry_attempts' => (int) env('SALES_KNOWLEDGE_EMBEDDING_QUERY_RETRY_ATTEMPTS', 1),
+            'query_retry_delay_ms' => (int) env('SALES_KNOWLEDGE_EMBEDDING_QUERY_RETRY_DELAY_MS', 150),
         ],
     ],
 

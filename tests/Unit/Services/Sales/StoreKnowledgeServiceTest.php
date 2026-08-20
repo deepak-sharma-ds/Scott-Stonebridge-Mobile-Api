@@ -10,6 +10,9 @@ use App\Services\Sales\StoreKnowledgeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
+use OpenAI\Laravel\Facades\OpenAI;
+use OpenAI\Responses\Embeddings\CreateResponse;
+use RuntimeException;
 use Tests\Mocks\MockShopifyClient;
 use Tests\TestCase;
 
@@ -156,6 +159,86 @@ class StoreKnowledgeServiceTest extends TestCase
         $this->assertStringContainsString('Refunds', $block);
         $this->assertStringNotContainsString('About', $block);
         $this->assertStringNotContainsString('Other shop policy', $block);
+    }
+
+    public function test_embed_query_retries_once_then_succeeds_without_degrading(): void
+    {
+        config([
+            'sales.knowledge.retrieval.enable_semantic' => true,
+            'sales.knowledge.embedding.query_retry_attempts' => 1,
+            'sales.knowledge.embedding.query_retry_delay_ms' => 0,
+        ]);
+
+        StoreKnowledge::factory()->forShop('demo.myshopify.com')->create([
+            'title' => 'About Scott',
+            'summary' => 'Scott founded the shop.',
+            'embedding' => [1.0, 0.0],
+        ]);
+
+        // First attempt fails, retry succeeds.
+        OpenAI::fake([
+            new RuntimeException('transient failure'),
+            CreateResponse::fake(['data' => [['embedding' => [1.0, 0.0]]]]),
+        ]);
+
+        $block = $this->service->getKnowledgeForPrompt('demo.myshopify.com', ['product_support'], 'tell me about scott');
+
+        $this->assertStringContainsString('About Scott', $block);
+        $this->assertFalse($this->service->wasLastRetrievalDegraded());
+    }
+
+    public function test_embed_query_degrades_and_hedges_after_exhausting_retries(): void
+    {
+        config([
+            'sales.knowledge.retrieval.enable_semantic' => true,
+            'sales.knowledge.embedding.query_retry_attempts' => 1,
+            'sales.knowledge.embedding.query_retry_delay_ms' => 0,
+        ]);
+
+        StoreKnowledge::factory()->forShop('demo.myshopify.com')->create([
+            'title' => 'About Scott',
+            'summary' => 'Scott founded the shop.',
+            'embedding' => [1.0, 0.0],
+        ]);
+
+        // Both the initial attempt and the retry fail.
+        OpenAI::fake([
+            new RuntimeException('transient failure'),
+            new RuntimeException('still failing'),
+        ]);
+
+        $this->service->getKnowledgeForPrompt('demo.myshopify.com', ['product_support'], 'tell me about scott');
+
+        $this->assertTrue($this->service->wasLastRetrievalDegraded());
+    }
+
+    public function test_was_last_retrieval_degraded_resets_on_next_call(): void
+    {
+        config([
+            'sales.knowledge.retrieval.enable_semantic' => true,
+            'sales.knowledge.embedding.query_retry_attempts' => 1,
+            'sales.knowledge.embedding.query_retry_delay_ms' => 0,
+        ]);
+
+        StoreKnowledge::factory()->forShop('demo.myshopify.com')->create([
+            'title' => 'About Scott',
+            'summary' => 'Scott founded the shop.',
+            'embedding' => [1.0, 0.0],
+        ]);
+
+        OpenAI::fake([
+            new RuntimeException('fail 1'),
+            new RuntimeException('fail 2'),
+        ]);
+        $this->service->getKnowledgeForPrompt('demo.myshopify.com', ['product_support'], 'first query');
+        $this->assertTrue($this->service->wasLastRetrievalDegraded());
+
+        // A second, distinct call that never touches embeddings (no query)
+        // must not carry the previous call's degraded flag forward.
+        StoreKnowledge::factory()->forShop('demo.myshopify.com')->policy()->create();
+        config(['sales.knowledge.intent_content_map' => ['refund_policy' => ['policy']]]);
+        $this->service->getKnowledgeForPrompt('demo.myshopify.com', ['refund_policy']);
+        $this->assertFalse($this->service->wasLastRetrievalDegraded());
     }
 
     public function test_upsert_faq_creates_then_updates_same_handle(): void

@@ -226,6 +226,52 @@ class ChatStreamMcpTest extends TestCase
         $this->assertStringContainsString('"tracking_number":"1Z999"', $body);
     }
 
+    public function test_bearer_token_bridges_customer_auth_without_oauth_popup(): void
+    {
+        $convo = $this->makeConversation();
+
+        // No AiCustomerSession row exists for this session — the only
+        // signal that the shopper is already authenticated is the
+        // Authorization header, exactly as ADR 0008 describes the storefront
+        // theme would send once it sources a Customer Account token.
+        $this->assertSame(0, AiCustomerSession::query()->where('session_id', $convo->session_id)->count());
+
+        OpenAI::fake([
+            $this->streamedToolCall('call_g', 'get_order_status', '{"order_number":"1234"}'),
+            $this->streamedText('On the way.'),
+        ]);
+
+        Http::fake([
+            'https://'.self::SHOP.'/.well-known/customer-account-api' => Http::response([
+                'mcp_endpoint' => 'https://'.self::SHOP.'/account/customer/mcp',
+            ]),
+            'https://'.self::SHOP.'/account/customer/mcp' => Http::response($this->jsonRpcResult([
+                'order' => [
+                    'name' => '#1234',
+                    'fulfillment_status' => 'IN_TRANSIT',
+                    'financial_status' => 'PAID',
+                    'tracking' => ['number' => '1Z999', 'url' => 'https://ups/track', 'company' => 'UPS'],
+                ],
+            ])),
+        ]);
+
+        $body = $this->stream(
+            $convo->session_id,
+            'where is my order #1234?',
+            ['Authorization' => 'Bearer shpca_bridged_token'],
+        );
+
+        // Bridged straight through from the Authorization header via
+        // ChatSessionContext.customerAccessToken — no OAuth popup, and no
+        // AiCustomerSession row was ever needed (resolveCustomerToken()'s DB
+        // lookup is bypassed entirely since $ctx->customerAccessToken is
+        // already set).
+        $this->assertStringNotContainsString('"type":"auth_required"', $body);
+        $this->assertStringContainsString('"type":"order_tracking"', $body);
+        $this->assertStringContainsString('"tracking_number":"1Z999"', $body);
+        $this->assertSame(0, AiCustomerSession::query()->where('session_id', $convo->session_id)->count());
+    }
+
     public function test_checkout_intent_emits_checkout_link_chunk(): void
     {
         $convo = $this->makeConversation();
@@ -310,7 +356,7 @@ class ChatStreamMcpTest extends TestCase
         ]);
     }
 
-    private function stream(string $sessionId, string $message): string
+    private function stream(string $sessionId, string $message, array $headers = []): string
     {
         $response = $this->postJson("/api/v1/ai/chat/stream/{$sessionId}", [
             'message' => $message,
@@ -320,7 +366,7 @@ class ChatStreamMcpTest extends TestCase
                 'currency' => 'GBP',
                 'locale' => 'en',
             ],
-        ]);
+        ], $headers);
 
         $response->assertStatus(200);
 
