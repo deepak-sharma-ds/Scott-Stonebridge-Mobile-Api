@@ -244,8 +244,7 @@ class ChatStreamMcpTest extends TestCase
         $body = $this->stream($convo->session_id, 'where is my order #1234?');
 
         $this->assertStringContainsString('"type":"auth_required"', $body);
-        $this->assertStringContainsString('"reason":"customer_account"', $body);
-        $this->assertStringContainsString('oauth_start_url', $body);
+        $this->assertStringContainsString('https://scottstonebridge.com/account/login', $body);
     }
 
     public function test_authenticated_order_query_emits_order_tracking_chunk(): void

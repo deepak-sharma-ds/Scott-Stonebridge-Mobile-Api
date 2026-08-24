@@ -431,21 +431,11 @@ class ToolExecutorTest extends TestCase
         $output = $this->invoke('get_order_status', ['order_number' => '1234']);
 
         $this->assertStringContainsString('"type":"auth_required"', $output);
-        $this->assertStringContainsString('"reason":"customer_account"', $output);
+        $this->assertStringContainsString('https://scottstonebridge.com/account/login', $output);
     }
 
     public function test_get_order_status_with_auth_emits_order_tracking(): void
     {
-        $convo = AiConversation::factory()->create([
-            'session_id' => self::SESSION_ID,
-            'shop_domain' => self::SHOP,
-        ]);
-        AiCustomerSession::create([
-            'session_id' => $convo->session_id,
-            'customer_access_token' => 'shpca_active',
-            'expires_at' => now()->addHour(),
-        ]);
-
         $this->customer
             ->expects($this->once())
             ->method('callTool')
@@ -454,7 +444,14 @@ class ToolExecutorTest extends TestCase
                 'order' => ['name' => '#1234', 'fulfillment_status' => 'IN_TRANSIT', 'financial_status' => 'PAID'],
             ]);
 
-        $output = $this->invoke('get_order_status', ['order_number' => '1234']);
+        $ctx = new ChatSessionContext(
+            sessionId: self::SESSION_ID,
+            shopDomain: self::SHOP,
+            customerAccessToken: 'shpca_active',
+            isGuest: false,
+        );
+
+        $output = $this->invoke('get_order_status', ['order_number' => '1234'], $ctx);
 
         $this->assertStringContainsString('"type":"order_tracking"', $output);
         $this->assertStringContainsString('"status":"in_transit"', $output);
@@ -462,15 +459,6 @@ class ToolExecutorTest extends TestCase
 
     public function test_customer_mcp_401_falls_back_to_auth_required(): void
     {
-        $convo = AiConversation::factory()->create([
-            'session_id' => self::SESSION_ID, 'shop_domain' => self::SHOP,
-        ]);
-        AiCustomerSession::create([
-            'session_id' => $convo->session_id,
-            'customer_access_token' => 'expired',
-            'expires_at' => now()->addHour(),
-        ]);
-
         $this->customer
             ->method('callTool')
             ->willThrowException(new AuthRequiredException);
@@ -479,7 +467,14 @@ class ToolExecutorTest extends TestCase
         $graphMock->method('query')->willThrowException(new AuthRequiredException);
         $this->app->instance(CustomerAccountGraphClient::class, $graphMock);
 
-        $output = $this->invoke('get_most_recent_order_status', []);
+        $ctx = new ChatSessionContext(
+            sessionId: self::SESSION_ID,
+            shopDomain: self::SHOP,
+            customerAccessToken: 'expired',
+            isGuest: false,
+        );
+
+        $output = $this->invoke('get_most_recent_order_status', [], $ctx);
 
         $this->assertStringContainsString('"type":"auth_required"', $output);
     }
@@ -491,21 +486,11 @@ class ToolExecutorTest extends TestCase
         $output = $this->invoke('list_customer_orders', []);
 
         $this->assertStringContainsString('"type":"auth_required"', $output);
-        $this->assertStringContainsString('"reason":"customer_account"', $output);
+        $this->assertStringContainsString('https://scottstonebridge.com/account/login', $output);
     }
 
     public function test_list_customer_orders_with_auth_emits_order_list(): void
     {
-        $convo = AiConversation::factory()->create([
-            'session_id' => self::SESSION_ID,
-            'shop_domain' => self::SHOP,
-        ]);
-        AiCustomerSession::create([
-            'session_id' => $convo->session_id,
-            'customer_access_token' => 'shpca_active',
-            'expires_at' => now()->addHour(),
-        ]);
-
         $graph = $this->createMock(CustomerAccountGraphClient::class);
         $graph->expects($this->once())
             ->method('query')
@@ -543,9 +528,16 @@ class ToolExecutorTest extends TestCase
             $graph,
         );
 
+        $ctx = new ChatSessionContext(
+            sessionId: self::SESSION_ID,
+            shopDomain: self::SHOP,
+            customerAccessToken: 'shpca_active',
+            isGuest: false,
+        );
+
         ob_start();
         try {
-            $executor->execute('list_customer_orders', [], $this->ctx());
+            $executor->execute('list_customer_orders', [], $ctx);
         } finally {
             $output = (string) ob_get_clean();
         }
@@ -577,33 +569,31 @@ class ToolExecutorTest extends TestCase
         $adminMock = $this->createMock(AdminService::class);
         $adminMock->expects($this->once())
             ->method('request')
-            ->with($this->anything(), ['customerId' => 'gid://shopify/Customer/24567362388351', 'first' => 10])
+            ->with($this->anything(), ['query' => 'email:ajay.yadav@dotsquares.com', 'first' => 10])
             ->willReturn([
                 'data' => [
-                    'customer' => [
-                        'orders' => [
-                            'pageInfo' => ['hasNextPage' => false, 'endCursor' => null],
-                            'edges' => [
-                                ['node' => [
-                                    'id' => 'gid://shopify/Order/12345',
-                                    'name' => '#1042',
-                                    'processedAt' => '2026-08-20T10:00:00Z',
-                                    'displayFulfillmentStatus' => 'FULFILLED',
-                                    'displayFinancialStatus' => 'PAID',
-                                    'totalPriceSet' => [
-                                        'shopMoney' => ['amount' => '80.00', 'currencyCode' => 'GBP'],
-                                        'presentmentMoney' => ['amount' => '80.00', 'currencyCode' => 'GBP'],
+                    'orders' => [
+                        'pageInfo' => ['hasNextPage' => false, 'endCursor' => null],
+                        'edges' => [
+                            ['node' => [
+                                'id' => 'gid://shopify/Order/12345',
+                                'name' => '#1042',
+                                'processedAt' => '2026-08-20T10:00:00Z',
+                                'displayFulfillmentStatus' => 'FULFILLED',
+                                'displayFinancialStatus' => 'PAID',
+                                'totalPriceSet' => [
+                                    'shopMoney' => ['amount' => '80.00', 'currencyCode' => 'GBP'],
+                                    'presentmentMoney' => ['amount' => '80.00', 'currencyCode' => 'GBP'],
+                                ],
+                                'statusUrl' => 'https://scottstonebridge.com/account/orders/1042',
+                                'fulfillments' => [
+                                    [
+                                        'trackingInfo' => [['number' => 'TRK123', 'url' => 'https://track.com', 'company' => 'Royal Mail']],
+                                        'estimatedDeliveryAt' => '2026-08-25T00:00:00Z',
                                     ],
-                                    'statusUrl' => 'https://scottstonebridge.com/account/orders/1042',
-                                    'fulfillments' => [
-                                        [
-                                            'trackingInfo' => [['number' => 'TRK123', 'url' => 'https://track.com', 'company' => 'Royal Mail']],
-                                            'estimatedDeliveryAt' => '2026-08-25T00:00:00Z',
-                                        ],
-                                    ],
-                                    'shippingAddress' => ['city' => 'London'],
-                                ]],
-                            ],
+                                ],
+                                'shippingAddress' => ['city' => 'London'],
+                            ]],
                         ],
                     ],
                 ],
@@ -660,22 +650,20 @@ class ToolExecutorTest extends TestCase
             ->method('request')
             ->willReturn([
                 'data' => [
-                    'customer' => [
-                        'orders' => [
-                            'pageInfo' => ['hasNextPage' => false, 'endCursor' => null],
-                            'edges' => [
-                                ['node' => [
-                                    'id' => 'gid://shopify/Order/99999',
-                                    'name' => '#25601',
-                                    'processedAt' => '2026-08-12T10:00:00Z',
-                                    'displayFulfillmentStatus' => 'UNFULFILLED',
-                                    'displayFinancialStatus' => 'PAID',
-                                    'totalPriceSet' => [
-                                        'shopMoney' => ['amount' => '0.00', 'currencyCode' => 'GBP'],
-                                    ],
-                                    'statusUrl' => 'https://scottstonebridge.com/account/orders/25601',
-                                ]],
-                            ],
+                    'orders' => [
+                        'pageInfo' => ['hasNextPage' => false, 'endCursor' => null],
+                        'edges' => [
+                            ['node' => [
+                                'id' => 'gid://shopify/Order/99999',
+                                'name' => '#25601',
+                                'processedAt' => '2026-08-12T10:00:00Z',
+                                'displayFulfillmentStatus' => 'UNFULFILLED',
+                                'displayFinancialStatus' => 'PAID',
+                                'totalPriceSet' => [
+                                    'shopMoney' => ['amount' => '0.00', 'currencyCode' => 'GBP'],
+                                ],
+                                'statusUrl' => 'https://scottstonebridge.com/account/orders/25601',
+                            ]],
                         ],
                     ],
                 ],

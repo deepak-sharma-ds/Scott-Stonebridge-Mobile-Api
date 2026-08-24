@@ -134,6 +134,10 @@ final class CustomerGraphOrderMapper
             $total = [];
         }
 
+        $bareId = preg_replace('~^gid://shopify/Order/~', '', (string) ($node['legacyResourceId'] ?? $node['id'] ?? ''));
+        $orderUrl = self::stringOrNull($node['statusPageUrl'] ?? $node['statusUrl'] ?? null)
+            ?? ($bareId !== '' ? "https://scottstonebridge.com/account/orders/{$bareId}" : 'https://scottstonebridge.com/account');
+
         return new CustomerOrderSummaryDTO(
             orderNumber: ltrim($name, '#'),
             name: str_starts_with($name, '#') ? $name : '#'.$name,
@@ -141,7 +145,7 @@ final class CustomerGraphOrderMapper
             processedAt: self::stringOrNull($node['processedAt'] ?? null),
             totalAmount: self::stringOrNull($total['amount'] ?? null),
             currencyCode: self::stringOrNull($total['currencyCode'] ?? null),
-            orderUrl: self::stringOrNull($node['statusPageUrl'] ?? $node['statusUrl'] ?? null),
+            orderUrl: $orderUrl,
         );
     }
 

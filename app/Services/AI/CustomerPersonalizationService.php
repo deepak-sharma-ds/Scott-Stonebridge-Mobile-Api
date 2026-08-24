@@ -90,32 +90,8 @@ class CustomerPersonalizationService
                     $admin = app(AdminService::class);
                     $first = $this->chatbotConfig()->personalizationRecentOrdersLimit();
 
-                    if ($customer->customerId !== null) {
-                        $bareId = preg_replace('~^gid://shopify/Customer/~', '', $customer->customerId);
-                        $query = <<<'GRAPHQL'
-                        query PersonalizationCustomerOrders($customerId: ID!, $first: Int!) {
-                          customer(id: $customerId) {
-                            orders(first: $first, sortKey: PROCESSED_AT, reverse: true) {
-                              edges {
-                                node {
-                                  name
-                                  processedAt
-                                  totalPriceSet {
-                                    presentmentMoney { amount currencyCode }
-                                    shopMoney { amount currencyCode }
-                                  }
-                                }
-                              }
-                            }
-                          }
-                        }
-                        GRAPHQL;
-
-                        $resp = $admin->request($query, [
-                            'customerId' => "gid://shopify/Customer/{$bareId}",
-                            'first' => $first,
-                        ]);
-                    } else {
+                    $resp = null;
+                    if ($customer->email !== null && $customer->email !== '') {
                         $query = <<<'GRAPHQL'
                         query PersonalizationOrdersByEmail($query: String!, $first: Int!) {
                           orders(first: $first, query: $query, sortKey: PROCESSED_AT, reverse: true) {
@@ -139,7 +115,38 @@ class CustomerPersonalizationService
                         ]);
                     }
 
-                    $ordersData = $resp['data']['customer']['orders']['edges'] ?? $resp['data']['orders']['edges'] ?? [];
+                    $ordersData = $resp['data']['orders']['edges'] ?? [];
+
+                    if (empty($ordersData) && $customer->customerId !== null && $customer->customerId !== '') {
+                        $bareId = preg_replace('~^gid://shopify/Customer/~', '', (string) $customer->customerId);
+                        if (is_numeric($bareId)) {
+                            $query = <<<'GRAPHQL'
+                            query PersonalizationCustomerOrders($customerId: ID!, $first: Int!) {
+                              customer(id: $customerId) {
+                                orders(first: $first, sortKey: PROCESSED_AT, reverse: true) {
+                                  edges {
+                                    node {
+                                      name
+                                      processedAt
+                                      totalPriceSet {
+                                        presentmentMoney { amount currencyCode }
+                                        shopMoney { amount currencyCode }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                            GRAPHQL;
+
+                            $resp = $admin->request($query, [
+                                'customerId' => "gid://shopify/Customer/{$bareId}",
+                                'first' => $first,
+                            ]);
+                            $ordersData = $resp['data']['customer']['orders']['edges'] ?? [];
+                        }
+                    }
+
                     if (! is_array($ordersData) || $ordersData === []) {
                         return null;
                     }

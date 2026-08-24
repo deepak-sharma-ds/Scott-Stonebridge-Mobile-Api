@@ -22,6 +22,8 @@ use Illuminate\Support\Str;
  * `/start` in a popup, we redirect to Shopify's hosted authorization page,
  * Shopify redirects back to `/callback`, we exchange the auth code for an
  * access token and persist it bound to the chat session.
+ *
+ * @deprecated Deprecated in favor of Unified Storefront & Admin Bridge.
  */
 class CustomerOAuthController
 {

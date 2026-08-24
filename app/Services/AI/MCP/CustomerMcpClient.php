@@ -10,6 +10,10 @@ use App\Services\AI\ChatbotConfigRepository;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
+/**
+ * @deprecated Deprecated in favor of Unified Storefront & Admin Bridge.
+ * Preserved for backward compatibility and reference.
+ */
 class CustomerMcpClient
 {
     public function __construct(

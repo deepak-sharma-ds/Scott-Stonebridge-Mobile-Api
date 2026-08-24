@@ -168,7 +168,7 @@ final class ToolDefinitions
                 ],
             ),
             $this->fn(self::TOOL_GET_ORDER_STATUS,
-                'Use when the user asks about a SPECIFIC order by number ("where is order #1234?"). Requires the customer to be signed in; the system returns auth_required if not. Call this fresh every time the user asks — even if a previous turn returned auth_required, because the customer may have just signed in. Never answer an order question without calling this tool in the current turn.',
+                'Use when the user asks about a SPECIFIC order by number ("where is order #1234?"). Requires the customer to be signed in; if not signed in, returns auth_required directing them to https://scottstonebridge.com/account/login. Call this fresh every time the user asks. Never answer an order question without calling this tool in the current turn.',
                 [
                     'type' => 'object',
                     'properties' => [
@@ -179,7 +179,7 @@ final class ToolDefinitions
                 ],
             ),
             $this->fn(self::TOOL_GET_MOST_RECENT_ORDER_STATUS,
-                'Use when the user asks about their latest order without naming a number ("where is my order?", "did my order ship?"). Requires the customer to be signed in. Call this fresh every time the user asks — even if a previous turn returned auth_required, because the customer may have just signed in. Never answer an order question without calling this tool in the current turn.',
+                'Use when the user asks about their latest order without naming a number ("where is my order?", "did my order ship?"). Requires the customer to be signed in; if not signed in, returns auth_required directing them to https://scottstonebridge.com/account/login. Call this fresh every time the user asks. Never answer an order question without calling this tool in the current turn.',
                 [
                     'type' => 'object',
                     'properties' => new \stdClass,
@@ -187,7 +187,7 @@ final class ToolDefinitions
                 ],
             ),
             $this->fn(self::TOOL_LIST_CUSTOMER_ORDERS,
-                'Use when the user wants to see their order history or ALL their orders ("show me my orders", "my past orders", "order history", "list my orders"). Requires the customer to be signed in; the system returns auth_required if not. Returns a list of orders newest-first, each linking to its Shopify order-detail page. To load older orders when the user asks for more, pass the `cursor` value from the previous order_list result. Call this fresh every time the user asks — even if a previous turn returned auth_required, because the customer may have just signed in. Never answer an order question without calling this tool in the current turn.',
+                'Use when the user wants to see their order history or ALL their orders ("show me my orders", "my past orders", "order history", "list my orders"). Requires the customer to be signed in; if not signed in, returns auth_required directing them to https://scottstonebridge.com/account/login. Returns a list of orders newest-first, each linking to its Shopify order-detail page. To load older orders when the user asks for more, pass the `cursor` value from the previous order_list result. Call this fresh every time the user asks. Never answer an order question without calling this tool in the current turn.',
                 [
                     'type' => 'object',
                     'properties' => [

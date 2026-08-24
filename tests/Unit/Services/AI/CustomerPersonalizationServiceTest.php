@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace Tests\Unit\Services\AI;
 
+use App\DTOs\Chat\CustomerContextDTO;
 use App\Models\AiConversation;
 use App\Models\AiCustomerSession;
 use App\Services\AI\CustomerPersonalizationService;
 use App\Services\AI\MCP\CustomerAccountGraphClient;
+use App\Services\Shopify\AdminService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Mockery;
 use Tests\TestCase;
@@ -84,5 +86,38 @@ class CustomerPersonalizationServiceTest extends TestCase
         $service = new CustomerPersonalizationService($graph);
 
         $this->assertNull($service->summaryFor('missing-session', self::SHOP));
+    }
+
+    public function test_returns_summary_for_storefront_logged_in_customer(): void
+    {
+        $adminMock = $this->createMock(AdminService::class);
+        $adminMock->expects($this->once())
+            ->method('request')
+            ->willReturn([
+                'data' => [
+                    'orders' => [
+                        'edges' => [
+                            ['node' => ['name' => '#25601', 'processedAt' => '2026-08-12T10:00:00Z', 'totalPriceSet' => ['shopMoney' => ['amount' => '80.00', 'currencyCode' => 'GBP']]]],
+                        ],
+                    ],
+                ],
+            ]);
+        $this->app->instance(AdminService::class, $adminMock);
+
+        $customer = new CustomerContextDTO(
+            customerId: '24567362388351',
+            loggedIn: true,
+            email: 'ajay.yadav@dotsquares.com',
+            locale: 'en',
+        );
+
+        $graph = Mockery::mock(CustomerAccountGraphClient::class);
+        $service = new CustomerPersonalizationService($graph);
+        $summary = $service->summaryFor(self::SESSION, self::SHOP, false, $customer);
+
+        $this->assertIsArray($summary);
+        $this->assertSame(1, $summary['order_count']);
+        $this->assertSame('25601', $summary['recent_orders'][0]['number']);
+        $this->assertSame('80.00', $summary['recent_orders'][0]['total']);
     }
 }

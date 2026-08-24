@@ -289,17 +289,18 @@ class ToolExecutor
     }
 
     /**
+     * Unified Customer Order Handler:
+     * 1. If Storefront API customer access token is present (e.g. mobile app Bearer token), query Storefront GraphQL / OrderService.
+     * 2. If customer is authenticated on storefront (context.customer.loggedIn == true), query Shopify Admin GraphQL.
+     * 3. If guest / unauthenticated, emit login prompt directing to https://scottstonebridge.com/account/login.
+     *
      * @param  array<string, mixed>  $args
      */
     private function executeCustomerMcp(string $toolName, array $args, ChatSessionContext $ctx): ToolResult
     {
+        // 1. Mobile App / Storefront customer access token (Bearer token or session token)
         $token = $ctx->customerAccessToken ?? $this->resolveCustomerToken($ctx->sessionId, $ctx->shopDomain, $ctx->isGuest);
-
-        // 1. Active Customer Account OAuth token present (Customer Account API / MCP)
-        if ($token !== null) {
-            // Order history is list-shaped and has no Shopify MCP tool — query the
-            // Customer Account GraphQL API directly (same `customer-account-api:full`
-            // scope the single-order path already relies on).
+        if ($token !== null && $token !== '') {
             if ($toolName === ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS) {
                 return $this->executeCustomerOrderListViaGraph($args, $ctx, $token);
             }
@@ -307,17 +308,6 @@ class ToolExecutor
             try {
                 $result = $this->customer->callTool($toolName, $args, $ctx->shopDomain, $token);
             } catch (AuthRequiredException $e) {
-                // MCP rejected a valid token. Fall back to the Customer Account
-                // GraphQL API, which uses the SAME `customer-account-api:full`
-                // scope but the GraphQL surface (always enabled on stock Headless
-                // apps). Bypassing MCP keeps the order flow working even when
-                // Shopify hasn't provisioned MCP for this app.
-                Log::channel('ai')->info('tool.customer_mcp_rejected_falling_back_to_graphql', [
-                    'session_id' => $ctx->sessionId,
-                    'shop_domain' => $ctx->shopDomain,
-                    'tool' => $toolName,
-                ]);
-
                 return $this->executeCustomerOrderViaGraph($toolName, $args, $ctx, $token);
             }
 
@@ -339,11 +329,11 @@ class ToolExecutor
 
         // 2. Customer is already signed in on storefront (context.customer.loggedIn = true) —
         // fetch orders directly via Shopify Admin GraphQL API without forcing an OAuth popup!
-        if ($ctx->customer !== null && ! $ctx->isGuest && ($ctx->customer->customerId !== null || $ctx->customer->email !== null)) {
+        if ($ctx->customer !== null && ! $ctx->isGuest && ($ctx->customer->email !== null || $ctx->customer->customerId !== null)) {
             return $this->executeCustomerOrderViaAdmin($toolName, $args, $ctx);
         }
 
-        // 3. Guest visitor: Prompt OAuth sign in
+        // 3. Guest visitor: Direct to login page in same tab
         return $this->emitAuthRequired($ctx);
     }
 
@@ -647,10 +637,10 @@ class ToolExecutor
                 $orderId = (string) ($args['order_id'] ?? $args['order_number'] ?? $args['name'] ?? '');
                 $orderId = ltrim($orderId, '#');
                 $searchQuery = $orderId !== '' ? "name:#{$orderId}" : '';
-                if ($bareId !== null) {
-                    $searchQuery .= ($searchQuery !== '' ? ' AND ' : '')."customer_id:{$bareId}";
-                } elseif ($email !== null && $email !== '') {
+                if ($email !== null && $email !== '') {
                     $searchQuery .= ($searchQuery !== '' ? ' AND ' : '')."email:{$email}";
+                } elseif ($bareId !== null && $bareId !== '') {
+                    $searchQuery .= ($searchQuery !== '' ? ' AND ' : '')."customer_id:{$bareId}";
                 }
 
                 $data = $this->adminApi()->request($this->adminOrdersSearchQuery(), [
@@ -658,33 +648,47 @@ class ToolExecutor
                     'first' => 1,
                 ]);
             } elseif ($toolName === ToolDefinitions::TOOL_GET_MOST_RECENT_ORDER_STATUS) {
-                $searchQuery = $bareId !== null ? "customer_id:{$bareId}" : "email:{$email}";
+                $searchQuery = ($email !== null && $email !== '') ? "email:{$email}" : "customer_id:{$bareId}";
                 $data = $this->adminApi()->request($this->adminOrdersSearchQuery(), [
                     'query' => $searchQuery,
                     'first' => 1,
                 ]);
             } else {
                 // list_customer_orders
-                $query = $customerGid !== null ? $this->adminCustomerOrdersQuery() : $this->adminOrdersSearchQuery();
-                $vars = $customerGid !== null
-                    ? ['customerId' => $customerGid, 'first' => $limit]
-                    : ['query' => "email:{$email}", 'first' => $limit];
+                // Search orders by customer email (universal across all Shopify orders)
+                $searchQuery = ($email !== null && $email !== '') ? "email:{$email}" : "customer_id:{$bareId}";
+                $vars = [
+                    'query' => $searchQuery,
+                    'first' => $limit,
+                ];
 
                 if ($cursor !== null) {
                     $vars['after'] = $cursor;
                 }
 
-                $data = $this->adminApi()->request($query, $vars);
+                $data = $this->adminApi()->request($this->adminOrdersSearchQuery(), $vars);
 
-                // If cursor query returned errors or no customer/orders, retry once without cursor
-                if ($cursor !== null && (empty($data['data']['customer']['orders']) && empty($data['data']['orders']))) {
+                // If cursor query returned errors or no orders, retry once without cursor
+                if ($cursor !== null && empty($data['data']['orders']['edges'])) {
                     Log::channel('ai')->warning('tool.admin_order_cursor_failed_retrying_without_cursor', [
                         'session_id' => $ctx->sessionId,
                         'cursor' => $cursor,
                         'errors' => $data['errors'] ?? null,
                     ]);
                     unset($vars['after']);
-                    $data = $this->adminApi()->request($query, $vars);
+                    $data = $this->adminApi()->request($this->adminOrdersSearchQuery(), $vars);
+                }
+
+                // If email search returned 0 orders and bareId is available, try customer GID query as fallback
+                if (empty($data['data']['orders']['edges']) && $bareId !== null && is_numeric($bareId)) {
+                    $customerGid = "gid://shopify/Customer/{$bareId}";
+                    $custData = $this->adminApi()->request($this->adminCustomerOrdersQuery(), [
+                        'customerId' => $customerGid,
+                        'first' => $limit,
+                    ]);
+                    if (! empty($custData['data']['customer']['orders']['edges'])) {
+                        $data = $custData;
+                    }
                 }
             }
         } catch (Throwable $e) {
@@ -760,11 +764,11 @@ class ToolExecutor
                 cursor
                 node {
                   id
+                  legacyResourceId
                   name
                   processedAt
                   displayFulfillmentStatus
                   displayFinancialStatus
-                  statusUrl
                   totalPriceSet {
                     shopMoney { amount currencyCode }
                     presentmentMoney { amount currencyCode }
@@ -792,11 +796,11 @@ class ToolExecutor
               cursor
               node {
                 id
+                legacyResourceId
                 name
                 processedAt
                 displayFulfillmentStatus
                 displayFinancialStatus
-                statusUrl
                 totalPriceSet {
                   shopMoney { amount currencyCode }
                   presentmentMoney { amount currencyCode }
@@ -1564,25 +1568,27 @@ class ToolExecutor
 
     private function emitAuthRequired(ChatSessionContext $ctx): ToolResult
     {
-        Log::channel('ai')->info('tool.auth_required', [
+        $loginUrl = 'https://scottstonebridge.com/account/login';
+
+        Log::channel('ai')->info('tool.login_required', [
             'session_id' => $ctx->sessionId,
             'shop_domain' => $ctx->shopDomain,
-            'has_row' => AiCustomerSession::query()->where('session_id', $ctx->sessionId)->exists(),
+            'login_url' => $loginUrl,
         ]);
 
         $payload = [
-            'reason' => 'customer_account',
-            'oauth_start_url' => route('api.v1.ai.oauth.customer.start', [
-                'session_id' => $ctx->sessionId,
-                'shop_domain' => $ctx->shopDomain,
-            ]),
+            'reason' => 'login_required',
+            'login_url' => $loginUrl,
         ];
 
         $this->emitter->emit('auth_required', $payload);
+        $this->emitter->emit('text', [
+            'content' => "Please log in to your account to view your order history.\n\n[Log In]({$loginUrl})",
+        ]);
 
         return ToolResult::authRequired(
-            'Customer is not signed in — the UI is showing the sign-in popup now.',
-            ['type' => 'auth_required'] + $payload,
+            "Customer is not signed in. Instruct them: 'Please log in to your account to view your order history.' and direct them to {$loginUrl}",
+            ['type' => 'auth_required', 'login_url' => $loginUrl] + $payload,
         );
     }
 

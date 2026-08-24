@@ -23,6 +23,8 @@ use Illuminate\Support\Facades\Log;
  * Endpoint discovery is shared with `CustomerMcpClient` via the same
  * `.well-known/customer-account-api` document — its `graphql_api` field is
  * the GraphQL URL.
+ *
+ * @deprecated Deprecated in favor of Unified Storefront & Admin Bridge.
  */
 class CustomerAccountGraphClient
 {
