@@ -119,6 +119,18 @@ return [
         // Pagination size for Admin API list queries.
         'admin_page_size' => (int) env('SALES_KNOWLEDGE_PAGE_SIZE', 50),
 
+        // Knowledge chunking (ADR 0009): a document is split when it
+        // crosses EITHER threshold below. Heading-based sections are tried
+        // first; a fixed ~chunk_words-word sliding window (with overlap) is
+        // the fallback for documents with no usable heading structure, and
+        // also caps any single heading-section that's still oversized.
+        'chunking' => [
+            'word_threshold' => (int) env('SALES_KNOWLEDGE_CHUNK_WORD_THRESHOLD', 400),
+            'heading_threshold' => (int) env('SALES_KNOWLEDGE_CHUNK_HEADING_THRESHOLD', 2),
+            'chunk_words' => (int) env('SALES_KNOWLEDGE_CHUNK_WORDS', 150),
+            'overlap_words' => (int) env('SALES_KNOWLEDGE_CHUNK_OVERLAP_WORDS', 25),
+        ],
+
         // Intent → content_type mapping for getKnowledgeForPrompt().
         // Broadened: every intent now sees `faq` + `custom` rows too so
         // merchant-authored knowledge always has a chance to land in the

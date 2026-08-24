@@ -161,6 +161,166 @@ class StoreKnowledgeServiceTest extends TestCase
         $this->assertStringNotContainsString('Other shop policy', $block);
     }
 
+    public function test_sync_all_chunks_a_long_page_into_multiple_summarise_jobs(): void
+    {
+        Queue::fake();
+
+        $longBody = '<h2>Origins</h2><p>'.str_repeat('origin word ', 60).'</p>'
+            .'<h2>Philosophy</h2><p>'.str_repeat('philosophy word ', 60).'</p>'
+            .'<h2>Today</h2><p>'.str_repeat('today word ', 60).'</p>';
+
+        $this->admin->mockResponse('admin/pages/list_pages', [
+            'data' => [
+                'pages' => [
+                    'edges' => [[
+                        'node' => [
+                            'id' => 'gid://shopify/Page/1',
+                            'title' => 'About Scott',
+                            'handle' => 'about-scott',
+                            'body' => $longBody,
+                            'updatedAt' => '2026-01-01T00:00:00Z',
+                        ],
+                        'cursor' => 'cur1',
+                    ]],
+                    'pageInfo' => ['hasNextPage' => false, 'endCursor' => 'cur1'],
+                ],
+            ],
+        ]);
+
+        $this->service->syncAll('demo.myshopify.com');
+
+        Queue::assertPushed(SummariseKnowledgeItemJob::class, 3);
+        foreach ([0, 1, 2] as $index) {
+            Queue::assertPushed(
+                SummariseKnowledgeItemJob::class,
+                fn (SummariseKnowledgeItemJob $job): bool => $job->handle === "about-scott#{$index}"
+                    && $job->documentHandle === 'about-scott'
+                    && $job->chunkIndex === $index
+            );
+        }
+    }
+
+    public function test_sync_all_does_not_chunk_a_short_page(): void
+    {
+        Queue::fake();
+
+        $this->admin->mockResponse('admin/pages/list_pages', [
+            'data' => [
+                'pages' => [
+                    'edges' => [[
+                        'node' => [
+                            'id' => 'gid://shopify/Page/1',
+                            'title' => 'Contact',
+                            'handle' => 'contact',
+                            'body' => '<p>Reach us at hello@example.com.</p>',
+                            'updatedAt' => '2026-01-01T00:00:00Z',
+                        ],
+                        'cursor' => 'cur1',
+                    ]],
+                    'pageInfo' => ['hasNextPage' => false, 'endCursor' => 'cur1'],
+                ],
+            ],
+        ]);
+
+        $this->service->syncAll('demo.myshopify.com');
+
+        // document_handle is still populated (every row this code path
+        // creates gets one) — only chunk_index reflects "never split".
+        Queue::assertPushed(
+            SummariseKnowledgeItemJob::class,
+            fn (SummariseKnowledgeItemJob $job): bool => $job->handle === 'contact'
+                && $job->documentHandle === 'contact'
+                && $job->chunkIndex === null
+        );
+    }
+
+    public function test_sync_all_reconciles_stale_chunks_when_a_document_shrinks(): void
+    {
+        Queue::fake();
+
+        // Simulate a previous sync that produced 3 chunks.
+        foreach ([0, 1, 2] as $index) {
+            StoreKnowledge::factory()->forShop('demo.myshopify.com')->ofType(StoreKnowledge::TYPE_PAGE)->create([
+                'handle' => "about-scott#{$index}",
+                'document_handle' => 'about-scott',
+                'chunk_index' => $index,
+            ]);
+        }
+
+        // The page has since been edited down to something short.
+        $this->admin->mockResponse('admin/pages/list_pages', [
+            'data' => [
+                'pages' => [
+                    'edges' => [[
+                        'node' => [
+                            'id' => 'gid://shopify/Page/1',
+                            'title' => 'About Scott',
+                            'handle' => 'about-scott',
+                            'body' => '<p>Scott founded the shop in 2020.</p>',
+                            'updatedAt' => '2026-02-01T00:00:00Z',
+                        ],
+                        'cursor' => 'cur1',
+                    ]],
+                    'pageInfo' => ['hasNextPage' => false, 'endCursor' => 'cur1'],
+                ],
+            ],
+        ]);
+
+        $this->service->syncAll('demo.myshopify.com');
+
+        $this->assertSame(
+            0,
+            StoreKnowledge::query()->where('document_handle', 'about-scott')->count(),
+            'stale chunk rows from the previous, longer version of the page must be gone'
+        );
+        Queue::assertPushed(
+            SummariseKnowledgeItemJob::class,
+            fn (SummariseKnowledgeItemJob $job): bool => $job->handle === 'about-scott' && $job->chunkIndex === null
+        );
+    }
+
+    public function test_sync_all_reconciles_a_legacy_single_row_when_a_document_grows_into_chunks(): void
+    {
+        Queue::fake();
+
+        // A row created before chunking existed: no document_handle at all.
+        StoreKnowledge::factory()->forShop('demo.myshopify.com')->ofType(StoreKnowledge::TYPE_PAGE)->create([
+            'handle' => 'about-scott',
+            'document_handle' => null,
+            'chunk_index' => null,
+        ]);
+
+        $longBody = '<h2>Origins</h2><p>'.str_repeat('origin word ', 60).'</p>'
+            .'<h2>Philosophy</h2><p>'.str_repeat('philosophy word ', 60).'</p>';
+
+        $this->admin->mockResponse('admin/pages/list_pages', [
+            'data' => [
+                'pages' => [
+                    'edges' => [[
+                        'node' => [
+                            'id' => 'gid://shopify/Page/1',
+                            'title' => 'About Scott',
+                            'handle' => 'about-scott',
+                            'body' => $longBody,
+                            'updatedAt' => '2026-02-01T00:00:00Z',
+                        ],
+                        'cursor' => 'cur1',
+                    ]],
+                    'pageInfo' => ['hasNextPage' => false, 'endCursor' => 'cur1'],
+                ],
+            ],
+        ]);
+
+        $this->service->syncAll('demo.myshopify.com');
+
+        $this->assertSame(
+            0,
+            StoreKnowledge::query()->where('handle', 'about-scott')->count(),
+            'the legacy unchunked row must be reconciled away once the document is chunked'
+        );
+        Queue::assertPushed(SummariseKnowledgeItemJob::class, 2);
+    }
+
     public function test_embed_query_retries_once_then_succeeds_without_degrading(): void
     {
         config([

@@ -423,6 +423,7 @@ final class ProductMapper
             url: $url,
             variantId: self::stringOrNull($firstVariant['id'] ?? null),
             priceMinorUnits: $priceMinor,
+            tags: self::extractTags($node),
         );
     }
 

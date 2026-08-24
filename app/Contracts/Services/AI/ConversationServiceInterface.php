@@ -53,4 +53,15 @@ interface ConversationServiceInterface
      * @return list<array{role: string, content: string}>
      */
     public function historyTailAsMessages(AiConversation $conversation, int $tail): array;
+
+    /**
+     * Variant ids shown to the customer (products, product details) across
+     * the same history-tail window historyTailAsMessages() renders into the
+     * model's own visible context — i.e. exactly what the model can already
+     * "remember" seeing. Used to guard update_cart against a hallucinated
+     * variant id (see ToolExecutor::handleUpdateCart()).
+     *
+     * @return array<string, true>
+     */
+    public function recentShownVariantIds(AiConversation $conversation, int $tail): array;
 }

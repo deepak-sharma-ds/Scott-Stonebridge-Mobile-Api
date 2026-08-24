@@ -44,6 +44,13 @@ class SummariseKnowledgeItemJob implements ShouldQueue
         public readonly string $handle,
         public readonly string $rawContent,
         public readonly ?string $shopifyUpdatedAt = null,
+        // Chunking (ADR 0009): documentHandle is the shared, unsuffixed
+        // handle every row of one document has in common — set on every
+        // row dispatchKnowledgeItem() creates, chunked or not. chunkIndex
+        // is this chunk's 0-based position, null when the document wasn't
+        // split. See StoreKnowledgeService::dispatchKnowledgeItem().
+        public readonly ?string $documentHandle = null,
+        public readonly ?int $chunkIndex = null,
     ) {}
 
     public function handle(StoreKnowledgeServiceInterface $knowledge): void
@@ -64,6 +71,8 @@ class SummariseKnowledgeItemJob implements ShouldQueue
             'title' => $this->title,
             'summary' => $summary,
             'raw_content' => $this->rawContent,
+            'document_handle' => $this->documentHandle,
+            'chunk_index' => $this->chunkIndex,
             'last_synced_at' => now(),
             'shopify_updated_at' => $this->shopifyUpdatedAt !== null
                 ? Carbon::parse($this->shopifyUpdatedAt)

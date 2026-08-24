@@ -121,34 +121,59 @@ class ChatStreamMcpTest extends TestCase
         $this->assertStringContainsString('"price_minor_units":4900', $body);
     }
 
-    public function test_update_cart_emits_cart_state_chunk(): void
+    public function test_update_cart_emits_cart_action_chunk_for_a_shown_variant(): void
     {
         $convo = $this->makeConversation();
 
+        // Two tool calls in one turn: get_product_details surfaces the
+        // variant, then update_cart adds it — the guard (ADR 0010) must
+        // accept it since it was shown earlier in this SAME turn's loop.
         OpenAI::fake([
-            $this->streamedToolCall('call_c', 'update_cart', '{"cart_id":"c1","lines":[{"merchandise_id":"v1","quantity":1}]}'),
+            $this->streamedToolCall('call_b', 'get_product_details', '{"product_id":"gid://shopify/Product/9"}'),
+            $this->streamedToolCall('call_c', 'update_cart', '{"items":[{"action":"add","variant_id":"v1","quantity":1}]}'),
             $this->streamedText('Added.'),
         ]);
 
         Http::fake([
             'https://'.self::SHOP.'/api/mcp' => Http::response($this->jsonRpcResult([
-                'cart' => [
-                    'id' => 'c1',
+                'product' => [
+                    'product_id' => 'gid://shopify/Product/9',
+                    'title' => 'Crystal Ball',
+                    'handle' => 'crystal-ball',
+                    'price' => '49.00',
                     'currency_code' => 'GBP',
-                    'checkout_url' => 'https://demo/checkout',
-                    'lines' => [[
-                        'merchandise_id' => 'v1', 'quantity' => 1,
-                        'merchandise' => ['product' => ['id' => 'p1', 'title' => 'Demo']],
-                        'cost' => ['total' => ['amount' => '10.00']],
-                    ]],
+                    'selectedOrFirstAvailableVariant' => [
+                        'variant_id' => 'v1',
+                        'price' => '49.00',
+                        'currency' => 'GBP',
+                        'available' => true,
+                    ],
                 ],
             ])),
         ]);
 
-        $body = $this->stream($convo->session_id, 'add to cart please');
+        $body = $this->stream($convo->session_id, 'add the crystal ball to my cart');
 
-        $this->assertStringContainsString('"type":"cart_state"', $body);
-        $this->assertStringContainsString('"checkout_url":"https://demo/checkout"', $body);
+        // No mock Http fake for /cart or any cart-mutation endpoint exists —
+        // if update_cart tried to call Shopify at all, this test would fail
+        // with an unmocked-request exception instead of reaching here.
+        $this->assertStringContainsString('"type":"cart_action"', $body);
+        $this->assertStringContainsString('"variant_id":"v1"', $body);
+        $this->assertStringContainsString('"action":"add"', $body);
+    }
+
+    public function test_update_cart_rejects_a_variant_never_shown(): void
+    {
+        $convo = $this->makeConversation();
+
+        OpenAI::fake([
+            $this->streamedToolCall('call_c2', 'update_cart', '{"items":[{"action":"add","variant_id":"gid://shopify/Variant/999","quantity":1}]}'),
+            $this->streamedText('Sorry, let me check that again.'),
+        ]);
+
+        $body = $this->stream($convo->session_id, 'add something to my cart');
+
+        $this->assertStringNotContainsString('"type":"cart_action"', $body);
     }
 
     public function test_policy_query_emits_policy_answer_chunk(): void
@@ -272,32 +297,21 @@ class ChatStreamMcpTest extends TestCase
         $this->assertSame(0, AiCustomerSession::query()->where('session_id', $convo->session_id)->count());
     }
 
-    public function test_checkout_intent_emits_checkout_link_chunk(): void
+    public function test_checkout_intent_emits_checkout_action_chunk(): void
     {
         $convo = $this->makeConversation();
 
         OpenAI::fake([
-            $this->streamedToolCall('call_g', 'start_checkout', '{"cart_id":"c1"}'),
+            $this->streamedToolCall('call_g', 'start_checkout', '{}'),
             $this->streamedText('Tap to checkout.'),
         ]);
 
-        // start_checkout is internal — it fans out to get_cart upstream and
-        // surfaces the cart's hosted checkout_url.
-        Http::fake([
-            'https://'.self::SHOP.'/api/mcp' => Http::response($this->jsonRpcResult([
-                'cart' => [
-                    'id' => 'c1',
-                    'total_quantity' => 2,
-                    'cost' => ['subtotal_amount' => ['amount' => '64.50', 'currency' => 'GBP']],
-                    'checkout_url' => 'https://demo.myshopify.com/checkouts/xyz',
-                ],
-            ])),
-        ]);
-
+        // start_checkout no longer calls Shopify (ADR 0010) — no Http::fake
+        // is registered, so any callTool() would fail this test by itself.
         $body = $this->stream($convo->session_id, 'I want to checkout now please');
 
-        $this->assertStringContainsString('"type":"checkout_link"', $body);
-        $this->assertStringContainsString('"checkout_url":"https://demo.myshopify.com/checkouts/xyz"', $body);
+        $this->assertStringContainsString('"type":"checkout_action"', $body);
+        $this->assertStringContainsString('"path":"/checkout"', $body);
     }
 
     public function test_tool_loop_cap_emits_graceful_continuation(): void
@@ -356,16 +370,21 @@ class ChatStreamMcpTest extends TestCase
         ]);
     }
 
-    private function stream(string $sessionId, string $message, array $headers = []): string
+    private function stream(string $sessionId, string $message, array $headers = [], ?array $cart = null): string
     {
+        $context = [
+            'page_type' => 'home',
+            'shop_domain' => self::SHOP,
+            'currency' => 'GBP',
+            'locale' => 'en',
+        ];
+        if ($cart !== null) {
+            $context['cart'] = $cart;
+        }
+
         $response = $this->postJson("/api/v1/ai/chat/stream/{$sessionId}", [
             'message' => $message,
-            'context' => [
-                'page_type' => 'home',
-                'shop_domain' => self::SHOP,
-                'currency' => 'GBP',
-                'locale' => 'en',
-            ],
+            'context' => $context,
         ], $headers);
 
         $response->assertStatus(200);

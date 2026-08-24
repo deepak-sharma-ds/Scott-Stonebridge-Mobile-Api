@@ -215,11 +215,14 @@ class PromptBuilderInjectionTest extends TestCase
     public function test_build_drops_lowest_ranked_knowledge_rows_to_fit_budget_without_touching_other_blocks(): void
     {
         // Base template (persona/rules/tool-usage + locale + customer
-        // blocks, no knowledge) is ~1686 tokens; +1 row ~1820, +2 rows
-        // ~1892, +3 rows ~1964. Budget of 1850 keeps the highest-ranked row
-        // but forces the other two to drop, without ever falling below the
-        // no-knowledge baseline (which would trigger the blind-fallback path).
-        config(['sales.prompt_guard.system_prompt_max_tokens' => 1850]);
+        // blocks, no knowledge) is ~1742 tokens; +1 row ~1877, +2 rows
+        // ~1949. Budget of 1900 keeps the highest-ranked row but forces the
+        // other two to drop, without ever falling below the no-knowledge
+        // baseline (which would trigger the blind-fallback path). Recompute
+        // these numbers (see the ChatbotConfigRepository/PromptBuilder test
+        // comment history) whenever system.blade.php's TOOL USAGE section
+        // changes length.
+        config(['sales.prompt_guard.system_prompt_max_tokens' => 1900]);
 
         // Ranked highest-relevance first, per StoreKnowledgeService's
         // contract — the fix must drop from the END of this list.

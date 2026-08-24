@@ -174,6 +174,37 @@ class ConversationService extends BaseService implements ConversationServiceInte
             ->all();
     }
 
+    public function recentShownVariantIds(AiConversation $conversation, int $tail): array
+    {
+        $ids = [];
+
+        $messages = $conversation->messages()
+            ->where('role', AiMessage::ROLE_ASSISTANT)
+            ->latest('id')
+            ->limit($tail)
+            ->get(['metadata']);
+
+        foreach ($messages as $message) {
+            $shown = $message->metadata['shown_entities'] ?? [];
+            if (! is_array($shown)) {
+                continue;
+            }
+            foreach ($shown as $group) {
+                if (! is_array($group) || ! is_array($group['items'] ?? null)) {
+                    continue;
+                }
+                foreach ($group['items'] as $item) {
+                    $variantId = is_array($item) ? ($item['variant_id'] ?? null) : null;
+                    if (is_string($variantId) && $variantId !== '') {
+                        $ids[$variantId] = true;
+                    }
+                }
+            }
+        }
+
+        return $ids;
+    }
+
     /**
      * B1 — for assistant turns, append a terse "[Shown to customer: …]" hint so
      * the model can resolve references to previously displayed products/orders

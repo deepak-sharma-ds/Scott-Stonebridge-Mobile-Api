@@ -126,6 +126,8 @@ class StreamingService extends BaseService implements StreamingServiceInterface
             customerSummary: $customerSummary,
         );
 
+        $tail = (int) config('chatbot.tokens.history_tail', 10);
+
         $sessionCtx = new ChatSessionContext(
             sessionId: $request->sessionId,
             shopDomain: (string) ($request->context->shopDomain ?? $conversation->shop_domain),
@@ -139,6 +141,15 @@ class StreamingService extends BaseService implements StreamingServiceInterface
             customerAccessToken: $request->accessToken === '' ? null : $request->accessToken,
             locale: $request->context->locale ?? 'en',
             pageType: $request->context->pageType,
+            // The live storefront cart snapshot IS the single source of
+            // truth (ADR 0010) — get_cart/update_cart/suggest_upsell read
+            // it directly instead of maintaining a separate Shopify cart.
+            cartSnapshot: $request->context->cart,
+            // Seeds the same "what has the model already been shown"
+            // window historyTailAsMessages() renders into its own visible
+            // context, so update_cart's guard never rejects a legitimate
+            // reference the model can actually see.
+            shownVariantIds: $this->conversations->recentShownVariantIds($conversation, $tail),
         );
 
         $response = new StreamedResponse(function () use ($messages, $intent, $conversation, $sessionCtx) {
@@ -243,6 +254,11 @@ class StreamingService extends BaseService implements StreamingServiceInterface
                     $result = $this->toolExecutor->execute($name, $args, $ctx);
 
                     $this->collectShownEntities($shownEntities, $result->emittedChunk);
+                    // Extends the model's own visible "shown" window for the
+                    // REST of this turn's tool calls too — e.g. search_catalog
+                    // then update_cart in the same response — so the guard in
+                    // handleUpdateCart() isn't limited to prior-turn history.
+                    $ctx = $ctx->withAdditionalShownVariantIds($this->variantIdsFromShownEntities($shownEntities));
 
                     $messages[] = [
                         'role' => 'tool',
@@ -411,6 +427,29 @@ class StreamingService extends BaseService implements StreamingServiceInterface
         if ($summary !== null) {
             $shownEntities[] = $summary;
         }
+    }
+
+    /**
+     * Flattens every variant_id out of the running shown-entities list —
+     * used to extend ChatSessionContext::$shownVariantIds so update_cart's
+     * guard (ADR 0010) covers products surfaced earlier in this same turn.
+     *
+     * @param  list<array<string, mixed>>  $shownEntities
+     * @return array<string, true>
+     */
+    private function variantIdsFromShownEntities(array $shownEntities): array
+    {
+        $ids = [];
+        foreach ($shownEntities as $group) {
+            foreach ((array) ($group['items'] ?? []) as $item) {
+                $variantId = is_array($item) ? ($item['variant_id'] ?? null) : null;
+                if (is_string($variantId) && $variantId !== '') {
+                    $ids[$variantId] = true;
+                }
+            }
+        }
+
+        return $ids;
     }
 
     /**

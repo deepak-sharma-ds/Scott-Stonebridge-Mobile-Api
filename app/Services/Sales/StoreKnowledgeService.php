@@ -10,6 +10,7 @@ use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\Jobs\Sales\SummariseKnowledgeItemJob;
 use App\Models\StoreKnowledge;
 use App\Services\Base\BaseService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -58,6 +59,7 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
         // service with only the admin client still pass. Production
         // wiring resolves both via the container.
         private readonly ?StorefrontApiClientInterface $storefront = null,
+        private readonly ?KnowledgeChunker $chunker = null,
     ) {
         parent::__construct();
     }
@@ -70,6 +72,74 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
     private function storefront(): StorefrontApiClientInterface
     {
         return $this->storefront ?? app(StorefrontApiClientInterface::class);
+    }
+
+    private function chunker(): KnowledgeChunker
+    {
+        return $this->chunker ?? app(KnowledgeChunker::class);
+    }
+
+    /**
+     * Splits $rawContent into chunks, reconciles the document's existing
+     * rows against the resulting chunk set, then dispatches one
+     * SummariseKnowledgeItemJob per chunk. Every sync path (pages,
+     * articles, policies, products, URLs) goes through this instead of
+     * dispatching SummariseKnowledgeItemJob directly, so long documents are
+     * chunked consistently everywhere. See ADR 0009.
+     */
+    private function dispatchKnowledgeItem(
+        string $shopDomain,
+        string $contentType,
+        string $title,
+        string $baseHandle,
+        string $rawContent,
+        ?string $shopifyUpdatedAt,
+        string $connection,
+        string $queue,
+    ): void {
+        $chunks = $this->chunker()->chunk($rawContent);
+        $chunkCount = count($chunks);
+        $this->reconcileKnowledgeChunks($shopDomain, $contentType, $baseHandle, $chunkCount);
+
+        foreach ($chunks as $index => $chunkContent) {
+            SummariseKnowledgeItemJob::dispatch(
+                $shopDomain,
+                $contentType,
+                $title,
+                $chunkCount > 1 ? "{$baseHandle}#{$index}" : $baseHandle,
+                $chunkContent,
+                $shopifyUpdatedAt,
+                $baseHandle,
+                $chunkCount > 1 ? $index : null,
+            )->onConnection($connection)->onQueue($queue);
+        }
+    }
+
+    /**
+     * Delete any existing rows for this document that no longer correspond
+     * to its current chunk set — e.g. a document that used to need 5
+     * chunks now needs 2, or a document that was a single row is now split
+     * into 3. Matches on `document_handle` (rows this feature created) as
+     * well as the bare handle (rows from before chunking existed, which
+     * never got a `document_handle`) so both generations reconcile
+     * correctly.
+     */
+    private function reconcileKnowledgeChunks(string $shopDomain, string $contentType, string $baseHandle, int $chunkCount): void
+    {
+        $keepHandles = $chunkCount > 1
+            ? array_map(static fn (int $i): string => "{$baseHandle}#{$i}", range(0, $chunkCount - 1))
+            : [$baseHandle];
+
+        StoreKnowledge::query()
+            ->forShop($shopDomain)
+            ->where('content_type', $contentType)
+            ->where(function (Builder $query) use ($baseHandle): void {
+                $query->where('document_handle', $baseHandle)
+                    ->orWhere('handle', $baseHandle)
+                    ->orWhere('handle', 'like', $baseHandle.'#%');
+            })
+            ->whereNotIn('handle', $keepHandles)
+            ->delete();
     }
 
     public function syncAll(string $shopDomain): void
@@ -85,14 +155,16 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
         // Pages
         try {
             $this->forEachAdminPage('admin/pages/list_pages', 'pages', $pageSize, function (array $node) use ($shopDomain, $connection, $queue): void {
-                SummariseKnowledgeItemJob::dispatch(
+                $this->dispatchKnowledgeItem(
                     $shopDomain,
                     StoreKnowledge::TYPE_PAGE,
                     (string) ($node['title'] ?? 'Untitled page'),
                     (string) ($node['handle'] ?? Str::slug((string) ($node['title'] ?? 'untitled'))),
                     (string) ($node['body'] ?? ''),
                     isset($node['updatedAt']) ? (string) $node['updatedAt'] : null,
-                )->onConnection($connection)->onQueue($queue);
+                    $connection,
+                    $queue,
+                );
             });
         } catch (Throwable $e) {
             $this->logWarning('Knowledge sync: pages list failed', [
@@ -110,14 +182,16 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
                     $handle = Str::slug((string) ($node['title'] ?? 'article'));
                 }
 
-                SummariseKnowledgeItemJob::dispatch(
+                $this->dispatchKnowledgeItem(
                     $shopDomain,
                     StoreKnowledge::TYPE_BLOG,
                     (string) ($node['title'] ?? 'Untitled article'),
                     $handle,
                     $body,
                     isset($node['updatedAt']) ? (string) $node['updatedAt'] : null,
-                )->onConnection($connection)->onQueue($queue);
+                    $connection,
+                    $queue,
+                );
             });
         } catch (Throwable $e) {
             $this->logWarning('Knowledge sync: articles list failed', [
@@ -135,14 +209,16 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
                     if (! is_array($policy)) {
                         continue;
                     }
-                    SummariseKnowledgeItemJob::dispatch(
+                    $this->dispatchKnowledgeItem(
                         $shopDomain,
                         StoreKnowledge::TYPE_POLICY,
                         (string) ($policy['title'] ?? 'Policy'),
                         (string) ($policy['type'] ?? $policy['handle'] ?? Str::slug((string) ($policy['title'] ?? 'policy'))),
                         (string) ($policy['body'] ?? ''),
                         isset($policy['updatedAt']) ? (string) $policy['updatedAt'] : null,
-                    )->onConnection($connection)->onQueue($queue);
+                        $connection,
+                        $queue,
+                    );
                 }
             }
         } catch (Throwable $e) {
@@ -669,14 +745,16 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
 
                 $rawContent = $this->composeProductRawContent($node);
 
-                SummariseKnowledgeItemJob::dispatch(
+                $this->dispatchKnowledgeItem(
                     $shopDomain,
                     StoreKnowledge::TYPE_PRODUCT,
                     $title,
                     $handle,
                     $rawContent,
                     isset($node['updatedAt']) ? (string) $node['updatedAt'] : null,
-                )->onConnection($connection)->onQueue($queue);
+                    $connection,
+                    $queue,
+                );
 
                 $dispatched++;
             }
@@ -752,14 +830,16 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
                     continue;
                 }
 
-                SummariseKnowledgeItemJob::dispatch(
+                $this->dispatchKnowledgeItem(
                     $shopDomain,
                     StoreKnowledge::TYPE_URL,
                     $title,
                     'url-'.md5($url),
                     "URL: {$url}\n\n{$text}",
                     null,
-                )->onConnection($connection)->onQueue($queue);
+                    $connection,
+                    $queue,
+                );
 
                 $dispatched++;
             }

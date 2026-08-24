@@ -40,8 +40,6 @@ final class ToolDefinitions
     public const STOREFRONT_MCP_TOOLS = [
         self::TOOL_SEARCH_CATALOG,
         self::TOOL_GET_PRODUCT_DETAILS,
-        self::TOOL_GET_CART,
-        self::TOOL_UPDATE_CART,
         self::TOOL_SEARCH_POLICIES,
     ];
 
@@ -54,12 +52,18 @@ final class ToolDefinitions
 
     /**
      * Internal tools are not proxied to any MCP server — handled directly by
-     * ToolExecutor. `start_checkout` is synthesised from a `get_cart` call so
-     * the AI can hand back the Shopify-hosted `cart.checkout_url`.
+     * ToolExecutor. The storefront's own cart (via `context.cart`, the live
+     * `/cart.js` snapshot) is the single source of truth for cart state
+     * (ADR 0010): `get_cart` reads it directly, `update_cart` emits a
+     * `cart_action` intent for the frontend to execute against the theme's
+     * native Ajax Cart API, and `start_checkout` emits a `checkout_action`
+     * intent to navigate to `/checkout` — none of the three call Shopify.
      *
      * @var list<string>
      */
     public const INTERNAL_TOOLS = [
+        self::TOOL_GET_CART,
+        self::TOOL_UPDATE_CART,
         self::TOOL_SUGGEST_QUICK_REPLIES,
         self::TOOL_SUGGEST_UPSELL,
         self::TOOL_START_CHECKOUT,
@@ -104,55 +108,34 @@ final class ToolDefinitions
                 ],
             ),
             $this->fn(self::TOOL_GET_CART,
-                'Use ONLY when the user asks what is currently in their cart and you have no recent cart_state from this turn. Never call right before start_checkout — start_checkout already reads the live cart. Never pass placeholder IDs.',
+                'Use when the user asks what is currently in their cart. Reads the cart the storefront already sent this turn — no arguments needed.',
                 [
                     'type' => 'object',
-                    'properties' => [
-                        'cart_id' => ['type' => 'string', 'minLength' => 1],
-                    ],
-                    'required' => ['cart_id'],
+                    'properties' => new \stdClass,
                     'additionalProperties' => false,
                 ],
             ),
             $this->fn(self::TOOL_UPDATE_CART,
-                'Use to add, change, or remove cart items. `cart_id` is OPTIONAL — when absent Shopify creates a new cart. Use `add_items` for new variants. To change quantity or remove a line, use the cart line `id` from the latest cart_state `items[].id` (NOT the variant id): `update_items` with that line id to change quantity, `remove_line_ids` with that line id to drop it.',
+                'Use to add, change the quantity of, or remove cart items. Each entry\'s `variant_id` MUST be one you actually surfaced this conversation (from search_catalog / get_product_details / a prior cart) — never invent one. For `update`/`remove`, use the SAME variant_id the item already has in the cart (from the cart the storefront sent this turn), not a cart line id. This performs the real cart mutation on the storefront directly — you do not need get_cart afterward to confirm it.',
                 [
                     'type' => 'object',
                     'properties' => [
-                        'cart_id' => ['type' => 'string'],
-                        'add_items' => [
+                        'items' => [
                             'type' => 'array',
+                            'minItems' => 1,
                             'items' => [
                                 'type' => 'object',
                                 'properties' => [
-                                    'product_variant_id' => ['type' => 'string', 'minLength' => 1],
-                                    'quantity' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 99],
+                                    'action' => ['type' => 'string', 'enum' => ['add', 'update', 'remove']],
+                                    'variant_id' => ['type' => 'string', 'minLength' => 1],
+                                    'quantity' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 99, 'description' => 'Required for add/update. Ignored for remove.'],
                                 ],
-                                'required' => ['product_variant_id', 'quantity'],
+                                'required' => ['action', 'variant_id'],
                                 'additionalProperties' => false,
                             ],
-                        ],
-                        'update_items' => [
-                            'type' => 'array',
-                            'items' => [
-                                'type' => 'object',
-                                'properties' => [
-                                    'id' => ['type' => 'string', 'minLength' => 1],
-                                    'quantity' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 99],
-                                ],
-                                'required' => ['id', 'quantity'],
-                                'additionalProperties' => false,
-                            ],
-                        ],
-                        'remove_line_ids' => [
-                            'type' => 'array',
-                            'items' => ['type' => 'string', 'minLength' => 1],
-                        ],
-                        'discount_codes' => [
-                            'type' => 'array',
-                            'items' => ['type' => 'string', 'minLength' => 1],
                         ],
                     ],
+                    'required' => ['items'],
                     'additionalProperties' => false,
                 ],
             ),
@@ -215,13 +198,10 @@ final class ToolDefinitions
                 ],
             ),
             $this->fn(self::TOOL_START_CHECKOUT,
-                'Call IMMEDIATELY (do NOT pre-call get_cart) when the user says they want to check out, buy, place order, pay, or are ready to purchase. Returns the Shopify-hosted checkout URL surfaced from the live cart. Pass the latest cart_id you have seen in any previous cart_state result — do not invent or use placeholder IDs from the schema description.',
+                'Call IMMEDIATELY (do NOT pre-call get_cart) when the user says they want to check out, buy, place order, pay, or are ready to purchase. Sends the customer to the storefront\'s checkout for whatever is currently in their cart — no arguments needed.',
                 [
                     'type' => 'object',
-                    'properties' => [
-                        'cart_id' => ['type' => 'string', 'minLength' => 1],
-                    ],
-                    'required' => ['cart_id'],
+                    'properties' => new \stdClass,
                     'additionalProperties' => false,
                 ],
             ),
@@ -242,13 +222,10 @@ final class ToolDefinitions
                 ],
             ),
             $this->fn(self::TOOL_SUGGEST_UPSELL,
-                'Call this IMMEDIATELY after every successful add-to-cart, and whenever the customer is browsing their cart, to surface complementary products (upsell / cross-sell).',
+                'Call this IMMEDIATELY after every successful add-to-cart, and whenever the customer is browsing their cart, to surface complementary products (upsell / cross-sell). Reads the cart the storefront already sent this turn — no arguments needed.',
                 [
                     'type' => 'object',
-                    'properties' => [
-                        'cart_id' => ['type' => 'string', 'minLength' => 1],
-                    ],
-                    'required' => ['cart_id'],
+                    'properties' => new \stdClass,
                     'additionalProperties' => false,
                 ],
             ),

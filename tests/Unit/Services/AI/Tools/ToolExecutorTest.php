@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Services\AI\Tools;
 
 use App\Contracts\Services\Sales\UpsellServiceInterface;
+use App\DTOs\Chat\CartContextDTO;
 use App\Exceptions\AI\AuthRequiredException;
 use App\Models\AiConversation;
 use App\Models\AiCustomerSession;
@@ -111,18 +112,55 @@ class ToolExecutorTest extends TestCase
         $this->assertStringContainsString('"price_minor_units":4900', $output);
     }
 
-    public function test_update_cart_emits_cart_state(): void
+    public function test_update_cart_emits_cart_action_for_a_shown_variant(): void
     {
-        $this->storefront->method('callTool')->willReturn([
-            'cart' => [
-                'id' => 'c1', 'currency_code' => 'GBP', 'checkout_url' => 'https://demo/checkout',
-                'lines' => [['merchandise_id' => 'v1', 'quantity' => 1, 'cost' => ['total' => ['amount' => '10.00']]]],
-            ],
+        // update_cart never calls Shopify — the storefront's own cart is the
+        // single source of truth (ADR 0010). No mock expectation on
+        // $this->storefront is set, so any callTool() invocation would fail
+        // the test by itself.
+        $ctx = $this->ctx(shownVariantIds: ['gid://shopify/ProductVariant/11' => true]);
+
+        $output = $this->invoke('update_cart', [
+            'items' => [['action' => 'add', 'variant_id' => 'gid://shopify/ProductVariant/11', 'quantity' => 2]],
+        ], $ctx);
+
+        $this->assertStringContainsString('"type":"cart_action"', $output);
+        $this->assertStringContainsString('"variant_id":"gid://shopify/ProductVariant/11"', $output);
+        $this->assertStringContainsString('"quantity":2', $output);
+    }
+
+    public function test_update_cart_rejects_a_variant_never_shown_or_in_cart(): void
+    {
+        ob_start();
+        try {
+            $result = $this->executor->execute(
+                'update_cart',
+                ['items' => [['action' => 'add', 'variant_id' => 'gid://shopify/ProductVariant/999', 'quantity' => 1]]],
+                $this->ctx(),
+            );
+        } finally {
+            ob_end_clean();
+        }
+
+        $this->assertFalse($result->isSuccess());
+    }
+
+    public function test_update_cart_allows_removing_a_variant_already_in_the_cart_snapshot(): void
+    {
+        $cart = CartContextDTO::fromArray([
+            'id' => null,
+            'item_count' => 1,
+            'total_price' => '24.99',
+            'currency' => 'GBP',
+            'items' => [['variant_id' => 'gid://shopify/ProductVariant/11', 'quantity' => 1]],
         ]);
 
-        $output = $this->invoke('update_cart', ['cart_id' => 'c1', 'lines' => [['merchandise_id' => 'v1', 'quantity' => 1]]]);
+        $output = $this->invoke('update_cart', [
+            'items' => [['action' => 'remove', 'variant_id' => 'gid://shopify/ProductVariant/11']],
+        ], $this->ctx(cart: $cart));
 
-        $this->assertStringContainsString('"type":"cart_state"', $output);
+        $this->assertStringContainsString('"type":"cart_action"', $output);
+        $this->assertStringContainsString('"action":"remove"', $output);
     }
 
     public function test_policy_query_emits_policy_answer(): void
@@ -358,29 +396,80 @@ class ToolExecutorTest extends TestCase
         });
     }
 
-    public function test_start_checkout_synthesises_checkout_link_from_cart(): void
+    public function test_start_checkout_emits_checkout_action(): void
     {
-        // start_checkout is internal — it calls get_cart upstream and surfaces
-        // the cart's hosted checkout URL.
-        $this->storefront
-            ->expects($this->once())
-            ->method('callTool')
-            ->with('get_cart', ['cart_id' => 'c1'], self::SHOP)
-            ->willReturn([
-                'cart' => [
-                    'id' => 'c1',
-                    'total_quantity' => 2,
-                    'cost' => ['subtotal_amount' => ['amount' => '64.50', 'currency' => 'GBP']],
-                    'checkout_url' => 'https://demo.myshopify.com/checkouts/xyz',
-                ],
-            ]);
+        // start_checkout no longer calls Shopify — the storefront navigates
+        // to its own /checkout for whatever cart currently exists (ADR 0010).
+        // No mock expectation on $this->storefront is set, so any callTool()
+        // invocation would fail the test by itself.
+        $output = $this->invoke('start_checkout', []);
 
-        $output = $this->invoke('start_checkout', ['cart_id' => 'c1']);
+        $this->assertStringContainsString('"type":"checkout_action"', $output);
+        $this->assertStringContainsString('"path":"/checkout"', $output);
+    }
 
-        $this->assertStringContainsString('"type":"checkout_link"', $output);
-        $this->assertStringContainsString('"checkout_url":"https://demo.myshopify.com/checkouts/xyz"', $output);
-        $this->assertStringContainsString('"total_amount":64.5', $output);
-        $this->assertStringContainsString('"currency":"GBP"', $output);
+    public function test_get_cart_reads_from_storefront_snapshot_without_calling_shopify(): void
+    {
+        $cart = CartContextDTO::fromArray([
+            'id' => null,
+            'item_count' => 2,
+            'total_price' => '64.50',
+            'currency' => 'GBP',
+            'items' => [['title' => 'The Fool Tarot', 'quantity' => 2, 'variant_id' => 'gid://shopify/ProductVariant/11']],
+        ]);
+
+        // get_cart doesn't emit any SSE chunk — the frontend already knows
+        // its own live cart (that's where this snapshot came from). It only
+        // needs to answer the model in text. No mock expectation on
+        // $this->storefront is set, so any callTool() call would fail this
+        // test by itself.
+        $result = $this->executor->execute('get_cart', [], $this->ctx(cart: $cart));
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertStringContainsString('The Fool Tarot x2', $result->messageForAi);
+        $this->assertStringContainsString('GBP 64.50', $result->messageForAi);
+    }
+
+    public function test_get_cart_reports_empty_when_no_snapshot_sent(): void
+    {
+        $result = $this->executor->execute('get_cart', [], $this->ctx());
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertStringContainsString('empty', $result->messageForAi);
+    }
+
+    public function test_suggest_upsell_reads_cart_items_from_storefront_snapshot(): void
+    {
+        $cart = CartContextDTO::fromArray([
+            'id' => null,
+            'item_count' => 1,
+            'total_price' => '24.99',
+            'currency' => 'GBP',
+            'items' => [['product_id' => 'gid://shopify/Product/1', 'quantity' => 1]],
+        ]);
+
+        $this->upsell->expects($this->once())
+            ->method('getUpsells')
+            ->with([['product_id' => 'gid://shopify/Product/1', 'quantity' => 1]], self::SHOP, 'GBP')
+            ->willReturn([]);
+
+        // No mock expectation on $this->storefront is set, so any callTool()
+        // invocation (the old get_cart round-trip) would fail the test.
+        $output = $this->invoke('suggest_upsell', [], $this->ctx(cart: $cart));
+
+        $this->assertStringContainsString('"type":"upsell_offer"', $output);
+    }
+
+    public function test_suggest_upsell_errors_on_empty_cart(): void
+    {
+        ob_start();
+        try {
+            $result = $this->executor->execute('suggest_upsell', [], $this->ctx());
+        } finally {
+            ob_end_clean();
+        }
+
+        $this->assertFalse($result->isSuccess());
     }
 
     public function test_suggest_quick_replies_emits_quick_replies(): void
@@ -433,11 +522,11 @@ class ToolExecutorTest extends TestCase
         $this->assertStringContainsString('too many requests', $output);
     }
 
-    private function invoke(string $toolName, array $args): string
+    private function invoke(string $toolName, array $args, ?ChatSessionContext $ctx = null): string
     {
         ob_start();
         try {
-            $result = $this->executor->execute($toolName, $args, $this->ctx());
+            $result = $this->executor->execute($toolName, $args, $ctx ?? $this->ctx());
             $this->assertInstanceOf(ToolResult::class, $result);
         } finally {
             $output = (string) ob_get_clean();
@@ -446,11 +535,13 @@ class ToolExecutorTest extends TestCase
         return $output;
     }
 
-    private function ctx(): ChatSessionContext
+    private function ctx(?CartContextDTO $cart = null, array $shownVariantIds = []): ChatSessionContext
     {
         return new ChatSessionContext(
             sessionId: self::SESSION_ID,
             shopDomain: self::SHOP,
+            cartSnapshot: $cart,
+            shownVariantIds: $shownVariantIds,
         );
     }
 }
