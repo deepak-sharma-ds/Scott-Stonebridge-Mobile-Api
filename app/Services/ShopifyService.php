@@ -7,7 +7,9 @@ use Illuminate\Support\Facades\Http;
 class ShopifyService
 {
     protected $accessToken;
+
     protected $storeDomain;
+
     protected $apiVersion;
 
     public function __construct()
@@ -21,12 +23,12 @@ class ShopifyService
     {
         $response = Http::withHeaders([
             'X-Shopify-Access-Token' => $this->accessToken,
-            'Content-Type' => 'application/json'
+            'Content-Type' => 'application/json',
         ])->post("https://{$this->storeDomain}/admin/api/{$this->apiVersion}/pages.json", [
             'page' => [
                 'title' => $title,
                 'body_html' => $htmlContent,
-            ]
+            ],
         ]);
 
         return $response->json();

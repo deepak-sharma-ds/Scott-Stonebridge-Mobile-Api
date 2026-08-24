@@ -62,21 +62,21 @@ class ShopifyExceptionTest extends TestCase
 
     public function test_it_has_default_http_status_code(): void
     {
-        $exception = new ShopifyException();
+        $exception = new ShopifyException;
 
         $this->assertEquals(500, $exception->getHttpStatusCode());
     }
 
     public function test_it_has_default_error_code(): void
     {
-        $exception = new ShopifyException();
+        $exception = new ShopifyException;
 
         $this->assertEquals('SHOPIFY_ERROR', $exception->getErrorCode());
     }
 
     public function test_it_has_empty_context_by_default(): void
     {
-        $exception = new ShopifyException();
+        $exception = new ShopifyException;
 
         $this->assertIsArray($exception->getContext());
         $this->assertEmpty($exception->getContext());

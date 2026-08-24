@@ -2,11 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Http\Resources\PackageResource;
 use App\Models\Package;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 class ShopifyPackageController extends Controller
 {
@@ -63,7 +61,7 @@ class ShopifyPackageController extends Controller
             });
 
             return response()->json([
-                'status'  => 200,
+                'status' => 200,
                 'message' => 'Data found successfully',
                 'package' => $packageData,
             ], 200);

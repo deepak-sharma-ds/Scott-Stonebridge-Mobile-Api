@@ -4,10 +4,10 @@ namespace App\Services\Shopify;
 
 use App\Contracts\Services\ContentServiceInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
-use App\DTOs\Content\PageDTO;
-use App\DTOs\Content\BlogDTO;
 use App\DTOs\Content\ArticleDTO;
+use App\DTOs\Content\BlogDTO;
 use App\DTOs\Content\MediaImageDTO;
+use App\DTOs\Content\PageDTO;
 use App\Exceptions\ShopifyApiException;
 use App\Exceptions\ShopifyNotFoundException;
 use App\Services\Base\BaseService;
@@ -18,17 +18,17 @@ use InvalidArgumentException;
 
 /**
  * Content Service
- * 
+ *
  * Handles CMS content operations including pages, blogs, articles, and policies
  * using the Shopify Storefront API. Implements intelligent caching with different
  * TTLs for different content types.
- * 
+ *
  * Cache TTLs:
  * - Pages: 1 hour (3600 seconds)
  * - Policies: 1 hour (3600 seconds)
  * - Blogs: 30 minutes (1800 seconds)
  * - Articles: 30 minutes (1800 seconds)
- * 
+ *
  * Requirements: 10.4, 10.6, 10.7, 10.8, 10.9, 10.10
  */
 class ContentService extends BaseService implements ContentServiceInterface
@@ -52,9 +52,9 @@ class ContentService extends BaseService implements ContentServiceInterface
 
     /**
      * Constructor
-     * 
-     * @param StorefrontApiClientInterface $storefrontClient Storefront API client for queries
-     * @param ShopifyCacheStrategy $cacheStrategy Cache strategy for key generation
+     *
+     * @param  StorefrontApiClientInterface  $storefrontClient  Storefront API client for queries
+     * @param  ShopifyCacheStrategy  $cacheStrategy  Cache strategy for key generation
      */
     public function __construct(
         private readonly StorefrontApiClientInterface $storefrontClient,
@@ -65,12 +65,12 @@ class ContentService extends BaseService implements ContentServiceInterface
 
     /**
      * Get page by handle
-     * 
+     *
      * Retrieves a Shopify page by its handle with 1-hour cache TTL.
      * Pages are static content like "About Us", "FAQ", etc.
-     * 
-     * @param string $handle Page handle (URL-friendly identifier)
-     * @return PageDTO
+     *
+     * @param  string  $handle  Page handle (URL-friendly identifier)
+     *
      * @throws ShopifyApiException
      */
     public function getPageByHandle(string $handle): PageDTO
@@ -81,7 +81,7 @@ class ContentService extends BaseService implements ContentServiceInterface
             $page = $this->cacheWithFallback(
                 $this->cacheStrategy->getCacheKey('page', ['handle' => $handle]),
                 3600, // 1 hour
-                fn() => $this->fetchPage($handle),
+                fn () => $this->fetchPage($handle),
                 ['page', $handle]
             );
 
@@ -99,9 +99,9 @@ class ContentService extends BaseService implements ContentServiceInterface
 
     /**
      * Fetch page from Shopify API
-     * 
-     * @param string $handle Page handle
-     * @return PageDTO
+     *
+     * @param  string  $handle  Page handle
+     *
      * @throws ShopifyApiException
      */
     private function fetchPage(string $handle): PageDTO
@@ -122,19 +122,19 @@ class ContentService extends BaseService implements ContentServiceInterface
     /**
      * Replace MediaImage GIDs in page metafield values with image URLs.
      *
-     * @param array<string, mixed> $pageData
+     * @param  array<string, mixed>  $pageData
      * @return array<string, mixed>
      */
     private function resolvePageMediaImageMetafields(array $pageData): array
     {
-        if (empty($pageData['metafields']) || !is_array($pageData['metafields'])) {
+        if (empty($pageData['metafields']) || ! is_array($pageData['metafields'])) {
             return $pageData;
         }
 
         $resolvedUrls = [];
 
         foreach ($pageData['metafields'] as &$metafield) {
-            if (!is_array($metafield)) {
+            if (! is_array($metafield)) {
                 continue;
             }
 
@@ -145,14 +145,14 @@ class ContentService extends BaseService implements ContentServiceInterface
                 );
             }
 
-            if (!empty($metafield['references']['nodes']) && is_array($metafield['references']['nodes'])) {
+            if (! empty($metafield['references']['nodes']) && is_array($metafield['references']['nodes'])) {
                 foreach ($metafield['references']['nodes'] as &$node) {
-                    if (!is_array($node) || empty($node['fields']) || !is_array($node['fields'])) {
+                    if (! is_array($node) || empty($node['fields']) || ! is_array($node['fields'])) {
                         continue;
                     }
 
                     foreach ($node['fields'] as &$field) {
-                        if (!is_array($field) || !array_key_exists('value', $field)) {
+                        if (! is_array($field) || ! array_key_exists('value', $field)) {
                             continue;
                         }
 
@@ -175,9 +175,7 @@ class ContentService extends BaseService implements ContentServiceInterface
     /**
      * Resolve a single value or JSON/list value containing MediaImage GIDs.
      *
-     * @param mixed $value
-     * @param array<string, string> $resolvedUrls
-     * @return mixed
+     * @param  array<string, string>  $resolvedUrls
      */
     private function resolveMediaImageReferences(mixed $value, array &$resolvedUrls): mixed
     {
@@ -189,8 +187,7 @@ class ContentService extends BaseService implements ContentServiceInterface
     /**
      * Resolve MediaImage references and report whether the value changed.
      *
-     * @param mixed $value
-     * @param array<string, string> $resolvedUrls
+     * @param  array<string, string>  $resolvedUrls
      * @return array{0: mixed, 1: bool}
      */
     private function resolveMediaImageReferenceValue(mixed $value, array &$resolvedUrls): array
@@ -241,7 +238,7 @@ class ContentService extends BaseService implements ContentServiceInterface
     /**
      * Resolve and cache a MediaImage GID to its URL for this page response.
      *
-     * @param array<string, string> $resolvedUrls
+     * @param  array<string, string>  $resolvedUrls
      */
     private function resolveMediaImageUrl(string $id, array &$resolvedUrls): ?string
     {
@@ -273,12 +270,12 @@ class ContentService extends BaseService implements ContentServiceInterface
 
     /**
      * Get policy by type
-     * 
+     *
      * Retrieves a Shopify policy page by type with 1-hour cache TTL.
      * Supported types: privacy, refund, shipping, terms
-     * 
-     * @param string $type Policy type (privacy, refund, shipping, terms)
-     * @return PageDTO
+     *
+     * @param  string  $type  Policy type (privacy, refund, shipping, terms)
+     *
      * @throws InvalidArgumentException If policy type is invalid
      * @throws ShopifyApiException
      */
@@ -288,14 +285,14 @@ class ContentService extends BaseService implements ContentServiceInterface
             $this->logPerformanceStart('getPolicyByType');
 
             // Validate policy type
-            if (!isset(self::POLICY_TYPE_MAP[$type])) {
-                throw new InvalidArgumentException("Invalid policy type: {$type}. Supported types: " . implode(', ', array_keys(self::POLICY_TYPE_MAP)));
+            if (! isset(self::POLICY_TYPE_MAP[$type])) {
+                throw new InvalidArgumentException("Invalid policy type: {$type}. Supported types: ".implode(', ', array_keys(self::POLICY_TYPE_MAP)));
             }
 
             $policy = $this->cacheWithFallback(
                 $this->cacheStrategy->getCacheKey('policy', ['type' => $type]),
                 3600, // 1 hour
-                fn() => $this->fetchPolicy($type),
+                fn () => $this->fetchPolicy($type),
                 ['policy', $type]
             );
 
@@ -313,9 +310,9 @@ class ContentService extends BaseService implements ContentServiceInterface
 
     /**
      * Fetch policy from Shopify API
-     * 
-     * @param string $type Policy type
-     * @return PageDTO
+     *
+     * @param  string  $type  Policy type
+     *
      * @throws ShopifyApiException
      */
     private function fetchPolicy(string $type): PageDTO
@@ -333,13 +330,14 @@ class ContentService extends BaseService implements ContentServiceInterface
 
     /**
      * Get blogs with pagination
-     * 
+     *
      * Retrieves a list of blogs with 30-minute cache TTL.
      * Supports cursor-based pagination.
-     * 
-     * @param int $limit Number of blogs to retrieve (default: 10)
-     * @param string|null $cursor Pagination cursor for next page
+     *
+     * @param  int  $limit  Number of blogs to retrieve (default: 10)
+     * @param  string|null  $cursor  Pagination cursor for next page
      * @return array ['items' => BlogDTO[], 'pagination' => ['has_next' => bool, 'next_cursor' => string|null]]
+     *
      * @throws ShopifyApiException
      */
     public function getBlogs(int $limit = 10, ?string $cursor = null): array
@@ -355,7 +353,7 @@ class ContentService extends BaseService implements ContentServiceInterface
             $result = $this->cacheWithFallback(
                 $cacheKey,
                 1800, // 30 minutes
-                fn() => $this->fetchBlogs($limit, $cursor),
+                fn () => $this->fetchBlogs($limit, $cursor),
                 ['blogs']
             );
 
@@ -377,10 +375,9 @@ class ContentService extends BaseService implements ContentServiceInterface
 
     /**
      * Fetch blogs from Shopify API
-     * 
-     * @param int $limit Number of blogs to retrieve
-     * @param string|null $cursor Pagination cursor
-     * @return array
+     *
+     * @param  int  $limit  Number of blogs to retrieve
+     * @param  string|null  $cursor  Pagination cursor
      */
     private function fetchBlogs(int $limit, ?string $cursor): array
     {
@@ -394,7 +391,7 @@ class ContentService extends BaseService implements ContentServiceInterface
 
         return [
             'items' => array_map(
-                fn($edge) => BlogDTO::fromShopifyResponse($edge['node']),
+                fn ($edge) => BlogDTO::fromShopifyResponse($edge['node']),
                 $edges
             ),
             'pagination' => [
@@ -406,14 +403,15 @@ class ContentService extends BaseService implements ContentServiceInterface
 
     /**
      * Get articles for a blog with pagination
-     * 
+     *
      * Retrieves articles for a specific blog with 30-minute cache TTL.
      * Supports cursor-based pagination.
-     * 
-     * @param string $blogHandle Blog handle
-     * @param int $limit Number of articles to retrieve (default: 10)
-     * @param string|null $cursor Pagination cursor for next page
+     *
+     * @param  string  $blogHandle  Blog handle
+     * @param  int  $limit  Number of articles to retrieve (default: 10)
+     * @param  string|null  $cursor  Pagination cursor for next page
      * @return array ['items' => ArticleDTO[], 'pagination' => ['has_next' => bool, 'next_cursor' => string|null]]
+     *
      * @throws ShopifyApiException
      */
     public function getArticles(string $blogHandle, int $limit = 10, ?string $cursor = null): array
@@ -430,7 +428,7 @@ class ContentService extends BaseService implements ContentServiceInterface
             $result = $this->cacheWithFallback(
                 $cacheKey,
                 1800, // 30 minutes
-                fn() => $this->fetchArticles($blogHandle, $limit, $cursor),
+                fn () => $this->fetchArticles($blogHandle, $limit, $cursor),
                 ['articles', $blogHandle]
             );
 
@@ -454,11 +452,11 @@ class ContentService extends BaseService implements ContentServiceInterface
 
     /**
      * Fetch articles from Shopify API
-     * 
-     * @param string $blogHandle Blog handle
-     * @param int $limit Number of articles to retrieve
-     * @param string|null $cursor Pagination cursor
-     * @return array
+     *
+     * @param  string  $blogHandle  Blog handle
+     * @param  int  $limit  Number of articles to retrieve
+     * @param  string|null  $cursor  Pagination cursor
+     *
      * @throws ShopifyApiException
      */
     private function fetchArticles(string $blogHandle, int $limit, ?string $cursor): array
@@ -478,7 +476,7 @@ class ContentService extends BaseService implements ContentServiceInterface
 
         return [
             'items' => array_map(
-                fn($edge) => ArticleDTO::fromShopifyResponse($edge['node']),
+                fn ($edge) => ArticleDTO::fromShopifyResponse($edge['node']),
                 $edges
             ),
             'pagination' => [
@@ -490,13 +488,13 @@ class ContentService extends BaseService implements ContentServiceInterface
 
     /**
      * Get a single article
-     * 
+     *
      * Retrieves a specific article by blog handle and article handle
      * with 30-minute cache TTL.
-     * 
-     * @param string $blogHandle Blog handle
-     * @param string $articleHandle Article handle
-     * @return ArticleDTO
+     *
+     * @param  string  $blogHandle  Blog handle
+     * @param  string  $articleHandle  Article handle
+     *
      * @throws ShopifyApiException
      */
     public function getArticle(string $blogHandle, string $articleHandle): ArticleDTO
@@ -510,7 +508,7 @@ class ContentService extends BaseService implements ContentServiceInterface
                     'article' => $articleHandle,
                 ]),
                 1800, // 30 minutes
-                fn() => $this->fetchArticle($blogHandle, $articleHandle),
+                fn () => $this->fetchArticle($blogHandle, $articleHandle),
                 ['article', $blogHandle, $articleHandle]
             );
 
@@ -533,8 +531,8 @@ class ContentService extends BaseService implements ContentServiceInterface
     /**
      * Get a single Shopify media image by ID.
      *
-     * @param string $id Shopify media image GID
-     * @return MediaImageDTO
+     * @param  string  $id  Shopify media image GID
+     *
      * @throws ShopifyApiException
      */
     public function getMediaImage(string $id): MediaImageDTO
@@ -545,7 +543,7 @@ class ContentService extends BaseService implements ContentServiceInterface
             $mediaImage = $this->cacheWithFallback(
                 $this->cacheStrategy->getCacheKey('media_image', ['id' => $id]),
                 3600,
-                fn() => $this->fetchMediaImage($id),
+                fn () => $this->fetchMediaImage($id),
                 ['media_image', md5($id)]
             );
 
@@ -563,10 +561,10 @@ class ContentService extends BaseService implements ContentServiceInterface
 
     /**
      * Fetch article from Shopify API
-     * 
-     * @param string $blogHandle Blog handle
-     * @param string $articleHandle Article handle
-     * @return ArticleDTO
+     *
+     * @param  string  $blogHandle  Blog handle
+     * @param  string  $articleHandle  Article handle
+     *
      * @throws ShopifyApiException
      */
     private function fetchArticle(string $blogHandle, string $articleHandle): ArticleDTO
@@ -586,8 +584,8 @@ class ContentService extends BaseService implements ContentServiceInterface
     /**
      * Fetch media image from Shopify API.
      *
-     * @param string $id Shopify media image GID
-     * @return MediaImageDTO
+     * @param  string  $id  Shopify media image GID
+     *
      * @throws ShopifyApiException
      */
     private function fetchMediaImage(string $id): MediaImageDTO
@@ -611,10 +609,10 @@ class ContentService extends BaseService implements ContentServiceInterface
 
     /**
      * Resolve URL to resource type
-     * 
+     *
      * Parses a URL and determines the resource type and handle(s).
      * Useful for deep linking and URL-based navigation.
-     * 
+     *
      * Supported URL patterns:
      * - /products/{handle} -> type: product, handle: {handle}
      * - /collections/{handle} -> type: collection, handle: {handle}
@@ -622,8 +620,8 @@ class ContentService extends BaseService implements ContentServiceInterface
      * - /blogs/{blog_handle} -> type: blog, blog_handle: {blog_handle}
      * - /blogs/{blog_handle}/{article_handle} -> type: article, blog_handle: {blog_handle}, article_handle: {article_handle}
      * - / -> type: home
-     * 
-     * @param string $url URL to resolve
+     *
+     * @param  string  $url  URL to resolve
      * @return array ['type' => string, 'handle' => string|null, 'blog_handle' => string|null, 'article_handle' => string|null]
      */
     public function resolveUrl(string $url): array
@@ -639,6 +637,7 @@ class ContentService extends BaseService implements ContentServiceInterface
             if (count($segments) === 0) {
                 $result = ['type' => 'home', 'handle' => null];
                 $this->logPerformanceEnd('resolveUrl', ['url' => $url, 'type' => 'home']);
+
                 return $result;
             }
 

@@ -8,6 +8,7 @@ use App\Contracts\Services\Sales\UpsellServiceInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\Sales\UpsellSuggestionDTO;
 use App\Services\Base\BaseService;
+use App\Services\CurrencyCountryMapService;
 use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Support\Facades\Cache;
 use Throwable;
@@ -265,13 +266,6 @@ class UpsellService extends BaseService implements UpsellServiceInterface
 
     private function countryFromCurrency(?string $currency): string
     {
-        return match (strtoupper((string) $currency)) {
-            'USD' => 'US',
-            'EUR' => 'DE',
-            'CAD' => 'CA',
-            'AUD' => 'AU',
-            'INR' => 'IN',
-            default => 'GB',
-        };
+        return CurrencyCountryMapService::getCountryCode((string) ($currency ?? 'GBP'));
     }
 }

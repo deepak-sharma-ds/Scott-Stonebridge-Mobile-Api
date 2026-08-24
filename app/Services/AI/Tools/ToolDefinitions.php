@@ -116,7 +116,7 @@ final class ToolDefinitions
                 ],
             ),
             $this->fn(self::TOOL_UPDATE_CART,
-                'Use to add, change the quantity of, or remove cart items. Each entry\'s `variant_id` MUST be one you actually surfaced this conversation (from search_catalog / get_product_details / a prior cart) — never invent one. For `update`/`remove`, use the SAME variant_id the item already has in the cart (from the cart the storefront sent this turn), not a cart line id. This performs the real cart mutation on the storefront directly — you do not need get_cart afterward to confirm it.',
+                'Use to add, change the quantity of, or remove cart items. To add an item, provide the variant_id (or product handle). If the variant ID is not yet known, call get_product_details first to get it. Action `remove` or quantity 0 removes the item. Action `clear` removes all items. This performs the real cart mutation on the storefront directly — reply as if it already succeeded.',
                 [
                     'type' => 'object',
                     'properties' => [
@@ -126,11 +126,11 @@ final class ToolDefinitions
                             'items' => [
                                 'type' => 'object',
                                 'properties' => [
-                                    'action' => ['type' => 'string', 'enum' => ['add', 'update', 'remove']],
-                                    'variant_id' => ['type' => 'string', 'minLength' => 1],
-                                    'quantity' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 99, 'description' => 'Required for add/update. Ignored for remove.'],
+                                    'action' => ['type' => 'string', 'enum' => ['add', 'update', 'remove', 'clear']],
+                                    'variant_id' => ['type' => 'string', 'description' => 'Variant ID (or product handle) to add/update/remove. Can be GID or numeric ID.'],
+                                    'quantity' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 99, 'description' => 'Quantity for add/update. Set to 0 or use action "remove" to remove.'],
                                 ],
-                                'required' => ['action', 'variant_id'],
+                                'required' => ['action'],
                                 'additionalProperties' => false,
                             ],
                         ],

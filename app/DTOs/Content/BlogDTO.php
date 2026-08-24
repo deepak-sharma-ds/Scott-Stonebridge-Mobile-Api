@@ -7,10 +7,10 @@ use InvalidArgumentException;
 
 /**
  * Blog Data Transfer Object
- * 
+ *
  * Represents a Shopify blog with basic information.
  * Blogs contain multiple articles and are used for content marketing.
- * 
+ *
  * Requirements: 11.7, 11.11, 11.12
  */
 class BlogDTO extends BaseDTO
@@ -25,7 +25,7 @@ class BlogDTO extends BaseDTO
 
     /**
      * Validate the blog data.
-     * 
+     *
      * @throws InvalidArgumentException
      */
     protected function validate(): void
@@ -37,11 +37,10 @@ class BlogDTO extends BaseDTO
 
     /**
      * Create a BlogDTO from Shopify API response data.
-     * 
+     *
      * Transforms raw Shopify GraphQL blog response into a typed DTO instance.
-     * 
-     * @param array $data Raw blog data from Shopify GraphQL response
-     * @return self
+     *
+     * @param  array  $data  Raw blog data from Shopify GraphQL response
      */
     public static function fromShopifyResponse(array $data): self
     {

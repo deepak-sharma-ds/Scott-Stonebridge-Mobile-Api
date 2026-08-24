@@ -6,26 +6,25 @@ use Illuminate\Http\JsonResponse;
 
 /**
  * ApiResponse Trait
- * 
+ *
  * Provides standardized API response formatting with:
  * - Consistent response structure (success, message, data, meta)
  * - Edge/node flattening for Shopify GraphQL responses
  * - Pagination metadata formatting
- * 
+ *
  * Refactored from ShopifyResponseFormatter to align with enterprise patterns.
- * 
+ *
  * @see Requirements 5.9, 9.3, 9.4, 9.5
  */
 trait ApiResponse
 {
     /**
      * Standard success response
-     * 
-     * @param string $message Success message
-     * @param array $data Response data
-     * @param array $meta Additional metadata (correlation_id, timestamp, etc.)
-     * @param int $statusCode HTTP status code
-     * @return JsonResponse
+     *
+     * @param  string  $message  Success message
+     * @param  array  $data  Response data
+     * @param  array  $meta  Additional metadata (correlation_id, timestamp, etc.)
+     * @param  int  $statusCode  HTTP status code
      */
     protected function successResponse(
         string $message,
@@ -45,12 +44,11 @@ trait ApiResponse
 
     /**
      * Standard error response
-     * 
-     * @param string $message Error message
-     * @param array $data Additional error data
-     * @param array $meta Additional metadata (error_code, correlation_id, etc.)
-     * @param int $statusCode HTTP status code
-     * @return JsonResponse
+     *
+     * @param  string  $message  Error message
+     * @param  array  $data  Additional error data
+     * @param  array  $meta  Additional metadata (error_code, correlation_id, etc.)
+     * @param  int  $statusCode  HTTP status code
      */
     protected function errorResponse(
         string $message,
@@ -70,9 +68,9 @@ trait ApiResponse
 
     /**
      * Parse Shopify GraphQL connection (edges/nodes) with pagination
-     * 
+     *
      * Transforms Shopify's edge/node structure into a flat array with pagination metadata.
-     * 
+     *
      * Example input:
      * [
      *   'edges' => [
@@ -81,7 +79,7 @@ trait ApiResponse
      *   ],
      *   'pageInfo' => ['endCursor' => 'abc123', 'hasNextPage' => true]
      * ]
-     * 
+     *
      * Example output:
      * [
      *   'items' => [
@@ -93,17 +91,17 @@ trait ApiResponse
      *     'has_more' => true
      *   ]
      * ]
-     * 
-     * @param array|null $connection Shopify connection object
-     * @param string $itemsKey Key name for items array in output
+     *
+     * @param  array|null  $connection  Shopify connection object
+     * @param  string  $itemsKey  Key name for items array in output
      * @return array Flattened array with items and pagination
      */
     protected function parseConnection(?array $connection, string $itemsKey = 'items'): array
     {
         if (
-            !$connection ||
-            !isset($connection['edges']) ||
-            !is_array($connection['edges'])
+            ! $connection ||
+            ! isset($connection['edges']) ||
+            ! is_array($connection['edges'])
         ) {
             return [
                 $itemsKey => [],
@@ -114,7 +112,7 @@ trait ApiResponse
             ];
         }
 
-        $items = array_map(fn($edge) => $edge['node'] ?? null, $connection['edges']);
+        $items = array_map(fn ($edge) => $edge['node'] ?? null, $connection['edges']);
         $items = array_filter($items);
         $items = array_values($items);
 
@@ -129,32 +127,33 @@ trait ApiResponse
 
     /**
      * Parse edges from a nested Shopify GraphQL response
-     * 
+     *
      * Convenience method for extracting connection data from nested paths.
-     * 
-     * @param array $data Full GraphQL response
-     * @param string $key Dot-notation path to connection (e.g., 'data.products')
-     * @param string $itemsKey Key name for items array in output
+     *
+     * @param  array  $data  Full GraphQL response
+     * @param  string  $key  Dot-notation path to connection (e.g., 'data.products')
+     * @param  string  $itemsKey  Key name for items array in output
      * @return array Flattened array with items and pagination
      */
     protected function parseEdges(array $data, string $key, string $itemsKey = 'items'): array
     {
         $connection = data_get($data, $key);
+
         return $this->parseConnection($connection, $itemsKey);
     }
 
     /**
      * Recursively flatten Shopify edges/nodes throughout nested data structures
-     * 
+     *
      * This method walks through any nested structure and converts all Shopify
      * edge/node patterns into flat arrays. Useful for deeply nested responses
      * like products with variants, images, collections, etc.
-     * 
+     *
      * Example:
      * Input:  ['images' => ['edges' => [['node' => ['url' => 'img1.jpg']]]]]
      * Output: ['images' => [['url' => 'img1.jpg']]]
-     * 
-     * @param mixed $data Data to flatten
+     *
+     * @param  mixed  $data  Data to flatten
      * @return mixed Flattened data
      */
     protected function flattenEdges($data)
@@ -165,7 +164,7 @@ trait ApiResponse
         }
 
         // If not an array → return as-is
-        if (!is_array($data)) {
+        if (! is_array($data)) {
             return $data;
         }
 
@@ -193,10 +192,10 @@ trait ApiResponse
 
     /**
      * Format pagination metadata for API responses
-     * 
-     * @param string|null $nextCursor Cursor for next page
-     * @param bool $hasMore Whether more pages exist
-     * @param int|null $totalCount Total count if available
+     *
+     * @param  string|null  $nextCursor  Cursor for next page
+     * @param  bool  $hasMore  Whether more pages exist
+     * @param  int|null  $totalCount  Total count if available
      * @return array Formatted pagination metadata
      */
     protected function formatPagination(
@@ -218,11 +217,11 @@ trait ApiResponse
 
     /**
      * Remove Shopify internal fields from data
-     * 
+     *
      * Removes fields like __typename, admin_graphql_api_id, etc.
-     * 
-     * @param array $data Data to clean
-     * @param array $fieldsToRemove Additional fields to remove
+     *
+     * @param  array  $data  Data to clean
+     * @param  array  $fieldsToRemove  Additional fields to remove
      * @return array Cleaned data
      */
     protected function removeInternalFields(array $data, array $fieldsToRemove = []): array

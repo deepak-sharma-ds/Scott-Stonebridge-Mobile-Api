@@ -4,10 +4,10 @@ namespace App\Http\Controllers\Apis;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ContactUsRequest;
-use App\Models\ContactUsMessage;
 use App\Mail\ContactUsMail;
-use Illuminate\Support\Facades\Mail;
+use App\Models\ContactUsMessage;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Throwable;
 
 class ContactUsController extends Controller

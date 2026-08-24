@@ -354,6 +354,9 @@ Route::prefix('v1')->middleware([
 
         Route::get('/status', [AICustomerOAuthController::class, 'status'])
             ->name('status');
+
+        Route::post('/logout', [AICustomerOAuthController::class, 'logout'])
+            ->name('logout');
     });
 
     // ============================================

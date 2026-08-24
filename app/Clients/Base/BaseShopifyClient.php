@@ -6,11 +6,11 @@ use App\Clients\Concerns\HasCircuitBreaker;
 use App\Clients\Concerns\HasRetryLogic;
 use App\Contracts\Shopify\ShopifyClientInterface;
 use App\Exceptions\ShopifyApiException;
+use App\Exceptions\ShopifyRateLimitException;
 use App\Exceptions\ShopifyTimeoutException;
 use App\Facades\GraphQLLoader;
 use App\Traits\CacheWithFallback;
 use GuzzleHttp\Client;
-use GuzzleHttp\Exception\ConnectException;
 use GuzzleHttp\Exception\RequestException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -18,12 +18,16 @@ use Illuminate\Support\Str;
 
 abstract class BaseShopifyClient implements ShopifyClientInterface
 {
-    use HasRetryLogic, HasCircuitBreaker, CacheWithFallback;
+    use CacheWithFallback, HasCircuitBreaker, HasRetryLogic;
 
     protected Client $httpClient;
+
     protected ?int $cacheTtl = null;
+
     protected array $cacheTags = [];
+
     protected float $lastRequestDuration = 0.0;
+
     protected ?int $lastRequestCost = null;
 
     public function __construct()
@@ -56,37 +60,37 @@ abstract class BaseShopifyClient implements ShopifyClientInterface
     public function query(string $queryPath, array $variables = []): array
     {
         $correlationId = request()->header('X-Correlation-ID') ?? Str::uuid()->toString();
-        
+
         // Check cache first if caching is enabled
         if ($this->cacheTtl !== null) {
             $cacheKey = $this->getCacheKey($queryPath, $variables);
-            
+
             try {
                 // Try to get from cache with tags
-                $cached = !empty($this->cacheTags) 
+                $cached = ! empty($this->cacheTags)
                     ? Cache::tags($this->cacheTags)->get($cacheKey)
                     : Cache::get($cacheKey);
-                
+
                 if ($cached !== null) {
                     Log::channel('shopify')->info('Cache hit', [
                         'correlation_id' => $correlationId,
                         'query_path' => $queryPath,
                         'cache_key' => $cacheKey,
                     ]);
-                    
+
                     return $cached;
                 }
             } catch (\BadMethodCallException $e) {
                 // Fallback to simple cache without tags
                 $cached = Cache::get($cacheKey);
-                
+
                 if ($cached !== null) {
                     Log::channel('shopify')->info('Cache hit (fallback)', [
                         'correlation_id' => $correlationId,
                         'query_path' => $queryPath,
                         'cache_key' => $cacheKey,
                     ]);
-                    
+
                     return $cached;
                 }
             }
@@ -100,13 +104,13 @@ abstract class BaseShopifyClient implements ShopifyClientInterface
             'query' => $query,
         ];
 
-        if (!empty($variables)) {
+        if (! empty($variables)) {
             $payload['variables'] = $variables;
         }
 
         // Execute request with retry logic if configured
         $response = $this->executeWithRetry(
-            fn($attempt) => $this->executeRequest($payload, $correlationId, $queryPath, $attempt),
+            fn ($attempt) => $this->executeRequest($payload, $correlationId, $queryPath, $attempt),
             null,
             null,
             $queryPath
@@ -115,10 +119,10 @@ abstract class BaseShopifyClient implements ShopifyClientInterface
         // Cache response if caching is enabled
         if ($this->cacheTtl !== null && isset($response['data'])) {
             $cacheKey = $this->getCacheKey($queryPath, $variables);
-            
+
             try {
                 // Try to cache with tags
-                if (!empty($this->cacheTags)) {
+                if (! empty($this->cacheTags)) {
                     Cache::tags($this->cacheTags)->put($cacheKey, $response, $this->cacheTtl);
                 } else {
                     Cache::put($cacheKey, $response, $this->cacheTtl);
@@ -183,7 +187,7 @@ abstract class BaseShopifyClient implements ShopifyClientInterface
             }
 
             if ($statusCode === 429) {
-                throw new \App\Exceptions\ShopifyRateLimitException(
+                throw new ShopifyRateLimitException(
                     'Rate limit exceeded',
                     429
                 );
@@ -191,13 +195,13 @@ abstract class BaseShopifyClient implements ShopifyClientInterface
 
             if ($statusCode >= 400) {
                 throw new ShopifyApiException(
-                    "Shopify API error: " . ($body['errors'][0]['message'] ?? 'Unknown error'),
+                    'Shopify API error: '.($body['errors'][0]['message'] ?? 'Unknown error'),
                     $statusCode
                 );
             }
 
             // Handle GraphQL errors
-            if (!empty($body['errors'])) {
+            if (! empty($body['errors'])) {
                 $errorMessage = is_array($body['errors'])
                     ? json_encode($body['errors'], JSON_UNESCAPED_SLASHES)
                     : $body['errors'];
@@ -209,7 +213,7 @@ abstract class BaseShopifyClient implements ShopifyClientInterface
             }
 
             // Validate response structure
-            if (!isset($body['data'])) {
+            if (! isset($body['data'])) {
                 throw new ShopifyApiException(
                     "Invalid Shopify API response: missing 'data' field",
                     $statusCode
@@ -233,7 +237,7 @@ abstract class BaseShopifyClient implements ShopifyClientInterface
             }
 
             throw new ShopifyApiException(
-                'HTTP request failed: ' . $e->getMessage(),
+                'HTTP request failed: '.$e->getMessage(),
                 $e->getCode(),
                 $e
             );
@@ -247,6 +251,7 @@ abstract class BaseShopifyClient implements ShopifyClientInterface
     {
         $this->cacheTtl = $ttl;
         $this->cacheTags = $tags;
+
         return $this;
     }
 
@@ -272,6 +277,7 @@ abstract class BaseShopifyClient implements ShopifyClientInterface
     protected function getCacheKey(string $queryPath, array $variables): string
     {
         $variablesHash = md5(json_encode($variables));
+
         return "shopify:{$this->getApiType()}:{$queryPath}:{$variablesHash}";
     }
 

@@ -12,6 +12,7 @@ use App\Contracts\Services\AI\SafetyServiceInterface;
 use App\Contracts\Services\AI\ShopifyContextServiceInterface;
 use App\Contracts\Services\AI\StreamingServiceInterface;
 use App\DTOs\Chat\AIResponseDTO;
+use App\DTOs\Chat\ChatContextDTO;
 use App\DTOs\Chat\ChatRequestDTO;
 use App\DTOs\Chat\IntentDTO;
 use App\Exceptions\AI\AIException;
@@ -20,6 +21,7 @@ use App\Services\AI\Streaming\ChunkEmitter;
 use App\Services\AI\Tools\ToolDefinitions;
 use App\Services\AI\Tools\ToolExecutor;
 use App\Services\Base\BaseService;
+use App\Services\CurrencyCountryMapService;
 use OpenAI\Laravel\Facades\OpenAI;
 use OpenAI\Responses\StreamResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -108,12 +110,14 @@ class StreamingService extends BaseService implements StreamingServiceInterface
             'detected_by' => $intent->detectedBy,
         ]);
 
+        $isGuest = ($request->context->customer !== null && ! $request->context->customer->loggedIn && empty($request->accessToken));
+
         // E1 — only fetch the signed-in order summary for intents that benefit,
         // so ordinary turns never pay the Customer Account API round-trip.
         $customerSummary = null;
-        if (in_array($intent->name, self::PERSONALISED_INTENTS, true)) {
+        if (! $isGuest && in_array($intent->name, self::PERSONALISED_INTENTS, true)) {
             $shopDomain = (string) ($request->context->shopDomain ?? $conversation->shop_domain);
-            $customerSummary = $this->personalization->summaryFor($request->sessionId, $shopDomain);
+            $customerSummary = $this->personalization->summaryFor($request->sessionId, $shopDomain, $isGuest);
         }
 
         $messages = $this->promptBuilder->build(
@@ -127,6 +131,17 @@ class StreamingService extends BaseService implements StreamingServiceInterface
         );
 
         $tail = (int) config('chatbot.tokens.history_tail', 10);
+        $initialShownVariants = $this->conversations->recentShownVariantIds($conversation, $tail);
+        $inboundVariants = $this->extractInboundVariantIds($sanitized, $request->context);
+        foreach ($inboundVariants as $vid => $true) {
+            $initialShownVariants[$vid] = true;
+        }
+
+        $currency = (string) ($request->context->currency ?? $request->context->cart?->currency ?? 'GBP');
+        if ($currency === '') {
+            $currency = 'GBP';
+        }
+        $country = CurrencyCountryMapService::getCountryCode($currency);
 
         $sessionCtx = new ChatSessionContext(
             sessionId: $request->sessionId,
@@ -149,7 +164,10 @@ class StreamingService extends BaseService implements StreamingServiceInterface
             // window historyTailAsMessages() renders into its own visible
             // context, so update_cart's guard never rejects a legitimate
             // reference the model can actually see.
-            shownVariantIds: $this->conversations->recentShownVariantIds($conversation, $tail),
+            shownVariantIds: $initialShownVariants,
+            isGuest: $isGuest,
+            currency: $currency,
+            country: $country,
         );
 
         $response = new StreamedResponse(function () use ($messages, $intent, $conversation, $sessionCtx) {
@@ -453,6 +471,74 @@ class StreamingService extends BaseService implements StreamingServiceInterface
     }
 
     /**
+     * @return array<string, true>
+     */
+    private function extractInboundVariantIds(string $message, ChatContextDTO $context): array
+    {
+        $ids = [];
+
+        // 1. Extract GIDs from message (e.g. gid://shopify/ProductVariant/41603517317294)
+        if (preg_match_all('#gid://shopify/ProductVariant/(\d+)#', $message, $matches)) {
+            foreach ($matches[0] as $gid) {
+                $ids[$gid] = true;
+            }
+            foreach ($matches[1] as $bare) {
+                $ids[$bare] = true;
+            }
+        }
+
+        // 2. Extract numeric variant IDs explicitly mentioned in message
+        if (preg_match_all('/(?:product_variant_id|variant_id|variant)\s*[:=]?\s*(?:gid:\/\/[^\s,\)]+\/)?(\d{6,})/i', $message, $matches)) {
+            foreach ($matches[1] as $num) {
+                $ids[$num] = true;
+                $ids["gid://shopify/ProductVariant/{$num}"] = true;
+            }
+        }
+
+        // 3. Extract from product page context
+        if ($context->product !== null) {
+            if ($context->product->id !== null && $context->product->id !== '') {
+                $ids[$context->product->id] = true;
+            }
+            foreach ($context->product->variants as $v) {
+                if (is_array($v)) {
+                    $vid = (string) ($v['id'] ?? $v['variant_id'] ?? '');
+                    if ($vid !== '') {
+                        $ids[$vid] = true;
+                    }
+                }
+            }
+        }
+
+        // 4. Extract from cart snapshot items
+        if ($context->cart !== null) {
+            foreach ($context->cart->items as $item) {
+                if (is_array($item)) {
+                    $vid = (string) ($item['variant_id'] ?? $item['id'] ?? '');
+                    if ($vid !== '') {
+                        $ids[$vid] = true;
+                    }
+                    $pid = (string) ($item['product_id'] ?? '');
+                    if ($pid !== '') {
+                        $ids[$pid] = true;
+                    }
+                }
+            }
+        }
+
+        // 5. Extract from recently viewed
+        foreach ($context->recentlyViewed as $rv) {
+            $rvStr = (string) $rv;
+            if ($rvStr !== '') {
+                $ids[$rvStr] = true;
+                $ids["gid://shopify/Product/{$rvStr}"] = true;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
      * Reduce a rich SSE chunk to the few identifiers needed to resolve later
      * references ("the second one", "add that"). Returns null for chunk types
      * that carry nothing referenceable.
@@ -462,7 +548,7 @@ class StreamingService extends BaseService implements StreamingServiceInterface
      */
     private function summariseShownChunk(array $chunk): ?array
     {
-        $cap = 5;
+        $cap = 10;
         $keep = static fn ($v): bool => $v !== null && $v !== '';
 
         switch ($chunk['type'] ?? null) {
@@ -472,13 +558,30 @@ class StreamingService extends BaseService implements StreamingServiceInterface
                     if (! is_array($p)) {
                         continue;
                     }
-                    $item = array_filter([
-                        'title' => $p['title'] ?? null,
-                        'handle' => $p['handle'] ?? null,
-                        'variant_id' => $p['variant_id'] ?? null,
-                    ], $keep);
-                    if ($item !== []) {
-                        $items[] = $item;
+                    $variants = is_array($p['variants'] ?? null) ? $p['variants'] : [];
+                    if ($variants !== []) {
+                        foreach ($variants as $v) {
+                            if (! is_array($v)) {
+                                continue;
+                            }
+                            $item = array_filter([
+                                'title' => $v['title'] ?? $p['title'] ?? null,
+                                'handle' => $p['handle'] ?? null,
+                                'variant_id' => $v['id'] ?? $v['variant_id'] ?? null,
+                            ], $keep);
+                            if ($item !== []) {
+                                $items[] = $item;
+                            }
+                        }
+                    } else {
+                        $item = array_filter([
+                            'title' => $p['title'] ?? null,
+                            'handle' => $p['handle'] ?? null,
+                            'variant_id' => $p['variant_id'] ?? null,
+                        ], $keep);
+                        if ($item !== []) {
+                            $items[] = $item;
+                        }
                     }
                 }
 
@@ -489,14 +592,44 @@ class StreamingService extends BaseService implements StreamingServiceInterface
                 if (! is_array($p)) {
                     return null;
                 }
-                $variantId = $p['variant_id'] ?? ($p['variants'][0]['id'] ?? null);
-                $item = array_filter([
-                    'title' => $p['title'] ?? null,
-                    'handle' => $p['handle'] ?? null,
-                    'variant_id' => $variantId,
-                ], $keep);
+                $items = [];
+                $variants = is_array($p['variants'] ?? null) ? $p['variants'] : [];
+                if ($variants !== []) {
+                    foreach ($variants as $v) {
+                        if (! is_array($v)) {
+                            continue;
+                        }
+                        $item = array_filter([
+                            'title' => $v['title'] ?? $p['title'] ?? null,
+                            'handle' => $p['handle'] ?? null,
+                            'variant_id' => $v['id'] ?? $v['variant_id'] ?? null,
+                        ], $keep);
+                        if ($item !== []) {
+                            $items[] = $item;
+                        }
+                    }
+                } else {
+                    $item = array_filter([
+                        'title' => $p['title'] ?? null,
+                        'handle' => $p['handle'] ?? null,
+                        'variant_id' => $p['variant_id'] ?? null,
+                    ], $keep);
+                    if ($item !== []) {
+                        $items[] = $item;
+                    }
+                }
 
-                return $item === [] ? null : ['type' => 'product', 'items' => [$item]];
+                return $items === [] ? null : ['type' => 'product', 'items' => $items];
+
+            case 'cart_action':
+                $items = [];
+                foreach ((array) ($chunk['items'] ?? []) as $row) {
+                    if (is_array($row) && isset($row['variant_id']) && is_string($row['variant_id'])) {
+                        $items[] = ['variant_id' => $row['variant_id']];
+                    }
+                }
+
+                return $items === [] ? null : ['type' => 'cart_action', 'items' => $items];
 
             case 'order_list':
                 $items = [];

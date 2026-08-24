@@ -7,18 +7,17 @@ use Illuminate\Http\Request;
 
 /**
  * Customer API Resource
- * 
+ *
  * Transforms CustomerDTO data to API response format.
  * Removes Shopify internal fields and flattens nested structures.
- * 
+ *
  * Requirements: 17.4, 17.6, 17.7, 17.8
  */
 class CustomerResource extends BaseApiResource
 {
     /**
      * Transform the resource into an array.
-     * 
-     * @param Request $request
+     *
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array

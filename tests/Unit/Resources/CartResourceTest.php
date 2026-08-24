@@ -6,11 +6,12 @@ use App\DTOs\Cart\CartDTO;
 use App\DTOs\Cart\CartLineItemDTO;
 use App\Http\Resources\Cart\CartResource;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Tests\TestCase;
 
 /**
  * CartResource Unit Tests
- * 
+ *
  * Tests transformation logic from CartDTO to API response format.
  * Validates field mapping, calculated fields, nested resource handling, and edge cases.
  */
@@ -119,12 +120,12 @@ class CartResourceTest extends TestCase
         $result = $resource->toArray($this->request);
 
         // Assert - line_items is a ResourceCollection, resolve it to array
-        $this->assertInstanceOf(\Illuminate\Http\Resources\Json\AnonymousResourceCollection::class, $result['line_items']);
+        $this->assertInstanceOf(AnonymousResourceCollection::class, $result['line_items']);
         $lineItemsArray = $result['line_items']->resolve($this->request);
-        
+
         $this->assertIsArray($lineItemsArray);
         $this->assertCount(1, $lineItemsArray);
-        
+
         $lineItemResult = $lineItemsArray[0];
         $this->assertEquals('gid://shopify/CartLine/456', $lineItemResult['id']);
         $this->assertEquals('gid://shopify/ProductVariant/789', $lineItemResult['variant_id']);
@@ -360,7 +361,7 @@ class CartResourceTest extends TestCase
         $this->assertEquals('100.00', $result['subtotal']);
         $this->assertEquals('120.00', $result['total']);
         $this->assertEquals('GBP', $result['currency']);
-        
+
         // Verify they are not nested in a cost object
         $this->assertArrayNotHasKey('cost', $result);
     }
@@ -402,7 +403,7 @@ class CartResourceTest extends TestCase
         $this->assertArrayHasKey('buyer_identity', $result);
         $this->assertArrayHasKey('created_at', $result);
         $this->assertArrayHasKey('updated_at', $result);
-        
+
         // Verify camelCase fields are NOT present
         $this->assertArrayNotHasKey('checkoutUrl', $result);
         $this->assertArrayNotHasKey('lineItems', $result);

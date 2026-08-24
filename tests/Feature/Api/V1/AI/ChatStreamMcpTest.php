@@ -67,17 +67,30 @@ class ChatStreamMcpTest extends TestCase
             $this->streamedText('Here are some decks.'),
         ]);
 
-        Http::fake([
-            'https://'.self::SHOP.'/api/mcp' => Http::response($this->jsonRpcResult([
-                'products' => [[
-                    'id' => 'gid://shopify/Product/1',
-                    'title' => 'The Fool Tarot',
-                    'handle' => 'the-fool-tarot',
-                    'variants' => [['id' => 'gid://shopify/Variant/11', 'price' => '24.99']],
-                    'currency_code' => 'GBP',
-                ]],
-            ])),
+        $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
+        $storefrontApi->method('query')->willReturn([
+            'data' => [
+                'collectionByHandle' => [
+                    'products' => [
+                        'edges' => [
+                            [
+                                'node' => [
+                                    'id' => 'gid://shopify/Product/1',
+                                    'title' => 'The Fool Tarot',
+                                    'handle' => 'the-fool-tarot',
+                                    'variants' => [
+                                        'edges' => [
+                                            ['node' => ['id' => 'gid://shopify/Variant/11', 'price' => ['amount' => '24.99', 'currencyCode' => 'GBP'], 'availableForSale' => true]],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ],
         ]);
+        $this->app->instance(StorefrontApiClientInterface::class, $storefrontApi);
 
         $body = $this->stream($convo->session_id, 'show me tarot decks');
 
@@ -174,6 +187,25 @@ class ChatStreamMcpTest extends TestCase
         $body = $this->stream($convo->session_id, 'add something to my cart');
 
         $this->assertStringNotContainsString('"type":"cart_action"', $body);
+    }
+
+    public function test_update_cart_accepts_variant_id_passed_in_user_message(): void
+    {
+        $convo = $this->makeConversation();
+
+        OpenAI::fake([
+            $this->streamedToolCall('call_direct', 'update_cart', '{"items":[{"action":"add","variant_id":"gid://shopify/ProductVariant/41603517317294","quantity":1}]}'),
+            $this->streamedText('Added.'),
+        ]);
+
+        $body = $this->stream(
+            $convo->session_id,
+            'Add 1 of Various Assorted Premium Aromatherapy Incense Sticks to my cart (product_variant_id gid://shopify/ProductVariant/41603517317294, quantity 1).'
+        );
+
+        $this->assertStringContainsString('"type":"cart_action"', $body);
+        $this->assertStringContainsString('"variant_id":"gid://shopify/ProductVariant/41603517317294"', $body);
+        $this->assertStringContainsString('"action":"add"', $body);
     }
 
     public function test_policy_query_emits_policy_answer_chunk(): void

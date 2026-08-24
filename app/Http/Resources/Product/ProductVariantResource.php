@@ -7,18 +7,17 @@ use Illuminate\Http\Request;
 
 /**
  * Product Variant API Resource
- * 
+ *
  * Transforms ProductVariantDTO data to API response format.
  * Removes Shopify internal fields and formats pricing information.
- * 
+ *
  * Requirements: 17.1, 17.6, 17.7, 17.8
  */
 class ProductVariantResource extends BaseApiResource
 {
     /**
      * Transform the resource into an array.
-     * 
-     * @param Request $request
+     *
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array

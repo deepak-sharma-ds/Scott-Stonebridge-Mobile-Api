@@ -7,8 +7,8 @@ interface CacheStrategyInterface
     /**
      * Generate cache key for an operation
      *
-     * @param string $operation Operation name (e.g., 'product.get', 'cart.fetch')
-     * @param array $params Operation parameters
+     * @param  string  $operation  Operation name (e.g., 'product.get', 'cart.fetch')
+     * @param  array  $params  Operation parameters
      * @return string Cache key
      */
     public function getCacheKey(string $operation, array $params): string;
@@ -16,8 +16,8 @@ interface CacheStrategyInterface
     /**
      * Get cache tags for an operation
      *
-     * @param string $operation Operation name
-     * @param array $params Operation parameters
+     * @param  string  $operation  Operation name
+     * @param  array  $params  Operation parameters
      * @return array Cache tags
      */
     public function getCacheTags(string $operation, array $params): array;
@@ -25,7 +25,7 @@ interface CacheStrategyInterface
     /**
      * Get cache TTL for an operation
      *
-     * @param string $operation Operation name
+     * @param  string  $operation  Operation name
      * @return int TTL in seconds
      */
     public function getCacheTTL(string $operation): int;
@@ -33,8 +33,7 @@ interface CacheStrategyInterface
     /**
      * Determine if an operation should be cached
      *
-     * @param string $operation Operation name
-     * @return bool
+     * @param  string  $operation  Operation name
      */
     public function shouldCache(string $operation): bool;
 }

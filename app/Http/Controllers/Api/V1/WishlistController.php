@@ -2,21 +2,24 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Contracts\Services\WishlistServiceInterface;
+use App\Exceptions\ShopifyApiException;
+use App\Exceptions\ShopifyAuthException;
+use App\Exceptions\ShopifyNotFoundException;
 use App\Http\Controllers\Base\BaseApiController;
 use App\Http\Requests\Wishlist\AddWishlistItemRequest;
 use App\Http\Resources\Wishlist\WishlistResource;
-use App\Contracts\Services\WishlistServiceInterface;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 /**
  * Wishlist Controller (v1)
- * 
+ *
  * Handles wishlist management endpoints.
  * Provides CRUD operations for customer wishlist items.
  * Extends BaseApiController for standardized responses.
- * 
+ *
  * Requirements: 9.3, 9.6, 9.7, 9.8, 9.9, 9.10
  */
 class WishlistController extends BaseApiController
@@ -27,12 +30,9 @@ class WishlistController extends BaseApiController
 
     /**
      * Get customer wishlist
-     * 
+     *
      * Returns the authenticated customer's wishlist with
      * full product details for each item.
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function index(Request $request): JsonResponse
     {
@@ -49,7 +49,7 @@ class WishlistController extends BaseApiController
                 'Wishlist retrieved successfully',
                 new WishlistResource($wishlist)
             );
-        } catch (\App\Exceptions\ShopifyAuthException $e) {
+        } catch (ShopifyAuthException $e) {
             Log::warning('Wishlist retrieval failed - authentication error', [
                 'correlation_id' => $this->getCorrelationId(),
                 'error' => $e->getMessage(),
@@ -74,12 +74,9 @@ class WishlistController extends BaseApiController
 
     /**
      * Add item to wishlist
-     * 
+     *
      * Adds a product to the authenticated customer's wishlist.
      * Prevents duplicate products from being added.
-     * 
-     * @param AddWishlistItemRequest $request
-     * @return JsonResponse
      */
     public function store(AddWishlistItemRequest $request): JsonResponse
     {
@@ -101,7 +98,7 @@ class WishlistController extends BaseApiController
                 [],
                 201
             );
-        } catch (\App\Exceptions\ShopifyAuthException $e) {
+        } catch (ShopifyAuthException $e) {
             Log::warning('Add to wishlist failed - authentication error', [
                 'correlation_id' => $this->getCorrelationId(),
                 'error' => $e->getMessage(),
@@ -109,7 +106,7 @@ class WishlistController extends BaseApiController
             ]);
 
             return $this->unauthorized($e->getMessage());
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             Log::warning('Product not found', [
                 'correlation_id' => $this->getCorrelationId(),
                 'error' => $e->getMessage(),
@@ -117,7 +114,7 @@ class WishlistController extends BaseApiController
             ]);
 
             return $this->notFound($e->getMessage());
-        } catch (\App\Exceptions\ShopifyApiException $e) {
+        } catch (ShopifyApiException $e) {
             Log::error('Add to wishlist failed - API error', [
                 'correlation_id' => $this->getCorrelationId(),
                 'error' => $e->getMessage(),
@@ -149,12 +146,8 @@ class WishlistController extends BaseApiController
 
     /**
      * Remove item from wishlist
-     * 
+     *
      * Removes a product from the authenticated customer's wishlist.
-     * 
-     * @param Request $request
-     * @param string $productId
-     * @return JsonResponse
      */
     public function destroy(Request $request, string $productId): JsonResponse
     {
@@ -171,7 +164,7 @@ class WishlistController extends BaseApiController
                 'Product removed from wishlist',
                 new WishlistResource($wishlist)
             );
-        } catch (\App\Exceptions\ShopifyAuthException $e) {
+        } catch (ShopifyAuthException $e) {
             Log::warning('Remove from wishlist failed - authentication error', [
                 'correlation_id' => $this->getCorrelationId(),
                 'error' => $e->getMessage(),
@@ -179,7 +172,7 @@ class WishlistController extends BaseApiController
             ]);
 
             return $this->unauthorized($e->getMessage());
-        } catch (\App\Exceptions\ShopifyApiException $e) {
+        } catch (ShopifyApiException $e) {
             Log::error('Remove from wishlist failed - API error', [
                 'correlation_id' => $this->getCorrelationId(),
                 'error' => $e->getMessage(),

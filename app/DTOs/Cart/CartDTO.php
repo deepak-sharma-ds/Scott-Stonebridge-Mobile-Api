@@ -7,10 +7,10 @@ use InvalidArgumentException;
 
 /**
  * Cart Data Transfer Object
- * 
+ *
  * Represents a Shopify cart with typed properties and validation.
  * Carts contain line items and cost information for guest or authenticated users.
- * 
+ *
  * Requirements: 16.2, 16.6, 16.7
  */
 class CartDTO extends BaseDTO
@@ -29,7 +29,7 @@ class CartDTO extends BaseDTO
 
     /**
      * Validate the cart data.
-     * 
+     *
      * @throws InvalidArgumentException
      */
     protected function validate(): void
@@ -39,19 +39,18 @@ class CartDTO extends BaseDTO
 
     /**
      * Create a CartDTO from Shopify API response data.
-     * 
+     *
      * Transforms raw Shopify GraphQL cart response into a typed DTO instance.
      * Handles nested line items and cost information.
-     * 
-     * @param array $data Raw cart data from Shopify GraphQL response
-     * @return self
+     *
+     * @param  array  $data  Raw cart data from Shopify GraphQL response
      */
     public static function fromShopifyResponse(array $data): self
     {
         // Handle both edge/node structure and flat array structure for line items
         $lines = $data['lines']['edges'] ?? $data['lines'] ?? [];
         $lineItems = array_map(
-            fn($item) => CartLineItemDTO::fromShopifyResponse($item['node'] ?? $item),
+            fn ($item) => CartLineItemDTO::fromShopifyResponse($item['node'] ?? $item),
             $lines
         );
 
@@ -75,14 +74,14 @@ class CartDTO extends BaseDTO
 
     /**
      * Build checkout URL with authentication key from cart ID
-     * 
+     *
      * Shopify cart IDs contain the cart token and optional key:
      * Format: gid://shopify/Cart/TOKEN?key=KEY
-     * 
+     *
      * The checkout URL should be: https://shop.com/cart/c/TOKEN?key=ENCODED_KEY
-     * 
-     * @param string $cartId Full cart ID from Shopify
-     * @param string $baseCheckoutUrl Base checkout URL from Shopify response
+     *
+     * @param  string  $cartId  Full cart ID from Shopify
+     * @param  string  $baseCheckoutUrl  Base checkout URL from Shopify response
      * @return string Complete checkout URL with authentication key
      */
     private static function buildCheckoutUrlFromCartId(string $cartId, string $baseCheckoutUrl): string
@@ -102,10 +101,10 @@ class CartDTO extends BaseDTO
                 // Extract the shop domain from base checkout URL
                 if (preg_match('/^(https?:\/\/[^\/]+)/', $baseCheckoutUrl, $urlMatches)) {
                     $shopDomain = $urlMatches[1];
-                    
+
                     // Build the full checkout URL with the key
                     // The key needs to be properly encoded for the URL
-                    return $shopDomain . '/cart/c/' . $cartToken . '?key=' . $cartKey;
+                    return $shopDomain.'/cart/c/'.$cartToken.'?key='.$cartKey;
                 }
             }
         }
@@ -116,16 +115,14 @@ class CartDTO extends BaseDTO
 
     /**
      * Get the total number of items in the cart.
-     * 
+     *
      * Sums the quantity of all line items.
-     * 
-     * @return int
      */
     public function getTotalItems(): int
     {
         return array_reduce(
             $this->lineItems,
-            fn($sum, $item) => $sum + $item->quantity,
+            fn ($sum, $item) => $sum + $item->quantity,
             0
         );
     }

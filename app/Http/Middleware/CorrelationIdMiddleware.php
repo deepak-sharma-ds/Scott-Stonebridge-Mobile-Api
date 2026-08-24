@@ -9,10 +9,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * CorrelationIdMiddleware
- * 
+ *
  * Generates or extracts correlation ID from request headers for request tracking.
  * Adds correlation ID to request context and response headers.
- * 
+ *
  * Requirements: 8.7, 15.1
  */
 class CorrelationIdMiddleware
@@ -20,12 +20,12 @@ class CorrelationIdMiddleware
     /**
      * Handle an incoming request.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
         // Extract correlation ID from request header or generate a new one
-        $correlationId = $request->header('X-Correlation-ID') 
+        $correlationId = $request->header('X-Correlation-ID')
             ?? $request->header('X-Request-ID')
             ?? (string) Str::uuid();
 

@@ -6,10 +6,10 @@ use Illuminate\Support\Str;
 
 /**
  * Factory for generating realistic Shopify API response data for testing
- * 
+ *
  * This factory creates mock Shopify GraphQL responses that match the structure
  * expected by DTOs and services. All methods support overrides for customization.
- * 
+ *
  * Requirements: 20.4
  */
 class ShopifyResponseFactory
@@ -17,13 +17,12 @@ class ShopifyResponseFactory
     /**
      * Generate a product response
      *
-     * @param array $overrides Custom values to override defaults
-     * @return array
+     * @param  array  $overrides  Custom values to override defaults
      */
     public static function product(array $overrides = []): array
     {
-        $id = $overrides['id'] ?? 'gid://shopify/Product/' . rand(1000000, 9999999);
-        $title = $overrides['title'] ?? 'Test Product ' . rand(1, 100);
+        $id = $overrides['id'] ?? 'gid://shopify/Product/'.rand(1000000, 9999999);
+        $title = $overrides['title'] ?? 'Test Product '.rand(1, 100);
         $handle = $overrides['handle'] ?? Str::slug($title);
 
         return array_merge([
@@ -62,17 +61,16 @@ class ShopifyResponseFactory
     /**
      * Generate a product variant response
      *
-     * @param array $overrides Custom values to override defaults
-     * @return array
+     * @param  array  $overrides  Custom values to override defaults
      */
     public static function productVariant(array $overrides = []): array
     {
-        $id = $overrides['id'] ?? 'gid://shopify/ProductVariant/' . rand(1000000, 9999999);
+        $id = $overrides['id'] ?? 'gid://shopify/ProductVariant/'.rand(1000000, 9999999);
 
         return array_merge([
             'id' => $id,
             'title' => 'Default Title',
-            'sku' => 'TEST-SKU-' . rand(1000, 9999),
+            'sku' => 'TEST-SKU-'.rand(1000, 9999),
             'availableForSale' => true,
             'quantityAvailable' => rand(0, 100),
             'price' => [
@@ -96,28 +94,28 @@ class ShopifyResponseFactory
     /**
      * Generate a cart response
      *
-     * @param array $overrides Custom values to override defaults
-     * @return array
+     * @param  array  $overrides  Custom values to override defaults
      */
     public static function cart(array $overrides = []): array
     {
-        $id = $overrides['id'] ?? 'gid://shopify/Cart/' . Str::uuid();
+        $id = $overrides['id'] ?? 'gid://shopify/Cart/'.Str::uuid();
         $lineItems = $overrides['lineItems'] ?? [
             self::cartLineItem(),
         ];
 
         // Calculate totals from line items
         $subtotal = array_reduce($lineItems, function ($sum, $item) {
-            $price = is_array($item['merchandise']['price']) 
+            $price = is_array($item['merchandise']['price'])
                 ? (float) $item['merchandise']['price']['amount']
                 : (float) $item['merchandise']['price'];
+
             return $sum + ($price * $item['quantity']);
         }, 0);
 
         return array_merge([
             'id' => $id,
             'lines' => $lineItems,
-            'checkoutUrl' => 'https://test-store.myshopify.com/cart/c/' . Str::random(32),
+            'checkoutUrl' => 'https://test-store.myshopify.com/cart/c/'.Str::random(32),
             'cost' => [
                 'subtotalAmount' => [
                     'amount' => number_format($subtotal, 2, '.', ''),
@@ -137,15 +135,14 @@ class ShopifyResponseFactory
     /**
      * Generate a cart line item response
      *
-     * @param array $overrides Custom values to override defaults
-     * @return array
+     * @param  array  $overrides  Custom values to override defaults
      */
     public static function cartLineItem(array $overrides = []): array
     {
-        $id = $overrides['id'] ?? 'gid://shopify/CartLine/' . Str::uuid();
+        $id = $overrides['id'] ?? 'gid://shopify/CartLine/'.Str::uuid();
         $quantity = $overrides['quantity'] ?? rand(1, 5);
-        $variantId = 'gid://shopify/ProductVariant/' . rand(1000000, 9999999);
-        $productId = 'gid://shopify/Product/' . rand(1000000, 9999999);
+        $variantId = 'gid://shopify/ProductVariant/'.rand(1000000, 9999999);
+        $productId = 'gid://shopify/Product/'.rand(1000000, 9999999);
 
         $defaultMerchandise = [
             'id' => $variantId,
@@ -162,7 +159,7 @@ class ShopifyResponseFactory
         ];
 
         // Merge merchandise if provided in overrides
-        $merchandise = isset($overrides['merchandise']) 
+        $merchandise = isset($overrides['merchandise'])
             ? array_merge($defaultMerchandise, $overrides['merchandise'])
             : $defaultMerchandise;
 
@@ -194,22 +191,22 @@ class ShopifyResponseFactory
     /**
      * Generate an order response
      *
-     * @param array $overrides Custom values to override defaults
-     * @return array
+     * @param  array  $overrides  Custom values to override defaults
      */
     public static function order(array $overrides = []): array
     {
         $orderNumber = $overrides['orderNumber'] ?? rand(1000, 9999);
-        $id = $overrides['id'] ?? 'gid://shopify/Order/' . rand(1000000, 9999999);
+        $id = $overrides['id'] ?? 'gid://shopify/Order/'.rand(1000000, 9999999);
         $lineItems = $overrides['lineItems'] ?? [
             self::orderLineItem(),
         ];
 
         // Calculate totals from line items
         $subtotal = array_reduce($lineItems, function ($sum, $item) {
-            $price = is_array($item['originalTotalPrice']) 
+            $price = is_array($item['originalTotalPrice'])
                 ? (float) $item['originalTotalPrice']['amount']
                 : (float) $item['originalTotalPrice'];
+
             return $sum + $price;
         }, 0);
 
@@ -218,7 +215,7 @@ class ShopifyResponseFactory
 
         return array_merge([
             'id' => $id,
-            'name' => '#' . $orderNumber,
+            'name' => '#'.$orderNumber,
             'orderNumber' => $orderNumber,
             'processedAt' => now()->subDays(7)->toIso8601String(),
             'financialStatus' => 'PAID',
@@ -250,8 +247,7 @@ class ShopifyResponseFactory
     /**
      * Generate an order line item response
      *
-     * @param array $overrides Custom values to override defaults
-     * @return array
+     * @param  array  $overrides  Custom values to override defaults
      */
     public static function orderLineItem(array $overrides = []): array
     {
@@ -260,13 +256,13 @@ class ShopifyResponseFactory
         $total = $quantity * $price;
 
         return array_merge([
-            'id' => 'gid://shopify/LineItem/' . rand(1000000, 9999999),
+            'id' => 'gid://shopify/LineItem/'.rand(1000000, 9999999),
             'title' => 'Test Product',
             'quantity' => $quantity,
             'variant' => [
-                'id' => 'gid://shopify/ProductVariant/' . rand(1000000, 9999999),
+                'id' => 'gid://shopify/ProductVariant/'.rand(1000000, 9999999),
                 'title' => 'Default Title',
-                'sku' => 'TEST-SKU-' . rand(1000, 9999),
+                'sku' => 'TEST-SKU-'.rand(1000, 9999),
                 'price' => [
                     'amount' => number_format($price, 2, '.', ''),
                     'currencyCode' => 'GBP',
@@ -282,15 +278,14 @@ class ShopifyResponseFactory
     /**
      * Generate a customer response
      *
-     * @param array $overrides Custom values to override defaults
-     * @return array
+     * @param  array  $overrides  Custom values to override defaults
      */
     public static function customer(array $overrides = []): array
     {
-        $id = $overrides['id'] ?? 'gid://shopify/Customer/' . rand(1000000, 9999999);
+        $id = $overrides['id'] ?? 'gid://shopify/Customer/'.rand(1000000, 9999999);
         $firstName = $overrides['firstName'] ?? 'John';
         $lastName = $overrides['lastName'] ?? 'Doe';
-        $email = $overrides['email'] ?? strtolower($firstName . '.' . $lastName . '@example.com');
+        $email = $overrides['email'] ?? strtolower($firstName.'.'.$lastName.'@example.com');
 
         return array_merge([
             'id' => $id,
@@ -310,13 +305,12 @@ class ShopifyResponseFactory
     /**
      * Generate an address response
      *
-     * @param array $overrides Custom values to override defaults
-     * @return array
+     * @param  array  $overrides  Custom values to override defaults
      */
     public static function address(array $overrides = []): array
     {
         return array_merge([
-            'id' => 'gid://shopify/MailingAddress/' . rand(1000000, 9999999),
+            'id' => 'gid://shopify/MailingAddress/'.rand(1000000, 9999999),
             'address1' => '123 Test Street',
             'address2' => 'Apt 4B',
             'city' => 'London',
@@ -332,13 +326,12 @@ class ShopifyResponseFactory
     /**
      * Generate a collection response
      *
-     * @param array $overrides Custom values to override defaults
-     * @return array
+     * @param  array  $overrides  Custom values to override defaults
      */
     public static function collection(array $overrides = []): array
     {
-        $id = $overrides['id'] ?? 'gid://shopify/Collection/' . rand(1000000, 9999999);
-        $title = $overrides['title'] ?? 'Test Collection ' . rand(1, 100);
+        $id = $overrides['id'] ?? 'gid://shopify/Collection/'.rand(1000000, 9999999);
+        $title = $overrides['title'] ?? 'Test Collection '.rand(1, 100);
         $handle = $overrides['handle'] ?? Str::slug($title);
 
         return array_merge([
@@ -357,19 +350,18 @@ class ShopifyResponseFactory
     /**
      * Generate a paginated response with edges/nodes structure
      *
-     * @param array $items Array of items to wrap in edges/nodes
-     * @param bool $hasNextPage Whether there are more pages
-     * @param string|null $endCursor Cursor for pagination
-     * @return array
+     * @param  array  $items  Array of items to wrap in edges/nodes
+     * @param  bool  $hasNextPage  Whether there are more pages
+     * @param  string|null  $endCursor  Cursor for pagination
      */
     public static function paginatedResponse(
         array $items,
         bool $hasNextPage = false,
         ?string $endCursor = null
     ): array {
-        $edges = array_map(fn($item) => [
+        $edges = array_map(fn ($item) => [
             'node' => $item,
-            'cursor' => base64_encode('cursor_' . ($item['id'] ?? rand(1000, 9999))),
+            'cursor' => base64_encode('cursor_'.($item['id'] ?? rand(1000, 9999))),
         ], $items);
 
         return [
@@ -386,9 +378,8 @@ class ShopifyResponseFactory
     /**
      * Generate a GraphQL error response
      *
-     * @param string $message Error message
-     * @param string $code Error code
-     * @return array
+     * @param  string  $message  Error message
+     * @param  string  $code  Error code
      */
     public static function errorResponse(
         string $message = 'An error occurred',
@@ -409,9 +400,8 @@ class ShopifyResponseFactory
     /**
      * Generate a successful GraphQL response wrapper
      *
-     * @param string $queryName The GraphQL query name (e.g., 'product', 'cart')
-     * @param array $data The data to wrap
-     * @return array
+     * @param  string  $queryName  The GraphQL query name (e.g., 'product', 'cart')
+     * @param  array  $data  The data to wrap
      */
     public static function successResponse(string $queryName, array $data): array
     {

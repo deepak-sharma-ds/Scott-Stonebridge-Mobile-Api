@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Services\AI\Tools;
 
 use App\Contracts\Services\Sales\UpsellServiceInterface;
+use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\Chat\CartContextDTO;
 use App\Exceptions\AI\AuthRequiredException;
 use App\Models\AiConversation;
@@ -67,17 +68,32 @@ class ToolExecutorTest extends TestCase
 
     public function test_search_catalog_routes_to_storefront_and_emits_products_chunk(): void
     {
-        $this->storefront
-            ->expects($this->once())
-            ->method('callTool')
-            ->with('search_catalog', ['query' => 'tarot'], self::SHOP)
+        $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
+        $storefrontApi->expects($this->once())
+            ->method('query')
             ->willReturn([
-                'products' => [[
-                    'id' => 'p1', 'title' => 'Deck', 'handle' => 'deck',
-                    'variants' => [['id' => 'v1', 'price' => '24.99']],
-                    'currency_code' => 'GBP',
-                ]],
+                'data' => [
+                    'collectionByHandle' => [
+                        'products' => [
+                            'edges' => [
+                                [
+                                    'node' => [
+                                        'id' => 'gid://shopify/Product/1',
+                                        'title' => 'Tarot Deck',
+                                        'handle' => 'tarot-deck',
+                                        'variants' => [
+                                            'edges' => [
+                                                ['node' => ['id' => 'gid://shopify/ProductVariant/11', 'price' => ['amount' => '24.99', 'currencyCode' => 'GBP'], 'availableForSale' => true]],
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
             ]);
+        $this->app->instance(StorefrontApiClientInterface::class, $storefrontApi);
 
         $output = $this->invoke('search_catalog', ['query' => 'tarot']);
 
@@ -85,12 +101,82 @@ class ToolExecutorTest extends TestCase
         $this->assertStringContainsString('"price_minor_units":2499', $output);
     }
 
+    public function test_search_catalog_passes_us_country_for_usd_currency(): void
+    {
+        $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
+        $storefrontApi->expects($this->once())
+            ->method('query')
+            ->with('storefront/collection/collection_products', [
+                'handle' => 'readings',
+                'limit' => 10,
+                'country' => 'US',
+            ])
+            ->willReturn([
+                'data' => [
+                    'collectionByHandle' => [
+                        'products' => [
+                            'edges' => [
+                                [
+                                    'node' => [
+                                        'id' => 'gid://shopify/Product/1',
+                                        'title' => 'Reading',
+                                        'handle' => 'reading',
+                                        'variants' => [
+                                            'edges' => [
+                                                ['node' => ['id' => 'gid://shopify/ProductVariant/11', 'price' => ['amount' => '21.00', 'currencyCode' => 'USD'], 'availableForSale' => true]],
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ]);
+        $this->app->instance(StorefrontApiClientInterface::class, $storefrontApi);
+
+        $ctx = new ChatSessionContext(
+            sessionId: 's1',
+            shopDomain: 'demo.myshopify.com',
+            currency: 'USD',
+            country: 'US',
+        );
+
+        $output = $this->invoke('search_catalog', ['query' => 'reading'], $ctx);
+
+        $this->assertStringContainsString('"type":"products"', $output);
+        $this->assertStringContainsString('"currency":"USD"', $output);
+        $this->assertStringContainsString('"price_minor_units":2100', $output);
+    }
+
     public function test_search_catalog_second_call_hits_cache(): void
     {
-        $this->storefront
-            ->expects($this->once())   // ← critical: only ONE upstream call
-            ->method('callTool')
-            ->willReturn(['products' => [['id' => 'p1', 'title' => 't', 'handle' => 'h', 'variants' => [['id' => 'v', 'price' => '1.00']]]]]);
+        $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
+        $storefrontApi->expects($this->once())   // ← critical: only ONE upstream call
+            ->method('query')
+            ->willReturn([
+                'data' => [
+                    'collectionByHandle' => [
+                        'products' => [
+                            'edges' => [
+                                [
+                                    'node' => [
+                                        'id' => 'gid://shopify/Product/1',
+                                        'title' => 'Tarot Deck',
+                                        'handle' => 'tarot-deck',
+                                        'variants' => [
+                                            'edges' => [
+                                                ['node' => ['id' => 'gid://shopify/ProductVariant/11', 'price' => ['amount' => '24.99', 'currencyCode' => 'GBP'], 'availableForSale' => true]],
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ]);
+        $this->app->instance(StorefrontApiClientInterface::class, $storefrontApi);
 
         $this->invoke('search_catalog', ['query' => 'tarot']);
         $this->invoke('search_catalog', ['query' => 'tarot']);
@@ -131,6 +217,10 @@ class ToolExecutorTest extends TestCase
 
     public function test_update_cart_rejects_a_variant_never_shown_or_in_cart(): void
     {
+        $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
+        $storefrontApi->method('query')->willReturn(['data' => ['node' => null]]);
+        $this->app->instance(StorefrontApiClientInterface::class, $storefrontApi);
+
         ob_start();
         try {
             $result = $this->executor->execute(
@@ -143,6 +233,34 @@ class ToolExecutorTest extends TestCase
         }
 
         $this->assertFalse($result->isSuccess());
+    }
+
+    public function test_update_cart_validates_unshown_variant_via_storefront_api(): void
+    {
+        $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
+        $storefrontApi->expects($this->once())
+            ->method('query')
+            ->with('storefront/products/get_variant_by_id', [
+                'id' => 'gid://shopify/ProductVariant/41603517317294',
+                'country' => 'GB',
+            ])
+            ->willReturn([
+                'data' => [
+                    'node' => [
+                        'id' => 'gid://shopify/ProductVariant/41603517317294',
+                        'title' => 'Assorted Sticks',
+                        'availableForSale' => true,
+                    ],
+                ],
+            ]);
+        $this->app->instance(StorefrontApiClientInterface::class, $storefrontApi);
+
+        $output = $this->invoke('update_cart', [
+            'items' => [['action' => 'add', 'variant_id' => '41603517317294', 'quantity' => 1]],
+        ], $this->ctx());
+
+        $this->assertStringContainsString('"type":"cart_action"', $output);
+        $this->assertStringContainsString('"variant_id":"gid://shopify/ProductVariant/41603517317294"', $output);
     }
 
     public function test_update_cart_allows_removing_a_variant_already_in_the_cart_snapshot(): void
@@ -161,6 +279,134 @@ class ToolExecutorTest extends TestCase
 
         $this->assertStringContainsString('"type":"cart_action"', $output);
         $this->assertStringContainsString('"action":"remove"', $output);
+    }
+
+    public function test_get_cart_returns_variant_ids_in_summary(): void
+    {
+        $cart = CartContextDTO::fromArray([
+            'id' => null,
+            'item_count' => 2,
+            'total_price' => '50.00',
+            'currency' => 'GBP',
+            'items' => [
+                [
+                    'id' => 40729360466094,
+                    'variant_id' => 40729360466094,
+                    'product_id' => 7229405069486,
+                    'title' => 'Aura Candle',
+                    'handle' => 'aura-candle',
+                    'quantity' => 2,
+                    'price' => '25.00',
+                ],
+            ],
+        ]);
+
+        $result = $this->executor->execute('get_cart', [], $this->ctx(cart: $cart));
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertStringContainsString('variant_id: 40729360466094', $result->messageForAi);
+        $this->assertStringContainsString('handle: aura-candle', $result->messageForAi);
+        $this->assertStringContainsString('Aura Candle', $result->messageForAi);
+    }
+
+    public function test_update_cart_resolves_variant_from_title_or_handle_in_cart(): void
+    {
+        $cart = CartContextDTO::fromArray([
+            'id' => null,
+            'item_count' => 1,
+            'total_price' => '25.00',
+            'currency' => 'GBP',
+            'items' => [
+                [
+                    'id' => 40729360466094,
+                    'variant_id' => 40729360466094,
+                    'title' => 'Aura Candle',
+                    'handle' => 'aura-candle',
+                    'quantity' => 1,
+                ],
+            ],
+        ]);
+
+        $output = $this->invoke('update_cart', [
+            'items' => [['action' => 'remove', 'variant_id' => 'aura-candle']],
+        ], $this->ctx(cart: $cart));
+
+        $this->assertStringContainsString('"type":"cart_action"', $output);
+        $this->assertStringContainsString('"variant_id":"40729360466094"', $output);
+        $this->assertStringContainsString('"action":"remove"', $output);
+    }
+
+    public function test_update_cart_with_quantity_zero_normalizes_to_remove(): void
+    {
+        $cart = CartContextDTO::fromArray([
+            'id' => null,
+            'item_count' => 1,
+            'total_price' => '25.00',
+            'currency' => 'GBP',
+            'items' => [
+                [
+                    'id' => 40729360466094,
+                    'variant_id' => 40729360466094,
+                    'title' => 'Aura Candle',
+                    'quantity' => 1,
+                ],
+            ],
+        ]);
+
+        $output = $this->invoke('update_cart', [
+            'items' => [['action' => 'update', 'variant_id' => '40729360466094', 'quantity' => 0]],
+        ], $this->ctx(cart: $cart));
+
+        $this->assertStringContainsString('"type":"cart_action"', $output);
+        $this->assertStringContainsString('"action":"remove"', $output);
+        $this->assertStringContainsString('"quantity":0', $output);
+    }
+
+    public function test_update_cart_with_clear_action_removes_all_items(): void
+    {
+        $cart = CartContextDTO::fromArray([
+            'id' => null,
+            'item_count' => 2,
+            'total_price' => '50.00',
+            'currency' => 'GBP',
+            'items' => [
+                ['id' => '101', 'variant_id' => '101', 'title' => 'Item 1', 'quantity' => 1],
+                ['id' => '102', 'variant_id' => '102', 'title' => 'Item 2', 'quantity' => 1],
+            ],
+        ]);
+
+        $output = $this->invoke('update_cart', [
+            'items' => [['action' => 'clear']],
+        ], $this->ctx(cart: $cart));
+
+        $this->assertStringContainsString('"type":"cart_action"', $output);
+        $this->assertStringContainsString('"variant_id":"101"', $output);
+        $this->assertStringContainsString('"variant_id":"102"', $output);
+    }
+
+    public function test_customer_mcp_when_is_guest_emits_auth_required_without_checking_db(): void
+    {
+        $convo = AiConversation::factory()->create([
+            'session_id' => self::SESSION_ID,
+            'shop_domain' => self::SHOP,
+        ]);
+        AiCustomerSession::create([
+            'session_id' => $convo->session_id,
+            'customer_access_token' => 'shpca_active',
+            'expires_at' => now()->addHour(),
+        ]);
+
+        $guestCtx = new ChatSessionContext(
+            sessionId: self::SESSION_ID,
+            shopDomain: self::SHOP,
+            isGuest: true,
+        );
+
+        $this->customer->expects($this->never())->method('callTool');
+
+        $output = $this->invoke('get_order_status', ['order_number' => '1234'], $guestCtx);
+
+        $this->assertStringContainsString('"type":"auth_required"', $output);
     }
 
     public function test_policy_query_emits_policy_answer(): void
@@ -226,6 +472,10 @@ class ToolExecutorTest extends TestCase
         $this->customer
             ->method('callTool')
             ->willThrowException(new AuthRequiredException);
+
+        $graphMock = $this->createMock(CustomerAccountGraphClient::class);
+        $graphMock->method('query')->willThrowException(new AuthRequiredException);
+        $this->app->instance(CustomerAccountGraphClient::class, $graphMock);
 
         $output = $this->invoke('get_most_recent_order_status', []);
 
@@ -426,7 +676,8 @@ class ToolExecutorTest extends TestCase
         $result = $this->executor->execute('get_cart', [], $this->ctx(cart: $cart));
 
         $this->assertTrue($result->isSuccess());
-        $this->assertStringContainsString('The Fool Tarot x2', $result->messageForAi);
+        $this->assertStringContainsString('The Fool Tarot', $result->messageForAi);
+        $this->assertStringContainsString('x2', $result->messageForAi);
         $this->assertStringContainsString('GBP 64.50', $result->messageForAi);
     }
 

@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Apis;
 
+use App\Facades\Shopify;
 use App\Http\Controllers\Controller;
 use App\Services\APIShopifyService;
-use App\Facades\Shopify;
 use App\Traits\ShopifyResponseFormatter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -26,8 +26,8 @@ class OrdertController extends Controller
     public function index(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'limit'  => 'sometimes|integer|min:1|max:250',
-            'after'  => 'sometimes|string|nullable',
+            'limit' => 'sometimes|integer|min:1|max:250',
+            'after' => 'sometimes|string|nullable',
             'filter' => 'required|string',
         ]);
         if ($validator->fails()) {
@@ -35,14 +35,14 @@ class OrdertController extends Controller
         }
 
         try {
-            $limit  = (int) $request->get('limit', 20);
-            $after  = $request->get('after');
-            $token  = $request->bearerToken();
+            $limit = (int) $request->get('limit', 20);
+            $after = $request->get('after');
+            $token = $request->bearerToken();
 
             $vars = [
                 'accessToken' => $token,
-                'limit'       => $limit,
-                'after'       => $after,
+                'limit' => $limit,
+                'after' => $after,
             ];
 
             // ---------------------------------------------------
@@ -55,11 +55,11 @@ class OrdertController extends Controller
             );
             $ordersNode = data_get($response, 'data.customer.orders');
 
-            if (!$ordersNode) {
+            if (! $ordersNode) {
                 return $this->success('No Orders', [
-                    'orders'      => [],
+                    'orders' => [],
                     'next_cursor' => null,
-                    'has_more'    => false,
+                    'has_more' => false,
                 ]);
             }
 
@@ -78,7 +78,6 @@ class OrdertController extends Controller
             return $this->fail('Something went wrong.', $e->getMessage());
         }
     }
-
 
     /**
      * Get Order Details by ID
@@ -108,7 +107,7 @@ class OrdertController extends Controller
 
             $order = data_get($response, 'data.order');
 
-            if (!$order) {
+            if (! $order) {
                 return $this->fail('Order not found');
             }
 

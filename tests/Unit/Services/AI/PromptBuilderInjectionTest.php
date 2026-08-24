@@ -222,7 +222,7 @@ class PromptBuilderInjectionTest extends TestCase
         // these numbers (see the ChatbotConfigRepository/PromptBuilder test
         // comment history) whenever system.blade.php's TOOL USAGE section
         // changes length.
-        config(['sales.prompt_guard.system_prompt_max_tokens' => 1900]);
+        config(['sales.prompt_guard.system_prompt_max_tokens' => 1860]);
 
         // Ranked highest-relevance first, per StoreKnowledgeService's
         // contract — the fix must drop from the END of this list.

@@ -5,14 +5,13 @@ namespace Tests\Unit\Controllers;
 use App\Http\Controllers\Base\BaseApiController;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
 use Tests\TestCase;
 
 /**
  * Unit tests for BaseApiController
- * 
+ *
  * Tests standardized response methods, correlation ID handling, and meta field population.
- * 
+ *
  * Requirements: 5.5, 9.1, 9.2, 9.6
  */
 class BaseApiControllerTest extends TestCase
@@ -22,7 +21,7 @@ class BaseApiControllerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->controller = new TestableBaseApiController();
+        $this->controller = new TestableBaseApiController;
     }
 
     /** @test */
@@ -101,7 +100,7 @@ class BaseApiControllerTest extends TestCase
     public function it_uses_correlation_id_from_request_header()
     {
         $correlationId = 'test-correlation-id-123';
-        
+
         $request = Request::create('/test', 'GET');
         $request->headers->set('X-Correlation-ID', $correlationId);
         $this->app->instance('request', $request);
@@ -116,7 +115,7 @@ class BaseApiControllerTest extends TestCase
     public function it_uses_correlation_id_from_request_attributes()
     {
         $correlationId = 'test-correlation-id-456';
-        
+
         $request = Request::create('/test', 'GET');
         $request->attributes->set('correlation_id', $correlationId);
         $this->app->instance('request', $request);

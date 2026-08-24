@@ -2,14 +2,15 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 
 class AvailabilityDate extends Model
 {
     use HasFactory;
 
     protected $fillable = ['date', 'user_id'];
+
     protected $casts = [
         'date' => 'date',
     ];
@@ -18,5 +19,4 @@ class AvailabilityDate extends Model
     {
         return $this->hasMany(TimeSlot::class);
     }
-    
 }

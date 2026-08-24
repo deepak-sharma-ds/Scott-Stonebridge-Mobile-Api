@@ -4,10 +4,9 @@ namespace App\Services;
 
 use App\Models\Audio;
 use App\Models\Package;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class AudioService
 {
@@ -49,7 +48,7 @@ class AudioService
     {
         return DB::transaction(function () use ($data) {
             // Set default order if not provided
-            if (!isset($data['order_index']) && isset($data['package_id'])) {
+            if (! isset($data['order_index']) && isset($data['package_id'])) {
                 $data['order_index'] = $this->getNextOrderIndex($data['package_id']);
             }
 
@@ -64,6 +63,7 @@ class AudioService
     {
         return DB::transaction(function () use ($audio, $data) {
             $audio->update($data);
+
             return $audio->fresh();
         });
     }
@@ -94,6 +94,7 @@ class AudioService
                     ->where('package_id', $packageId)
                     ->update(['order_index' => $index + 1]);
             }
+
             return true;
         });
     }
@@ -118,6 +119,7 @@ class AudioService
     private function getNextOrderIndex(int $packageId): int
     {
         $maxOrder = Audio::where('package_id', $packageId)->max('order_index');
+
         return ($maxOrder ?? 0) + 1;
     }
 }

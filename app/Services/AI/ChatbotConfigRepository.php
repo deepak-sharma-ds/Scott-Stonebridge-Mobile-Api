@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\AI;
 
 use App\Models\Configuration;
+use App\Services\CurrencyCountryMapService;
 use Illuminate\Support\Facades\Schema;
 use Throwable;
 
@@ -164,16 +165,19 @@ class ChatbotConfigRepository
         return $this->int('Context.product_description_max_chars', 400);
     }
 
-    /**
-     * Shared currency→country lookup (previously duplicated verbatim in
-     * ShopifyContextService and ProductRecommendationService).
-     */
     public function countryFromCurrency(?string $currency): string
     {
-        $map = $this->json('Context.currency_country_map', self::DEFAULT_CURRENCY_COUNTRY_MAP);
-        $fallback = $this->raw('Context.currency_country_fallback') ?? self::DEFAULT_CURRENCY_COUNTRY_FALLBACK;
+        $map = $this->json('Context.currency_country_map', null);
+        if ($map !== null && isset($map[strtoupper((string) $currency)])) {
+            return $map[strtoupper((string) $currency)];
+        }
 
-        return $map[strtoupper((string) $currency)] ?? $fallback;
+        $fallback = $this->raw('Context.currency_country_fallback');
+        if ($fallback !== null && $fallback !== '') {
+            return (string) $fallback;
+        }
+
+        return CurrencyCountryMapService::getCountryCode((string) ($currency ?? 'GBP'));
     }
 
     // -- ToolExecutor ------------------------------------------------------------

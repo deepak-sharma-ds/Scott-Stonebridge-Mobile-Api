@@ -254,6 +254,35 @@ class CustomerOAuthController
         ]);
     }
 
+    public function logout(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'session_id' => ['required', 'uuid'],
+        ]);
+
+        $session = AiCustomerSession::query()
+            ->where('session_id', $validated['session_id'])
+            ->first();
+
+        if ($session !== null) {
+            $session->forceFill([
+                'customer_access_token' => '',
+                'refresh_token' => null,
+                'refresh_token_expires_at' => null,
+                'expires_at' => now()->subSecond(),
+            ])->save();
+
+            Log::channel('ai')->info('oauth.customer_logout', [
+                'session_id' => $validated['session_id'],
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'authenticated' => false,
+        ]);
+    }
+
     /**
      * @return array{authorization_endpoint: string, token_endpoint: string}
      */

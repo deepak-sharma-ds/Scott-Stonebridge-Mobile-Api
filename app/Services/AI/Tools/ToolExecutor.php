@@ -8,7 +8,6 @@ use App\Contracts\Services\Sales\StoreKnowledgeServiceInterface;
 use App\Contracts\Services\Sales\UpsellServiceInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\AI\CustomerOrderSummaryDTO;
-use App\DTOs\Chat\CartContextDTO;
 use App\DTOs\Chat\ProductRecommendationDTO;
 use App\Exceptions\AI\AIServiceUnavailableException;
 use App\Exceptions\AI\AuthRequiredException;
@@ -188,24 +187,27 @@ class ToolExecutor
         $query = trim((string) ($args['query'] ?? ''));
         $limit = (int) ($args['limit'] ?? 0);
         $limit = $limit >= 1 && $limit <= 12 ? $limit : 10;
+        $country = $ctx->country;
 
-        $cacheKey = 'ai:catalog:'.md5($ctx->shopDomain.'|'.strtolower($query).'|'.$limit);
+        $cacheKey = 'ai:catalog:'.md5($ctx->shopDomain.'|'.strtolower($query).'|'.$limit.'|'.$country);
         $ttl = (int) (config('chatbot.mcp.cache_ttl_seconds.search_catalog') ?? 120);
 
         try {
-            $nodes = Cache::remember($cacheKey, $ttl, function () use ($query, $limit): array {
+            $nodes = Cache::remember($cacheKey, $ttl, function () use ($query, $limit, $country): array {
                 $handle = $this->mapQueryToCollection($query);
 
                 if ($handle !== null) {
                     $resp = $this->storefrontApi()->query('storefront/collection/collection_products', [
                         'handle' => $handle,
                         'limit' => $limit,
+                        'country' => $country,
                     ]);
                     $edges = $resp['data']['collectionByHandle']['products']['edges'] ?? [];
                 } else {
                     $resp = $this->storefrontApi()->query('storefront/products/get_all_products', [
                         'limit' => $limit,
                         'query' => $query !== '' ? $query : '*',
+                        'country' => $country,
                     ]);
                     $edges = $resp['data']['products']['edges'] ?? [];
                 }
@@ -278,7 +280,7 @@ class ToolExecutor
      */
     private function executeCustomerMcp(string $toolName, array $args, ChatSessionContext $ctx): ToolResult
     {
-        $token = $ctx->customerAccessToken ?? $this->resolveCustomerToken($ctx->sessionId, $ctx->shopDomain);
+        $token = $ctx->customerAccessToken ?? $this->resolveCustomerToken($ctx->sessionId, $ctx->shopDomain, $ctx->isGuest);
         if ($token === null) {
             return $this->emitAuthRequired($ctx);
         }
@@ -340,21 +342,20 @@ class ToolExecutor
                 $this->customerOrderVariables($toolName, $args),
             );
         } catch (AuthRequiredException $e) {
-            // Token rejected by GraphQL too — genuine auth state mismatch.
-            // Emit a soft text instead of re-opening the popup (which would
-            // re-trigger the loop) and let the user retry from the chat UI.
+            // Token rejected by GraphQL — invalid / revoked / logged out.
+            // Invalidate the session in DB and prompt auth_required.
             Log::channel('ai')->warning('tool.customer_graph_rejected_valid_token', [
                 'session_id' => $ctx->sessionId,
                 'shop_domain' => $ctx->shopDomain,
                 'tool' => $toolName,
             ]);
 
-            $this->emitter->emit('text', [
-                'content' => "You're signed in, but I can't reach the live order service right now. "
-                    .'Please check your order history in your account, or try again in a few minutes.',
-            ]);
+            $row = AiCustomerSession::query()->where('session_id', $ctx->sessionId)->first();
+            if ($row !== null) {
+                $this->invalidateCustomerSession($row, 'graphql_auth_required');
+            }
 
-            return ToolResult::error('Customer Account GraphQL rejected a valid token.');
+            return $this->emitAuthRequired($ctx);
         } catch (Throwable $e) {
             $this->logToolError($toolName, $ctx, $e);
 
@@ -413,12 +414,12 @@ class ToolExecutor
                 'tool' => ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS,
             ]);
 
-            $this->emitter->emit('text', [
-                'content' => "You're signed in, but I can't reach your order history right now. "
-                    .'Please try again in a few minutes.',
-            ]);
+            $row = AiCustomerSession::query()->where('session_id', $ctx->sessionId)->first();
+            if ($row !== null) {
+                $this->invalidateCustomerSession($row, 'graphql_auth_required');
+            }
 
-            return ToolResult::error('Customer Account GraphQL rejected a valid token.');
+            return $this->emitAuthRequired($ctx);
         } catch (Throwable $e) {
             $this->logToolError(ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS, $ctx, $e);
 
@@ -689,7 +690,7 @@ class ToolExecutor
             return ToolResult::error('Empty cart — nothing to upsell against.');
         }
 
-        $suggestions = $this->upsell->getUpsells($cartItems, $ctx->shopDomain, $cart->currency);
+        $suggestions = $this->upsell->getUpsells($cartItems, $ctx->shopDomain, $cart->currency ?? $ctx->currency);
 
         $payload = [
             'upsells' => array_map(static fn ($dto) => $dto->toArray(), $suggestions),
@@ -796,30 +797,33 @@ class ToolExecutor
     private function resolveProductDetailVars(array $args, ChatSessionContext $ctx): ?array
     {
         $handle = trim((string) ($args['handle'] ?? ''));
+        $res = null;
+
         if ($handle !== '') {
-            return ['handle' => $handle];
+            $res = ['handle' => $handle];
+        } else {
+            $pid = trim((string) ($args['product_id'] ?? ''));
+            if ($pid === '') {
+                return null;
+            }
+
+            if (str_starts_with($pid, 'gid://shopify/Product/')) {
+                $res = ['id' => $pid];
+            } elseif (ctype_digit($pid)) {
+                $res = ['id' => $this->toGid('Product', $pid)];
+            } elseif (preg_match('/^[a-z0-9][a-z0-9\-]*$/', $pid) === 1) {
+                $res = ['handle' => $pid];
+            } else {
+                $resolved = $this->resolveProductIdFromQuery($pid, $ctx);
+                $res = $resolved !== null ? ['id' => $resolved] : null;
+            }
         }
 
-        $pid = trim((string) ($args['product_id'] ?? ''));
-        if ($pid === '') {
-            return null;
+        if ($res !== null) {
+            $res['country'] = $ctx->country;
         }
 
-        if (str_starts_with($pid, 'gid://shopify/Product/')) {
-            return ['id' => $pid];
-        }
-        if (ctype_digit($pid)) {
-            return ['id' => $this->toGid('Product', $pid)];
-        }
-        // A bare handle/slug: lowercase alphanumerics + dashes, no spaces.
-        if (preg_match('/^[a-z0-9][a-z0-9\-]*$/', $pid) === 1) {
-            return ['handle' => $pid];
-        }
-
-        // Free text / title — resolve to a GID via the Storefront search.
-        $resolved = $this->resolveProductIdFromQuery($pid, $ctx);
-
-        return $resolved !== null ? ['id' => $resolved] : null;
+        return $res;
     }
 
     /**
@@ -841,12 +845,28 @@ class ToolExecutor
             }
             $title = (string) ($line['title'] ?? $line['product_title'] ?? 'Item');
             $qty = (int) ($line['quantity'] ?? 0);
-            $lines[] = "{$title} x{$qty}";
+            $variantId = (string) ($line['variant_id'] ?? $line['id'] ?? '');
+            $handle = (string) ($line['handle'] ?? '');
+            $price = isset($line['price']) ? (string) $line['price'] : '';
+
+            $meta = [];
+            if ($variantId !== '') {
+                $meta[] = "variant_id: {$variantId}";
+            }
+            if ($handle !== '') {
+                $meta[] = "handle: {$handle}";
+            }
+            if ($price !== '') {
+                $meta[] = "price: {$price}";
+            }
+
+            $metaStr = $meta !== [] ? ' ('.implode(', ', $meta).')' : '';
+            $lines[] = "- {$title}{$metaStr} x{$qty}";
         }
 
         $summary = $lines === []
             ? "Cart has {$cart->itemCount} item(s)."
-            : 'Cart: '.implode(', ', $lines).". Total: {$cart->currency} {$cart->totalPrice}.";
+            : "Current Cart (Total: {$cart->currency} {$cart->totalPrice}):\n".implode("\n", $lines);
 
         return ToolResult::success($summary);
     }
@@ -854,12 +874,10 @@ class ToolExecutor
     /**
      * Emits a `cart_action` intent per requested item for the frontend to
      * execute against the theme's native Ajax Cart API (`/cart/add.js`,
-     * `/cart/change.js`) — the storefront's own cart cookie is the only
-     * cart, so nothing is mutated here (ADR 0010). Each `variant_id` is
-     * checked against $ctx->shownVariantIds — the same "shown to customer"
-     * window the model's own visible history already carries — and dropped
-     * if it was never actually surfaced, guarding against a hallucinated or
-     * stale id reaching a real customer's cart.
+     * `/cart/change.js`, `/cart/clear.js`) — the storefront's own cart cookie
+     * is the only cart, so nothing is mutated here (ADR 0010). Each `variant_id`
+     * is resolved against the cart snapshot or $ctx->shownVariantIds — guarding
+     * against a hallucinated or stale id reaching a real customer's cart.
      *
      * @param  array<string, mixed>  $args
      */
@@ -876,33 +894,51 @@ class ToolExecutor
             if (! is_array($row)) {
                 continue;
             }
-            $action = is_string($row['action'] ?? null) ? $row['action'] : '';
-            $variantId = is_string($row['variant_id'] ?? null) ? $row['variant_id'] : '';
-            $quantity = (int) ($row['quantity'] ?? ($action === 'remove' ? 0 : 1));
+            $action = is_string($row['action'] ?? null) ? strtolower($row['action']) : '';
+            $rawVariantId = is_string($row['variant_id'] ?? null) ? trim($row['variant_id']) : '';
+            $quantity = isset($row['quantity']) ? (int) $row['quantity'] : ($action === 'remove' ? 0 : 1);
 
-            if (! in_array($action, ['add', 'update', 'remove'], true) || $variantId === '') {
-                $rejected[] = $variantId !== '' ? $variantId : '(missing variant_id)';
+            if ($action === 'clear') {
+                if ($ctx->cartSnapshot !== null && ! $ctx->cartSnapshot->isEmpty()) {
+                    foreach ($ctx->cartSnapshot->items as $line) {
+                        if (! is_array($line)) {
+                            continue;
+                        }
+                        $vid = (string) ($line['variant_id'] ?? $line['id'] ?? '');
+                        if ($vid !== '') {
+                            $accepted[] = ['action' => 'remove', 'variant_id' => $vid, 'quantity' => 0];
+                        }
+                    }
+                }
 
                 continue;
             }
 
-            // 'add' targets a variant the customer was just shown a card/detail
-            // for; 'update'/'remove' target a variant already IN the cart the
-            // storefront sent this turn — both are legitimate provenance, so
-            // either satisfies the guard.
-            $alreadyInCart = $this->variantInCartSnapshot($variantId, $ctx->cartSnapshot);
-            if (! isset($ctx->shownVariantIds[$variantId]) && ! $alreadyInCart) {
-                $rejected[] = $variantId;
+            if (! in_array($action, ['add', 'update', 'remove'], true) || $rawVariantId === '') {
+                $rejected[] = $rawVariantId !== '' ? $rawVariantId : '(missing variant_id)';
 
                 continue;
             }
 
-            $accepted[] = ['action' => $action, 'variant_id' => $variantId, 'quantity' => max(0, $quantity)];
+            // Normalise update with quantity 0 to remove
+            if ($action === 'update' && $quantity === 0) {
+                $action = 'remove';
+            }
+
+            // Resolve variant against cartSnapshot and shownVariantIds
+            $resolvedVariantId = $this->resolveCartVariantId($rawVariantId, $ctx);
+            if ($resolvedVariantId === null) {
+                $rejected[] = $rawVariantId;
+
+                continue;
+            }
+
+            $accepted[] = ['action' => $action, 'variant_id' => $resolvedVariantId, 'quantity' => max(0, $quantity)];
         }
 
         if ($accepted === []) {
             return ToolResult::error(
-                'None of the requested variant_ids were actually shown to the customer this conversation or present in their cart — do not guess an id; call search_catalog or get_product_details first.',
+                'None of the requested variant_ids were actually shown to the customer this conversation or present in their cart — do not guess an id; call get_cart, search_catalog, or get_product_details first.',
             );
         }
 
@@ -920,19 +956,112 @@ class ToolExecutor
         return ToolResult::success($summary, ['type' => 'cart_action'] + $payload);
     }
 
-    private function variantInCartSnapshot(string $variantId, ?CartContextDTO $cart): bool
+    private function resolveCartVariantId(string $identifier, ChatSessionContext $ctx): ?string
     {
-        if ($cart === null) {
-            return false;
-        }
+        $bare = (string) (str_contains($identifier, '/') ? basename($identifier) : $identifier);
 
-        foreach ($cart->items as $line) {
-            if (is_array($line) && ($line['variant_id'] ?? null) === $variantId) {
-                return true;
+        // 1. Direct check in shownVariantIds
+        if (isset($ctx->shownVariantIds[$identifier])) {
+            return $identifier;
+        }
+        if (isset($ctx->shownVariantIds[$bare])) {
+            return $bare;
+        }
+        foreach (array_keys($ctx->shownVariantIds) as $shownId) {
+            $shownBare = (string) (str_contains((string) $shownId, '/') ? basename((string) $shownId) : $shownId);
+            if ($shownBare === $bare) {
+                return (string) $shownId;
             }
         }
 
-        return false;
+        // 2. Check in cart snapshot
+        if ($ctx->cartSnapshot !== null) {
+            foreach ($ctx->cartSnapshot->items as $line) {
+                if (! is_array($line)) {
+                    continue;
+                }
+                $lineVid = (string) ($line['variant_id'] ?? $line['id'] ?? '');
+                $lineBare = (string) (str_contains($lineVid, '/') ? basename($lineVid) : $lineVid);
+                $linePid = (string) ($line['product_id'] ?? '');
+                $lineHandle = strtolower((string) ($line['handle'] ?? ''));
+                $lineTitle = strtolower((string) ($line['title'] ?? $line['product_title'] ?? ''));
+
+                if ($lineVid === $identifier || $lineBare === $bare) {
+                    return $lineVid !== '' ? $lineVid : $identifier;
+                }
+                if ($linePid !== '' && ($linePid === $identifier || $linePid === $bare)) {
+                    return $lineVid !== '' ? $lineVid : $identifier;
+                }
+                if ($lineHandle !== '' && $lineHandle === strtolower($identifier)) {
+                    return $lineVid !== '' ? $lineVid : $identifier;
+                }
+                if ($lineTitle !== '' && ($lineTitle === strtolower($identifier) || str_contains($lineTitle, strtolower($identifier)))) {
+                    return $lineVid !== '' ? $lineVid : $identifier;
+                }
+            }
+        }
+
+        // 3. Fallback: Validate variant directly against Shopify Storefront API
+        if (str_starts_with($identifier, 'gid://shopify/ProductVariant/') || (is_numeric($bare) && strlen($bare) >= 6)) {
+            $gid = str_starts_with($identifier, 'gid://') ? $identifier : "gid://shopify/ProductVariant/{$bare}";
+            $cacheKey = "ai:variant_valid:{$ctx->shopDomain}:{$ctx->country}:{$gid}";
+            $validatedId = Cache::remember($cacheKey, 3600, function () use ($gid, $ctx): ?string {
+                try {
+                    $resp = $this->storefrontApi()->query('storefront/products/get_variant_by_id', [
+                        'id' => $gid,
+                        'country' => $ctx->country,
+                    ]);
+                    $node = $resp['data']['node'] ?? null;
+                    if (is_array($node) && ! empty($node['id'])) {
+                        return (string) $node['id'];
+                    }
+                } catch (Throwable) {
+                    // Ignore and fall through
+                }
+
+                return null;
+            });
+
+            if ($validatedId !== null) {
+                return $validatedId;
+            }
+        }
+
+        // 4. Fallback: Resolve product handle / name to its first available variant
+        if (strlen($identifier) >= 3 && ! is_numeric($identifier) && ! str_starts_with($identifier, 'gid://')) {
+            $handleKey = "ai:product_handle_vid:{$ctx->shopDomain}:{$ctx->country}:".strtolower($identifier);
+            $resolvedByHandle = Cache::remember($handleKey, 3600, function () use ($identifier, $ctx): ?string {
+                try {
+                    $resp = $this->storefrontApi()->query('storefront/products/get_product_detail_for_chat', [
+                        'handle' => strtolower($identifier),
+                        'country' => $ctx->country,
+                    ]);
+                    $productNode = $resp['data']['product'] ?? null;
+                    if (is_array($productNode)) {
+                        $edges = $productNode['variants']['edges'] ?? [];
+                        foreach ($edges as $edge) {
+                            $v = $edge['node'] ?? null;
+                            if (is_array($v) && ! empty($v['id']) && ($v['availableForSale'] ?? true)) {
+                                return (string) $v['id'];
+                            }
+                        }
+                        if (isset($edges[0]['node']['id'])) {
+                            return (string) $edges[0]['node']['id'];
+                        }
+                    }
+                } catch (Throwable) {
+                    // Ignore and fall through
+                }
+
+                return null;
+            });
+
+            if ($resolvedByHandle !== null) {
+                return $resolvedByHandle;
+            }
+        }
+
+        return null;
     }
 
     /**
@@ -1207,8 +1336,12 @@ class ToolExecutor
         );
     }
 
-    private function resolveCustomerToken(string $sessionId, string $shopDomain = ''): ?string
+    private function resolveCustomerToken(string $sessionId, string $shopDomain = '', bool $isGuest = false): ?string
     {
+        if ($isGuest) {
+            return null;
+        }
+
         $row = AiCustomerSession::query()
             ->where('session_id', $sessionId)
             ->first();
@@ -1518,6 +1651,7 @@ class ToolExecutor
             $resp = $this->storefrontApi()->query('storefront/products/get_all_products', [
                 'limit' => 1,
                 'query' => $query,
+                'country' => $ctx->country,
             ]);
             $node = $resp['data']['products']['edges'][0]['node'] ?? null;
         } catch (Throwable $e) {

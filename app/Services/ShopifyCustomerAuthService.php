@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Services\APIShopifyService;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 
@@ -56,9 +55,10 @@ class ShopifyCustomerAuthService
 
         $errors = data_get($response, 'data.customerCreate.customerUserErrors', []);
 
-        if (!empty($errors)) {
+        if (! empty($errors)) {
             // Log errors and return
             Log::warning('Shopify signup errors', $errors);
+
             return [
                 'success' => false,
                 'errors' => $errors,
@@ -70,6 +70,7 @@ class ShopifyCustomerAuthService
         if ($customer) {
             // Automatically login customer after signup
             $tokenData = $this->loginCustomer($email, $password);
+
             return array_merge(['success' => true, 'customer' => $customer], $tokenData ?? []);
         }
 
@@ -109,13 +110,14 @@ class ShopifyCustomerAuthService
             return null;
         }
 
-        if (!empty($response['data']['customerAccessTokenCreate']['customerAccessToken'])) {
+        if (! empty($response['data']['customerAccessTokenCreate']['customerAccessToken'])) {
             $tokenData = $response['data']['customerAccessTokenCreate']['customerAccessToken'];
             $log->info('Shopify customer login successful', [
                 'email' => $email,
                 'expires_at' => $tokenData['expiresAt'],
             ]);
             $log->info('================== END: ShopifyCustomerAuthService: loginCustomer ==================');
+
             return [
                 'access_token' => $tokenData['accessToken'],
                 'expires_at' => Carbon::parse($tokenData['expiresAt']),
@@ -123,7 +125,7 @@ class ShopifyCustomerAuthService
         }
 
         // Log errors
-        if (!empty($response['data']['customerAccessTokenCreate']['userErrors'])) {
+        if (! empty($response['data']['customerAccessTokenCreate']['userErrors'])) {
             $log->warning('Shopify login user errors', $response['data']['customerAccessTokenCreate']['userErrors']);
         }
 
@@ -144,6 +146,7 @@ class ShopifyCustomerAuthService
                 'token' => $accessToken,
                 'expires_at' => $expiresAt,
             ]);
+
             return false;
         }
 
@@ -196,11 +199,13 @@ class ShopifyCustomerAuthService
             $log->info('Shopify token verification response', $response);
             if (isset($response['errors'])) {
                 $log->warning('Shopify token verification errors', $response['errors']);
+
                 return false;
             }
             $customer = data_get($response, 'data.customer');
 
             $log->info('================== END: ShopifyCustomerAuthService: verifyToken ==================');
+
             return $customer ?: false;
         } catch (\Throwable $e) {
             $log->error('Shopify token verification failed', [
@@ -241,15 +246,17 @@ class ShopifyCustomerAuthService
         $log->info('Shopify token renewal response', $response);
         if (isset($response['errors'])) {
             $log->warning('Shopify token renewal errors', $response['errors']);
+
             return null;
         }
 
-        if (!empty($response['data']['customerAccessTokenRenew']['customerAccessToken'])) {
+        if (! empty($response['data']['customerAccessTokenRenew']['customerAccessToken'])) {
             $tokenData = $response['data']['customerAccessTokenRenew']['customerAccessToken'];
             $log->info('Shopify token renewal successful', [
                 'expires_at' => $tokenData['expiresAt'],
             ]);
             $log->info('================== END: ShopifyCustomerAuthService: renewToken ==================');
+
             return [
                 'access_token' => $tokenData['accessToken'],
                 'expires_at' => Carbon::parse($tokenData['expiresAt']),
@@ -257,6 +264,7 @@ class ShopifyCustomerAuthService
         }
 
         $log->warning('Shopify token renewal user errors', $response['data']['customerAccessTokenRenew']['userErrors'] ?? []);
+
         return null;
     }
 
@@ -288,26 +296,29 @@ class ShopifyCustomerAuthService
                 'email' => $email,
                 'errors' => $response['errors'],
             ]);
+
             return [
                 'success' => false,
                 'message' => 'Unknown error occurred',
-                'error' => $response['errors'] ?? []
+                'error' => $response['errors'] ?? [],
             ];
         }
 
-        if (!empty($response['data']['customerRecover']['customerUserErrors'])) {
+        if (! empty($response['data']['customerRecover']['customerUserErrors'])) {
             $log->warning('Shopify password reset email user errors', $response['data']['customerRecover']['customerUserErrors']);
+
             return [
                 'success' => false,
-                'message' => $response['data']['customerRecover']['customerUserErrors']
+                'message' => $response['data']['customerRecover']['customerUserErrors'],
             ];
         }
 
         $log->info('Shopify password reset email sent successfully', ['email' => $email]);
         $log->info('================== END: ShopifyCustomerAuthService: sendPasswordResetEmail ==================');
+
         return [
             'success' => true,
-            'message' => 'Password reset email sent successfully.'
+            'message' => 'Password reset email sent successfully.',
         ];
     }
 
@@ -350,20 +361,22 @@ class ShopifyCustomerAuthService
                 'reset_url' => $resetUrl,
                 'errors' => $response['errors'],
             ]);
+
             return [
                 'success' => false,
                 'message' => 'Unknown error occurred',
-                'error' => $response['errors'] ?? []
+                'error' => $response['errors'] ?? [],
             ];
         }
 
         $data = $response['data']['customerResetByUrl'] ?? null;
 
-        if (!empty($data['customerUserErrors'])) {
+        if (! empty($data['customerUserErrors'])) {
             $log->warning('Shopify password reset user errors', $data['customerUserErrors']);
+
             return [
                 'success' => false,
-                'message' => $data['customerUserErrors']
+                'message' => $data['customerUserErrors'],
             ];
         }
 
@@ -372,6 +385,7 @@ class ShopifyCustomerAuthService
             'email' => $data['customer']['email'] ?? null,
         ]);
         $log->info('================== END: ShopifyCustomerAuthService: resetPassword ==================');
+
         return [
             'success' => true,
             'message' => 'Password has been reset successfully.',
@@ -390,6 +404,7 @@ class ShopifyCustomerAuthService
 
         if (empty($accessToken)) {
             $log->warning('Logout failed: Access token missing');
+
             return false;
         }
 
@@ -415,6 +430,7 @@ class ShopifyCustomerAuthService
 
             if (isset($response['errors'])) {
                 $log->error('Shopify logout failed', $response['errors']);
+
                 return false;
             }
 
@@ -424,8 +440,9 @@ class ShopifyCustomerAuthService
                 []
             );
 
-            if (!empty($errors)) {
+            if (! empty($errors)) {
                 $log->warning('Shopify logout user errors', $errors);
+
                 return false;
             }
 
@@ -434,12 +451,14 @@ class ShopifyCustomerAuthService
             ]);
 
             $log->info('================== END: ShopifyCustomerAuthService: logoutCustomer ==================');
+
             return true;
         } catch (\Throwable $e) {
             $log->error('Shopify logout exception', [
                 'token' => $accessToken,
                 'error' => $e->getMessage(),
             ]);
+
             return false;
         }
     }

@@ -9,21 +9,21 @@ class ShopifyValidationExceptionTest extends TestCase
 {
     public function test_it_has_correct_http_status_code(): void
     {
-        $exception = new ShopifyValidationException();
+        $exception = new ShopifyValidationException;
 
         $this->assertEquals(422, $exception->getHttpStatusCode());
     }
 
     public function test_it_has_correct_error_code(): void
     {
-        $exception = new ShopifyValidationException();
+        $exception = new ShopifyValidationException;
 
         $this->assertEquals('VALIDATION_ERROR', $exception->getErrorCode());
     }
 
     public function test_it_has_default_message(): void
     {
-        $exception = new ShopifyValidationException();
+        $exception = new ShopifyValidationException;
 
         $this->assertEquals('Validation failed', $exception->getMessage());
     }
@@ -41,7 +41,7 @@ class ShopifyValidationExceptionTest extends TestCase
 
     public function test_it_has_empty_errors_by_default(): void
     {
-        $exception = new ShopifyValidationException();
+        $exception = new ShopifyValidationException;
 
         $this->assertIsArray($exception->getErrors());
         $this->assertEmpty($exception->getErrors());
@@ -61,7 +61,7 @@ class ShopifyValidationExceptionTest extends TestCase
 
     public function test_it_excludes_errors_from_array_when_empty(): void
     {
-        $exception = new ShopifyValidationException();
+        $exception = new ShopifyValidationException;
         $array = $exception->toArray();
 
         $this->assertArrayNotHasKey('errors', $array['data']);

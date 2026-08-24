@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-       Schema::table('scheduled_meetings', function (Blueprint $table) {
+        Schema::table('scheduled_meetings', function (Blueprint $table) {
             $table->unsignedBigInteger('availability_date_id')->after('user_id')->nullable();
             $table->unsignedBigInteger('time_slot_id')->after('availability_date_id')->nullable();
 

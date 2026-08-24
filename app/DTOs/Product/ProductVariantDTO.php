@@ -7,10 +7,10 @@ use InvalidArgumentException;
 
 /**
  * Product Variant Data Transfer Object
- * 
+ *
  * Represents a single variant of a Shopify product with typed properties.
  * Variants represent different options of a product (e.g., size, color combinations).
- * 
+ *
  * Requirements: 16.1, 16.6, 16.7
  */
 class ProductVariantDTO extends BaseDTO
@@ -34,7 +34,7 @@ class ProductVariantDTO extends BaseDTO
 
     /**
      * Validate the product variant data.
-     * 
+     *
      * @throws InvalidArgumentException
      */
     protected function validate(): void
@@ -47,9 +47,8 @@ class ProductVariantDTO extends BaseDTO
 
     /**
      * Create a ProductVariantDTO from Shopify API response data.
-     * 
-     * @param array $data Raw variant data from Shopify GraphQL response
-     * @return self
+     *
+     * @param  array  $data  Raw variant data from Shopify GraphQL response
      */
     public static function fromShopifyResponse(array $data): self
     {
@@ -64,7 +63,7 @@ class ProductVariantDTO extends BaseDTO
             quantityAvailable: $data['quantityAvailable'] ?? null,
             image: $data['image']['url'] ?? null,
             selectedOptions: array_map(
-                fn($option) => [
+                fn ($option) => [
                     'name' => $option['name'],
                     'value' => $option['value'],
                 ],

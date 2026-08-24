@@ -6,18 +6,16 @@ use Tests\TestCase;
 
 /**
  * Theme Template API Example Test
- * 
+ *
  * This is an example test file showing how to test the Theme Template API.
  * Copy and adapt these patterns for actual unit and feature tests.
- * 
+ *
  * To run: php artisan test tests/Examples/ThemeTemplateApiExampleTest.php
  */
 class ThemeTemplateApiExampleTest extends TestCase
 {
     /**
      * Example: Test listing theme templates
-     * 
-     * @return void
      */
     public function test_can_list_theme_templates(): void
     {
@@ -42,7 +40,7 @@ class ThemeTemplateApiExampleTest extends TestCase
                         'metadata',
                         'created_at',
                         'updated_at',
-                    ]
+                    ],
                 ],
                 'pagination' => [
                     'has_next',
@@ -51,14 +49,12 @@ class ThemeTemplateApiExampleTest extends TestCase
                 'meta' => [
                     'correlation_id',
                     'timestamp',
-                ]
+                ],
             ]);
     }
 
     /**
      * Example: Test getting theme template by handle
-     * 
-     * @return void
      */
     public function test_can_get_theme_template_by_handle(): void
     {
@@ -86,21 +82,19 @@ class ThemeTemplateApiExampleTest extends TestCase
                 'meta' => [
                     'correlation_id',
                     'timestamp',
-                ]
+                ],
             ])
             ->assertJson([
                 'success' => true,
                 'data' => [
                     'handle' => 'product.custom',
                     'type' => 'product',
-                ]
+                ],
             ]);
     }
 
     /**
      * Example: Test getting theme template by type
-     * 
-     * @return void
      */
     public function test_can_get_theme_template_by_type(): void
     {
@@ -119,20 +113,18 @@ class ThemeTemplateApiExampleTest extends TestCase
                     'type',
                     'name',
                 ],
-                'meta'
+                'meta',
             ])
             ->assertJson([
                 'success' => true,
                 'data' => [
                     'type' => 'product',
-                ]
+                ],
             ]);
     }
 
     /**
      * Example: Test getting theme template with resource handle
-     * 
-     * @return void
      */
     public function test_can_get_theme_template_by_type_with_resource_handle(): void
     {
@@ -147,14 +139,12 @@ class ThemeTemplateApiExampleTest extends TestCase
                 'data' => [
                     'type' => 'product',
                     'suffix' => 'featured',
-                ]
+                ],
             ]);
     }
 
     /**
      * Example: Test template not found error
-     * 
-     * @return void
      */
     public function test_returns_404_when_template_not_found(): void
     {
@@ -172,8 +162,6 @@ class ThemeTemplateApiExampleTest extends TestCase
 
     /**
      * Example: Test invalid template type error
-     * 
-     * @return void
      */
     public function test_returns_400_when_template_type_is_invalid(): void
     {
@@ -191,8 +179,6 @@ class ThemeTemplateApiExampleTest extends TestCase
 
     /**
      * Example: Test missing type parameter error
-     * 
-     * @return void
      */
     public function test_returns_400_when_type_parameter_is_missing(): void
     {
@@ -206,9 +192,9 @@ class ThemeTemplateApiExampleTest extends TestCase
                 'success',
                 'message',
                 'errors' => [
-                    'type'
+                    'type',
                 ],
-                'meta'
+                'meta',
             ])
             ->assertJson([
                 'success' => false,
@@ -217,8 +203,6 @@ class ThemeTemplateApiExampleTest extends TestCase
 
     /**
      * Example: Test pagination
-     * 
-     * @return void
      */
     public function test_can_paginate_theme_templates(): void
     {
@@ -228,11 +212,11 @@ class ThemeTemplateApiExampleTest extends TestCase
         // First page
         $response = $this->getJson('/api/v1/theme/templates?limit=5');
         $response->assertStatus(200);
-        
+
         $data = $response->json();
         $this->assertCount(5, $data['data']);
         $this->assertTrue($data['pagination']['has_next']);
-        
+
         // Second page
         $cursor = $data['pagination']['next_cursor'];
         $response = $this->getJson("/api/v1/theme/templates?limit=5&cursor={$cursor}");
@@ -241,8 +225,6 @@ class ThemeTemplateApiExampleTest extends TestCase
 
     /**
      * Example: Test currency header is respected
-     * 
-     * @return void
      */
     public function test_respects_currency_header(): void
     {
@@ -250,7 +232,7 @@ class ThemeTemplateApiExampleTest extends TestCase
         $this->markTestSkipped('Example test - implement with actual mocks');
 
         $response = $this->getJson('/api/v1/theme/templates', [
-            'X-Currency' => 'EUR'
+            'X-Currency' => 'EUR',
         ]);
 
         $response->assertStatus(200);
@@ -259,8 +241,6 @@ class ThemeTemplateApiExampleTest extends TestCase
 
     /**
      * Example: Test correlation ID is included in response
-     * 
-     * @return void
      */
     public function test_includes_correlation_id_in_response(): void
     {
@@ -274,7 +254,7 @@ class ThemeTemplateApiExampleTest extends TestCase
                 'meta' => [
                     'correlation_id',
                     'timestamp',
-                ]
+                ],
             ]);
 
         $data = $response->json();
@@ -283,8 +263,6 @@ class ThemeTemplateApiExampleTest extends TestCase
 
     /**
      * Example: Test rate limiting
-     * 
-     * @return void
      */
     public function test_rate_limiting_is_applied(): void
     {
@@ -294,9 +272,10 @@ class ThemeTemplateApiExampleTest extends TestCase
         // Make multiple requests to trigger rate limit
         for ($i = 0; $i < 100; $i++) {
             $response = $this->getJson('/api/v1/theme/templates');
-            
+
             if ($response->status() === 429) {
                 $this->assertEquals(429, $response->status());
+
                 return;
             }
         }

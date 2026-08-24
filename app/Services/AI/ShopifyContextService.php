@@ -99,13 +99,14 @@ class ShopifyContextService extends BaseService implements ShopifyContextService
             ];
         }
 
-        $key = sprintf('%s:%s:product:%s', $prefix, $shop, $handle);
+        $country = $this->chatbotConfig->countryFromCurrency($context->currency);
+        $key = sprintf('%s:%s:product:%s:%s', $prefix, $shop, $country, $handle);
 
-        return Cache::remember($key, $ttl, function () use ($handle, $context): ?array {
+        return Cache::remember($key, $ttl, function () use ($handle, $country): ?array {
             try {
                 $response = $this->storefront->query('storefront/products/get_product_details', [
                     'handle' => $handle,
-                    'country' => $this->chatbotConfig->countryFromCurrency($context->currency),
+                    'country' => $country,
                 ]);
 
                 $node = $response['data']['productByHandle'] ?? null;

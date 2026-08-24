@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Contracts\Services\ThemeServiceInterface;
+use App\Exceptions\ShopifyNotFoundException;
 use App\Http\Controllers\Base\BaseApiController;
 use App\Http\Resources\Theme\ThemeTemplateResource;
 use Illuminate\Http\JsonResponse;
@@ -11,10 +12,10 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Theme Controller (v1)
- * 
+ *
  * Handles Shopify theme template endpoints for mobile app rendering.
  * Provides public access to theme templates for dynamic content display.
- * 
+ *
  * Uses Shopify Admin API to fetch theme template assets from Online Store 2.0.
  * Extends BaseApiController for standardized responses.
  */
@@ -26,11 +27,9 @@ class ThemeController extends BaseApiController
 
     /**
      * Get active theme information
-     * 
+     *
      * Returns the active theme ID and name.
      * Public endpoint - no authentication required.
-     * 
-     * @return JsonResponse
      */
     public function getActiveTheme(): JsonResponse
     {
@@ -59,14 +58,12 @@ class ThemeController extends BaseApiController
 
     /**
      * Get theme template by handle
-     * 
+     *
      * Returns a specific theme template by its handle.
      * Optionally includes rendered HTML if requested.
      * Public endpoint - no authentication required.
-     * 
-     * @param Request $request
-     * @param string $handle Template handle (e.g., "page", "page.about", "product.custom")
-     * @return JsonResponse
+     *
+     * @param  string  $handle  Template handle (e.g., "page", "page.about", "product.custom")
      */
     public function show(Request $request, string $handle): JsonResponse
     {
@@ -88,7 +85,7 @@ class ThemeController extends BaseApiController
                 'Theme template retrieved successfully',
                 new ThemeTemplateResource($template)
             );
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             Log::info('Theme template not found', [
                 'correlation_id' => $this->getCorrelationId(),
                 'handle' => $handle,
@@ -114,12 +111,9 @@ class ThemeController extends BaseApiController
 
     /**
      * Get template JSON by name
-     * 
+     *
      * Returns the template JSON configuration from theme assets.
      * Public endpoint - no authentication required.
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function getTemplateJson(Request $request): JsonResponse
     {
@@ -135,7 +129,7 @@ class ThemeController extends BaseApiController
             }
 
             $templateJson = $this->themeService->getTemplateJson(
-                $templateName, 
+                $templateName,
                 $themeId ? (int) $themeId : null
             );
 
@@ -143,7 +137,7 @@ class ThemeController extends BaseApiController
                 'Template JSON retrieved successfully',
                 $templateJson
             );
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             Log::info('Template JSON not found', [
                 'correlation_id' => $this->getCorrelationId(),
                 'template_name' => $request->input('template_name'),
@@ -169,12 +163,9 @@ class ThemeController extends BaseApiController
 
     /**
      * Get rendered HTML for a page
-     * 
+     *
      * Returns the fully rendered HTML of a page from the storefront.
      * Public endpoint - no authentication required.
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function getRenderedHtml(Request $request): JsonResponse
     {
@@ -194,7 +185,7 @@ class ThemeController extends BaseApiController
                 'Rendered HTML retrieved successfully',
                 ['html' => $html]
             );
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             Log::info('Page not found', [
                 'correlation_id' => $this->getCorrelationId(),
                 'handle' => $request->input('handle'),
@@ -220,14 +211,11 @@ class ThemeController extends BaseApiController
 
     /**
      * Get theme template by type
-     * 
+     *
      * Returns a theme template by type and optional suffix.
      * Optionally includes rendered HTML if requested.
      * Useful for determining which template to use for a specific resource.
      * Public endpoint - no authentication required.
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function getByType(Request $request): JsonResponse
     {
@@ -270,7 +258,7 @@ class ThemeController extends BaseApiController
                 [],
                 400
             );
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             Log::info('Theme template not found', [
                 'correlation_id' => $this->getCorrelationId(),
                 'type' => $request->input('type'),

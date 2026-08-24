@@ -10,10 +10,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * ResponseCacheMiddleware
- * 
+ *
  * Caches GET responses with appropriate TTL using cache tags from CacheStrategy.
  * Skips caching for authenticated requests.
- * 
+ *
  * Requirements: 15.6
  */
 class ResponseCacheMiddleware
@@ -23,23 +23,22 @@ class ResponseCacheMiddleware
      */
     public function __construct(
         protected CacheStrategyInterface $cacheStrategy
-    ) {
-    }
+    ) {}
 
     /**
      * Handle an incoming request.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
         // Only cache GET requests
-        if (!$request->isMethod('GET')) {
+        if (! $request->isMethod('GET')) {
             return $next($request);
         }
 
         // Skip caching if disabled in config
-        if (!config('shopify.cache.enabled', true)) {
+        if (! config('shopify.cache.enabled', true)) {
             return $next($request);
         }
 
@@ -53,13 +52,13 @@ class ResponseCacheMiddleware
         $operation = $this->extractOperation($request);
 
         // Check if this operation should be cached
-        if (!$this->cacheStrategy->shouldCache($operation)) {
+        if (! $this->cacheStrategy->shouldCache($operation)) {
             return $next($request);
         }
 
         // Try to get cached response
         $cachedResponse = $this->getCachedResponse($cacheKey);
-        
+
         if ($cachedResponse !== null) {
             return $this->buildResponseFromCache($cachedResponse);
         }
@@ -198,9 +197,9 @@ class ResponseCacheMiddleware
 
         // Restore headers (excluding some that should be fresh)
         $excludeHeaders = ['date', 'age', 'expires'];
-        
+
         foreach ($cachedData['headers'] as $key => $values) {
-            if (!in_array(strtolower($key), $excludeHeaders, true)) {
+            if (! in_array(strtolower($key), $excludeHeaders, true)) {
                 $response->headers->set($key, $values);
             }
         }
@@ -218,7 +217,7 @@ class ResponseCacheMiddleware
     protected function supportsTags(): bool
     {
         $driver = config('cache.default');
-        
+
         // Redis and Memcached support tags
         return in_array($driver, ['redis', 'memcached'], true);
     }

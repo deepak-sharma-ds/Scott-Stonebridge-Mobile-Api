@@ -13,7 +13,8 @@ class BaseDTOTest extends TestCase
      */
     public function test_to_array_converts_properties_to_array(): void
     {
-        $dto = new class('test-id', 'Test Title', 'test-handle') extends BaseDTO {
+        $dto = new class('test-id', 'Test Title', 'test-handle') extends BaseDTO
+        {
             public function __construct(
                 public readonly string $id,
                 public readonly string $title,
@@ -41,7 +42,8 @@ class BaseDTOTest extends TestCase
      */
     public function test_to_array_handles_null_values(): void
     {
-        $dto = new class('test-id', null) extends BaseDTO {
+        $dto = new class('test-id', null) extends BaseDTO
+        {
             public function __construct(
                 public readonly string $id,
                 public readonly ?string $description,
@@ -65,7 +67,8 @@ class BaseDTOTest extends TestCase
      */
     public function test_to_array_handles_nested_dtos(): void
     {
-        $nestedDto = new class('nested-id', 'Nested Title') extends BaseDTO {
+        $nestedDto = new class('nested-id', 'Nested Title') extends BaseDTO
+        {
             public function __construct(
                 public readonly string $id,
                 public readonly string $title,
@@ -79,7 +82,8 @@ class BaseDTOTest extends TestCase
             }
         };
 
-        $parentDto = new class('parent-id', $nestedDto) extends BaseDTO {
+        $parentDto = new class('parent-id', $nestedDto) extends BaseDTO
+        {
             public function __construct(
                 public readonly string $id,
                 public readonly BaseDTO $nested,
@@ -105,7 +109,8 @@ class BaseDTOTest extends TestCase
      */
     public function test_to_array_handles_arrays_of_dtos(): void
     {
-        $dto1 = new class('id-1', 'Title 1') extends BaseDTO {
+        $dto1 = new class('id-1', 'Title 1') extends BaseDTO
+        {
             public function __construct(
                 public readonly string $id,
                 public readonly string $title,
@@ -119,7 +124,8 @@ class BaseDTOTest extends TestCase
             }
         };
 
-        $dto2 = new class('id-2', 'Title 2') extends BaseDTO {
+        $dto2 = new class('id-2', 'Title 2') extends BaseDTO
+        {
             public function __construct(
                 public readonly string $id,
                 public readonly string $title,
@@ -133,7 +139,8 @@ class BaseDTOTest extends TestCase
             }
         };
 
-        $parentDto = new class('parent-id', [$dto1, $dto2]) extends BaseDTO {
+        $parentDto = new class('parent-id', [$dto1, $dto2]) extends BaseDTO
+        {
             public function __construct(
                 public readonly string $id,
                 public readonly array $items,
@@ -160,7 +167,8 @@ class BaseDTOTest extends TestCase
      */
     public function test_to_array_handles_primitive_arrays(): void
     {
-        $dto = new class('test-id', ['tag1', 'tag2', 'tag3']) extends BaseDTO {
+        $dto = new class('test-id', ['tag1', 'tag2', 'tag3']) extends BaseDTO
+        {
             public function __construct(
                 public readonly string $id,
                 public readonly array $tags,
@@ -188,7 +196,8 @@ class BaseDTOTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Title is required');
 
-        new class('', 'Description') extends BaseDTO {
+        new class('', 'Description') extends BaseDTO
+        {
             public function __construct(
                 public readonly string $title,
                 public readonly string $description,
@@ -211,7 +220,8 @@ class BaseDTOTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Title is required');
 
-        new class(null) extends BaseDTO {
+        new class(null) extends BaseDTO
+        {
             public function __construct(
                 public readonly ?string $title,
             ) {
@@ -230,7 +240,8 @@ class BaseDTOTest extends TestCase
      */
     public function test_validate_email_accepts_valid_email(): void
     {
-        $dto = new class('test@example.com') extends BaseDTO {
+        $dto = new class('test@example.com') extends BaseDTO
+        {
             public function __construct(
                 public readonly string $email,
             ) {
@@ -254,7 +265,8 @@ class BaseDTOTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Email must be a valid email address');
 
-        new class('invalid-email') extends BaseDTO {
+        new class('invalid-email') extends BaseDTO
+        {
             public function __construct(
                 public readonly string $email,
             ) {
@@ -273,7 +285,8 @@ class BaseDTOTest extends TestCase
      */
     public function test_validate_positive_accepts_positive_numbers(): void
     {
-        $dto = new class(10) extends BaseDTO {
+        $dto = new class(10) extends BaseDTO
+        {
             public function __construct(
                 public readonly int $quantity,
             ) {
@@ -297,7 +310,8 @@ class BaseDTOTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Quantity must be positive');
 
-        new class(0) extends BaseDTO {
+        new class(0) extends BaseDTO
+        {
             public function __construct(
                 public readonly int $quantity,
             ) {
@@ -319,7 +333,8 @@ class BaseDTOTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Quantity must be positive');
 
-        new class(-5) extends BaseDTO {
+        new class(-5) extends BaseDTO
+        {
             public function __construct(
                 public readonly int $quantity,
             ) {
@@ -338,7 +353,8 @@ class BaseDTOTest extends TestCase
      */
     public function test_validate_non_negative_accepts_zero(): void
     {
-        $dto = new class(0) extends BaseDTO {
+        $dto = new class(0) extends BaseDTO
+        {
             public function __construct(
                 public readonly int $count,
             ) {
@@ -362,7 +378,8 @@ class BaseDTOTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Count must be non-negative');
 
-        new class(-1) extends BaseDTO {
+        new class(-1) extends BaseDTO
+        {
             public function __construct(
                 public readonly int $count,
             ) {
@@ -381,7 +398,8 @@ class BaseDTOTest extends TestCase
      */
     public function test_validate_not_empty_accepts_non_empty_arrays(): void
     {
-        $dto = new class(['item1', 'item2']) extends BaseDTO {
+        $dto = new class(['item1', 'item2']) extends BaseDTO
+        {
             public function __construct(
                 public readonly array $items,
             ) {
@@ -405,7 +423,8 @@ class BaseDTOTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Items cannot be empty');
 
-        new class([]) extends BaseDTO {
+        new class([]) extends BaseDTO
+        {
             public function __construct(
                 public readonly array $items,
             ) {
@@ -424,7 +443,8 @@ class BaseDTOTest extends TestCase
      */
     public function test_validate_in_array_accepts_allowed_values(): void
     {
-        $dto = new class('active') extends BaseDTO {
+        $dto = new class('active') extends BaseDTO
+        {
             public function __construct(
                 public readonly string $status,
             ) {
@@ -448,7 +468,8 @@ class BaseDTOTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage('Status must be one of: active, inactive, pending');
 
-        new class('invalid') extends BaseDTO {
+        new class('invalid') extends BaseDTO
+        {
             public function __construct(
                 public readonly string $status,
             ) {

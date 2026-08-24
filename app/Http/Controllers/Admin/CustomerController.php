@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers\Admin;
 
-use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Facades\Shopify;
+use App\Http\Controllers\Controller;
 use App\Traits\ShopifyResponseFormatter;
 use Exception;
+use Illuminate\Http\Request;
 
 class CustomerController extends Controller
 {
@@ -24,7 +24,6 @@ class CustomerController extends Controller
             'search' => 'sometimes|string|nullable',
             'filter' => 'sometimes|string|nullable',
         ]);
-
 
         try {
             $vars = [
@@ -51,7 +50,7 @@ class CustomerController extends Controller
                 'request' => $request,
             ]);
         } catch (Exception $e) {
-            return back()->with('error', "Failed to fetch customers: " . $e->getMessage());
+            return back()->with('error', 'Failed to fetch customers: '.$e->getMessage());
         }
     }
 
@@ -68,18 +67,18 @@ class CustomerController extends Controller
         }
 
         if ($req->filter === 'inactive') {
-            $query[] = "orders_count:0";
+            $query[] = 'orders_count:0';
         }
 
         if ($req->filter === 'active') {
-            $query[] = "orders_count:>0";
+            $query[] = 'orders_count:>0';
         }
 
         if (empty($query)) {
             return null;
         }
 
-        return implode(" AND ", $query);
+        return implode(' AND ', $query);
     }
 
     /**
@@ -98,7 +97,7 @@ class CustomerController extends Controller
 
             return view('admin.customers.show', compact('customer'));
         } catch (Exception $e) {
-            return back()->with('error', "Failed to load customer details.");
+            return back()->with('error', 'Failed to load customer details.');
         }
     }
 
@@ -113,7 +112,7 @@ class CustomerController extends Controller
                 'customers/suspend_customer',
                 [
                     'ownerId' => "gid://shopify/Customer/{$id}",
-                    'value' => "1"
+                    'value' => '1',
                 ]
             );
 
@@ -134,7 +133,7 @@ class CustomerController extends Controller
                 'customers/suspend_customer',
                 [
                     'ownerId' => "gid://shopify/Customer/{$id}",
-                    'value' => "0"
+                    'value' => '0',
                 ]
             );
 
@@ -156,9 +155,9 @@ class CustomerController extends Controller
                 ]
             );
 
-            return $this->success("Updated suspend status", $response);
+            return $this->success('Updated suspend status', $response);
         } catch (Exception $e) {
-            return $this->fail("Failed to update suspension", $e->getMessage());
+            return $this->fail('Failed to update suspension', $e->getMessage());
         }
     }
 
@@ -198,17 +197,17 @@ class CustomerController extends Controller
                 $vars
             );
             $parsed = $this->parseEdges(data_get($response, 'data'), 'customers');
-            $filename = 'customers_export_' . date('Y-m-d') . '.csv';
+            $filename = 'customers_export_'.date('Y-m-d').'.csv';
 
             $handle = fopen($filename, 'w+');
             fputcsv($handle, ['Name', 'Email', 'Orders Count', 'Total Spent']);
 
             foreach ($parsed['items'] as $c) {
                 fputcsv($handle, [
-                    $c['firstName'] . ' ' . $c['lastName'],
+                    $c['firstName'].' '.$c['lastName'],
                     $c['email'],
                     $c['numberOfOrders'],
-                    $c['amountSpent']['amount'] . ' (' . $c['amountSpent']['currencyCode'] . ')'
+                    $c['amountSpent']['amount'].' ('.$c['amountSpent']['currencyCode'].')',
                 ]);
             }
 
@@ -217,7 +216,7 @@ class CustomerController extends Controller
             return response()->download($filename)->deleteFileAfterSend(true);
         } catch (\Throwable $th) {
             dd($th);
-            //throw $th;
+            // throw $th;
         }
     }
 }

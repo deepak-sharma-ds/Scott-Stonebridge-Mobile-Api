@@ -6,7 +6,7 @@ use Exception;
 
 /**
  * Base exception class for all Shopify-related errors.
- * 
+ *
  * This exception serves as the parent for all Shopify API and integration errors,
  * providing a common interface for exception handling and HTTP status mapping.
  */
@@ -30,10 +30,10 @@ class ShopifyException extends Exception
     /**
      * Create a new Shopify exception instance.
      *
-     * @param string $message The exception message
-     * @param int $code The exception code
-     * @param \Throwable|null $previous The previous throwable used for exception chaining
-     * @param array $context Additional context data
+     * @param  string  $message  The exception message
+     * @param  int  $code  The exception code
+     * @param  \Throwable|null  $previous  The previous throwable used for exception chaining
+     * @param  array  $context  Additional context data
      */
     public function __construct(
         string $message = '',
@@ -75,6 +75,7 @@ class ShopifyException extends Exception
     public function setContext(array $context): self
     {
         $this->context = array_merge($this->context, $context);
+
         return $this;
     }
 

@@ -12,24 +12,24 @@ use Illuminate\Support\Facades\Mail;
 
 /**
  * Contact Service
- * 
+ *
  * Handles contact form submission operations including email notifications
  * and optional storage in customer metafields using the Shopify Admin API.
- * 
+ *
  * Features:
  * - Send email notifications to admin for contact form submissions
  * - Optionally store submissions in customer metafields
  * - Comprehensive logging with correlation ID tracking
  * - Performance monitoring for all operations
- * 
+ *
  * Requirements: 11.9, 11.11, 11.12
  */
 class ContactService extends BaseService implements ContactServiceInterface
 {
     /**
      * Constructor
-     * 
-     * @param AdminApiClientInterface $adminClient Admin API client for metafield operations
+     *
+     * @param  AdminApiClientInterface  $adminClient  Admin API client for metafield operations
      */
     public function __construct(
         private readonly AdminApiClientInterface $adminClient
@@ -39,13 +39,13 @@ class ContactService extends BaseService implements ContactServiceInterface
 
     /**
      * Submit contact form
-     * 
+     *
      * Processes a contact form submission by sending an email notification
      * to the admin email address. Logs the submission with correlation ID
      * for tracking and debugging purposes.
-     * 
-     * @param ContactDTO $contact Contact form data
-     * @return void
+     *
+     * @param  ContactDTO  $contact  Contact form data
+     *
      * @throws \Exception If email sending fails
      */
     public function submitContactForm(ContactDTO $contact): void
@@ -68,8 +68,8 @@ class ContactService extends BaseService implements ContactServiceInterface
             $this->logInfo('Contact form submitted successfully', [
                 'contact_email' => $contact->email,
                 'contact_name' => $contact->name,
-                'has_subject' => !empty($contact->subject),
-                'has_phone' => !empty($contact->phone),
+                'has_subject' => ! empty($contact->subject),
+                'has_phone' => ! empty($contact->phone),
             ]);
 
             $this->logPerformanceEnd('submitContactForm', [
@@ -87,17 +87,17 @@ class ContactService extends BaseService implements ContactServiceInterface
 
     /**
      * Store contact submission in customer metafields
-     * 
+     *
      * Optionally stores the contact form submission in the customer's metafields
      * for record-keeping purposes. This allows tracking of customer inquiries
      * within Shopify's customer data.
-     * 
+     *
      * Uses the Admin API metafield_set mutation to store submission data as JSON
      * in the 'custom.contact_submissions' namespace/key.
-     * 
-     * @param ContactDTO $contact Contact form data
-     * @param string $customerId Customer ID (Shopify GID)
-     * @return void
+     *
+     * @param  ContactDTO  $contact  Contact form data
+     * @param  string  $customerId  Customer ID (Shopify GID)
+     *
      * @throws ShopifyApiException If metafield storage fails
      */
     private function storeContactSubmission(ContactDTO $contact, string $customerId): void
@@ -129,9 +129,9 @@ class ContactService extends BaseService implements ContactServiceInterface
             $response = $this->adminClient->query('admin/metafield/metafield_set', $variables);
 
             // Check for user errors in the response
-            if (!empty($response['data']['metafieldsSet']['userErrors'])) {
+            if (! empty($response['data']['metafieldsSet']['userErrors'])) {
                 $errors = $response['data']['metafieldsSet']['userErrors'];
-                $errorMessage = 'Failed to store contact submission: ' . json_encode($errors);
+                $errorMessage = 'Failed to store contact submission: '.json_encode($errors);
                 $this->logError($errorMessage, ['errors' => $errors]);
                 throw new ShopifyApiException($errorMessage);
             }

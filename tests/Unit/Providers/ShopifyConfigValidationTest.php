@@ -3,7 +3,6 @@
 namespace Tests\Unit\Providers;
 
 use Tests\TestCase;
-use Illuminate\Support\Facades\Config;
 
 class ShopifyConfigValidationTest extends TestCase
 {
@@ -110,8 +109,8 @@ class ShopifyConfigValidationTest extends TestCase
         $this->assertIsBool(config('shopify.graphql.performance_logging'));
         $this->assertTrue(is_numeric(config('shopify.graphql.performance_threshold_ms')));
 
-        $this->assertGreaterThan(0, (int)config('shopify.graphql.cache_minutes'));
-        $this->assertGreaterThan(0, (int)config('shopify.graphql.performance_threshold_ms'));
+        $this->assertGreaterThan(0, (int) config('shopify.graphql.cache_minutes'));
+        $this->assertGreaterThan(0, (int) config('shopify.graphql.performance_threshold_ms'));
     }
 
     /**

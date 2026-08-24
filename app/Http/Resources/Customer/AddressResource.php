@@ -7,18 +7,17 @@ use Illuminate\Http\Request;
 
 /**
  * Address API Resource
- * 
+ *
  * Transforms AddressDTO data to API response format.
  * Removes Shopify internal fields and provides clean address structure.
- * 
+ *
  * Requirements: 17.4, 17.6, 17.7, 17.8
  */
 class AddressResource extends BaseApiResource
 {
     /**
      * Transform the resource into an array.
-     * 
-     * @param Request $request
+     *
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array

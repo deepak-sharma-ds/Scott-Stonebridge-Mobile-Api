@@ -1,6 +1,9 @@
 <?php
 
+use App\Providers\AppServiceProvider;
+use App\Providers\ShopifyServiceProvider;
+
 return [
-    App\Providers\AppServiceProvider::class,
-    App\Providers\ShopifyServiceProvider::class,
+    AppServiceProvider::class,
+    ShopifyServiceProvider::class,
 ];

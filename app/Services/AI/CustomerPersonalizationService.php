@@ -46,9 +46,9 @@ class CustomerPersonalizationService
     /**
      * @return array{order_count:int, recent_orders:list<array{number:string, total:?string, currency:?string, date:?string}>}|null
      */
-    public function summaryFor(string $sessionId, string $shopDomain): ?array
+    public function summaryFor(string $sessionId, string $shopDomain, bool $isGuest = false): ?array
     {
-        if ($sessionId === '' || $shopDomain === '') {
+        if ($isGuest || $sessionId === '' || $shopDomain === '') {
             return null;
         }
 

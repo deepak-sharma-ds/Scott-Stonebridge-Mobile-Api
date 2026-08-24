@@ -52,16 +52,17 @@ class ProductRecommendationService extends BaseService implements ProductRecomme
             $reverse = false;
         }
 
-        $cacheKey = sprintf('ai:rec:%s:%s:%s:%d', $shop, $sortKey, md5(mb_strtolower($trimmedQuery)), $limit);
+        $country = $this->chatbotConfig->countryFromCurrency($context->currency);
+        $cacheKey = sprintf('ai:rec:%s:%s:%s:%s:%d', $shop, $country, $sortKey, md5(mb_strtolower($trimmedQuery)), $limit);
 
         try {
-            return Cache::remember($cacheKey, $this->chatbotConfig->recommendationCacheTtlSeconds(), function () use ($trimmedQuery, $limit, $shop, $context, $sortKey, $reverse): array {
+            return Cache::remember($cacheKey, $this->chatbotConfig->recommendationCacheTtlSeconds(), function () use ($trimmedQuery, $limit, $shop, $sortKey, $reverse, $country): array {
                 $response = $this->storefront->query('storefront/products/get_all_products', [
                     'limit' => $limit,
                     'sortKey' => $sortKey,
                     'reverse' => $reverse,
                     'query' => $trimmedQuery,
-                    'country' => $this->chatbotConfig->countryFromCurrency($context->currency),
+                    'country' => $country,
                 ]);
 
                 $edges = $response['data']['products']['edges'] ?? [];

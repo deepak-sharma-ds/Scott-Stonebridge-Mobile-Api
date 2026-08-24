@@ -72,7 +72,7 @@ class PromptBuilderService extends BaseService implements PromptBuilderServiceIn
                 'shop' => $context->shopDomain ?? config('shopify.store_domain'),
                 'intent' => $intent->name,
                 'page_type' => $context->pageType,
-                'currency' => $context->currency,
+                'currency' => $context->currency ?? $context->cart?->currency ?? 'GBP',
                 'locale' => $context->locale,
                 'resolved_context' => $resolvedContext,
                 'products' => $recommendations,

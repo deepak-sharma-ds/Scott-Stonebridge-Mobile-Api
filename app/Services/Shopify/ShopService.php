@@ -14,7 +14,7 @@ use Illuminate\Support\Facades\Cache;
 
 /**
  * Shop Service
- * 
+ *
  * Handles shop-level operations including markets and currency information
  */
 class ShopService extends BaseService implements ShopServiceInterface
@@ -30,11 +30,9 @@ class ShopService extends BaseService implements ShopServiceInterface
 
     /**
      * Get shop markets and supported currencies
-     * 
+     *
      * Fetches shop information including all supported markets and currencies.
      * Results are cached for 24 hours as this data rarely changes.
-     * 
-     * @return ShopDTO
      */
     public function getMarkets(): ShopDTO
     {
@@ -44,7 +42,7 @@ class ShopService extends BaseService implements ShopServiceInterface
             $shop = $this->cacheWithFallback(
                 'shop:markets',
                 86400, // 24 hours
-                fn() => $this->fetchMarkets(),
+                fn () => $this->fetchMarkets(),
                 ['shop', 'markets']
             );
 
@@ -62,8 +60,6 @@ class ShopService extends BaseService implements ShopServiceInterface
 
     /**
      * Fetch markets from Shopify API
-     * 
-     * @return ShopDTO
      */
     protected function fetchMarkets(): ShopDTO
     {
@@ -76,18 +72,18 @@ class ShopService extends BaseService implements ShopServiceInterface
 
         // Extract enabled currencies
         $enabledCurrencies = $paymentSettings['enabledPresentmentCurrencies'] ?? [];
-        
+
         // Extract markets from available countries and add currency flags
         $markets = [];
         foreach ($localization['availableCountries'] ?? [] as $country) {
             $market = MarketDTO::fromShopifyResponse($country);
-            
+
             // Add currency flag URL
             $flagUrl = $this->currencyFlagService->getFlagUrl(
                 $market->currencyCode,
                 $market->countryCode
             );
-            
+
             $markets[] = $market->withCurrencyFlag($flagUrl);
         }
 
@@ -104,11 +100,9 @@ class ShopService extends BaseService implements ShopServiceInterface
 
     /**
      * Get supported currencies only
-     * 
+     *
      * Returns a simple array of supported currency codes.
      * Cached for 24 hours.
-     * 
-     * @return array
      */
     public function getSupportedCurrencies(): array
     {
@@ -118,7 +112,7 @@ class ShopService extends BaseService implements ShopServiceInterface
             $currencies = $this->cacheWithFallback(
                 'shop:currencies',
                 86400, // 24 hours
-                fn() => $this->getMarkets()->getSupportedCurrencies(),
+                fn () => $this->getMarkets()->getSupportedCurrencies(),
                 ['shop', 'currencies']
             );
 
@@ -137,20 +131,16 @@ class ShopService extends BaseService implements ShopServiceInterface
 
     /**
      * Check if currency is supported
-     * 
-     * @param string $currencyCode
-     * @return bool
      */
     public function isCurrencySupported(string $currencyCode): bool
     {
         $supportedCurrencies = $this->getSupportedCurrencies();
+
         return in_array(strtoupper($currencyCode), $supportedCurrencies, true);
     }
 
     /**
      * Clear markets cache
-     * 
-     * @return void
      */
     public function clearMarketsCache(): void
     {

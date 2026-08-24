@@ -27,6 +27,9 @@ final class ChatSessionContext
         public readonly ?string $pageType = null,
         public readonly ?CartContextDTO $cartSnapshot = null,
         public readonly array $shownVariantIds = [],
+        public readonly bool $isGuest = false,
+        public readonly string $currency = 'GBP',
+        public readonly string $country = 'GB',
     ) {}
 
     public function withCustomerAccessToken(?string $token): self
@@ -40,6 +43,9 @@ final class ChatSessionContext
             pageType: $this->pageType,
             cartSnapshot: $this->cartSnapshot,
             shownVariantIds: $this->shownVariantIds,
+            isGuest: $this->isGuest,
+            currency: $this->currency,
+            country: $this->country,
         );
     }
 
@@ -54,6 +60,9 @@ final class ChatSessionContext
             pageType: $this->pageType,
             cartSnapshot: $this->cartSnapshot,
             shownVariantIds: $this->shownVariantIds,
+            isGuest: $this->isGuest,
+            currency: $this->currency,
+            country: $this->country,
         );
     }
 
@@ -68,6 +77,9 @@ final class ChatSessionContext
             pageType: $this->pageType,
             cartSnapshot: $cartSnapshot,
             shownVariantIds: $this->shownVariantIds,
+            isGuest: $this->isGuest,
+            currency: $this->currency,
+            country: $this->country,
         );
     }
 
@@ -89,6 +101,9 @@ final class ChatSessionContext
             pageType: $this->pageType,
             cartSnapshot: $this->cartSnapshot,
             shownVariantIds: $this->shownVariantIds + $additional,
+            isGuest: $this->isGuest,
+            currency: $this->currency,
+            country: $this->country,
         );
     }
 }

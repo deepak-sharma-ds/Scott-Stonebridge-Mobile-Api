@@ -6,8 +6,8 @@ use App\Facades\Shopify;
 use App\Models\CustomerEntitlement;
 use App\Models\Package;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
-use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 
 class CustomerEntitlementService
 {
@@ -42,7 +42,7 @@ class CustomerEntitlementService
     /**
      * Add additional customer emails to an entitlement package and sync Shopify tags.
      *
-     * @param array<int, string> $emails
+     * @param  array<int, string>  $emails
      * @return array<string, array<int, string>>
      */
     public function addEmails(CustomerEntitlement $entitlement, array $emails): array
@@ -60,14 +60,16 @@ class CustomerEntitlementService
         foreach ($emails as $email) {
             if (in_array($email, $storedEmails, true)) {
                 $summary['skipped'][] = $email;
+
                 continue;
             }
 
             try {
                 $customer = $this->findCustomerByEmail($email);
 
-                if (!$customer) {
+                if (! $customer) {
                     $summary['not_found'][] = $email;
+
                     continue;
                 }
 
@@ -76,9 +78,10 @@ class CustomerEntitlementService
                 $storedEmails[] = $email;
                 $storedEmails = array_values(array_unique($storedEmails));
 
-                if (!$this->addTagToCustomer($customerGid, $entitlement->package_tag)) {
+                if (! $this->addTagToCustomer($customerGid, $entitlement->package_tag)) {
                     $summary['tag_failed'][] = $email;
                     $storedEmails = array_values(array_diff($storedEmails, [$email]));
+
                     continue;
                 }
 
@@ -104,30 +107,30 @@ class CustomerEntitlementService
     /**
      * Build a compact flash message from the sync summary.
      *
-     * @param array<string, array<int, string>> $summary
+     * @param  array<string, array<int, string>>  $summary
      */
     public function buildSyncMessage(array $summary): string
     {
         $segments = [];
 
-        if (!empty($summary['added'])) {
-            $segments[] = count($summary['added']) . ' email(s) added to the selected entitlement row.';
+        if (! empty($summary['added'])) {
+            $segments[] = count($summary['added']).' email(s) added to the selected entitlement row.';
         }
 
-        if (!empty($summary['skipped'])) {
-            $segments[] = count($summary['skipped']) . ' email(s) were already present in the selected row.';
+        if (! empty($summary['skipped'])) {
+            $segments[] = count($summary['skipped']).' email(s) were already present in the selected row.';
         }
 
-        if (!empty($summary['not_found'])) {
-            $segments[] = 'Shopify customer not found for: ' . implode(', ', $summary['not_found']) . '.';
+        if (! empty($summary['not_found'])) {
+            $segments[] = 'Shopify customer not found for: '.implode(', ', $summary['not_found']).'.';
         }
 
-        if (!empty($summary['tag_failed'])) {
-            $segments[] = 'Shopify tag sync failed for: ' . implode(', ', $summary['tag_failed']) . '.';
+        if (! empty($summary['tag_failed'])) {
+            $segments[] = 'Shopify tag sync failed for: '.implode(', ', $summary['tag_failed']).'.';
         }
 
-        if (!empty($summary['failed'])) {
-            $segments[] = 'Unable to process: ' . implode(', ', $summary['failed']) . '.';
+        if (! empty($summary['failed'])) {
+            $segments[] = 'Unable to process: '.implode(', ', $summary['failed']).'.';
         }
 
         return empty($segments)
@@ -140,7 +143,7 @@ class CustomerEntitlementService
      */
     protected function findCustomerByEmail(string $email): ?array
     {
-        $escapedEmail = addcslashes($email, "\\\"");
+        $escapedEmail = addcslashes($email, '\\"');
 
         $response = Shopify::query('admin', 'customers/find_customer_by_email', [
             'first' => 10,
@@ -148,8 +151,8 @@ class CustomerEntitlementService
         ]);
 
         $customers = collect(data_get($response, 'data.customers.edges', []))
-            ->map(static fn(array $edge): array => $edge['node'] ?? [])
-            ->filter(static fn(array $node): bool => !empty($node))
+            ->map(static fn (array $edge): array => $edge['node'] ?? [])
+            ->filter(static fn (array $node): bool => ! empty($node))
             ->values();
 
         if ($customers->isEmpty()) {
@@ -157,7 +160,7 @@ class CustomerEntitlementService
         }
 
         $exactMatch = $customers->first(
-            static fn(array $customer): bool => strcasecmp((string) data_get($customer, 'email', ''), $email) === 0
+            static fn (array $customer): bool => strcasecmp((string) data_get($customer, 'email', ''), $email) === 0
         );
 
         return $exactMatch ?: $customers->first();
@@ -194,8 +197,8 @@ class CustomerEntitlementService
         }
 
         $items = preg_split('/\s*,\s*/', $emails) ?: [];
-        $items = array_map(static fn(string $email): string => Str::lower(trim($email)), $items);
-        $items = array_filter($items, static fn(string $email): bool => $email !== '');
+        $items = array_map(static fn (string $email): string => Str::lower(trim($email)), $items);
+        $items = array_filter($items, static fn (string $email): bool => $email !== '');
 
         return array_values(array_unique($items));
     }
