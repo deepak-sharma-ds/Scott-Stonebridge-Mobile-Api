@@ -7,6 +7,7 @@ namespace Tests\Unit\Services\AI\Tools;
 use App\Contracts\Services\Sales\UpsellServiceInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\Chat\CartContextDTO;
+use App\DTOs\Chat\CustomerContextDTO;
 use App\Exceptions\AI\AuthRequiredException;
 use App\Models\AiConversation;
 use App\Models\AiCustomerSession;
@@ -17,6 +18,7 @@ use App\Services\AI\MCP\StorefrontMcpClient;
 use App\Services\AI\Streaming\ChunkEmitter;
 use App\Services\AI\Tools\ToolExecutor;
 use App\Services\AI\Tools\ToolResult;
+use App\Services\Shopify\AdminService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -554,6 +556,152 @@ class ToolExecutorTest extends TestCase
         $this->assertStringContainsString('"order_url":"https://scottstonebridge.com/account/orders/adc11bfa"', $output);
         $this->assertStringContainsString('"has_next_page":true', $output);
         $this->assertStringContainsString('"cursor":"CURSOR_2"', $output);
+    }
+
+    public function test_list_customer_orders_with_storefront_logged_in_customer_queries_admin_api(): void
+    {
+        $customer = new CustomerContextDTO(
+            customerId: '24567362388351',
+            loggedIn: true,
+            email: 'ajay.yadav@dotsquares.com',
+            locale: 'en',
+        );
+
+        $ctx = new ChatSessionContext(
+            sessionId: self::SESSION_ID,
+            shopDomain: self::SHOP,
+            isGuest: false,
+            customer: $customer,
+        );
+
+        $adminMock = $this->createMock(AdminService::class);
+        $adminMock->expects($this->once())
+            ->method('request')
+            ->with($this->anything(), ['customerId' => 'gid://shopify/Customer/24567362388351', 'first' => 10])
+            ->willReturn([
+                'data' => [
+                    'customer' => [
+                        'orders' => [
+                            'pageInfo' => ['hasNextPage' => false, 'endCursor' => null],
+                            'edges' => [
+                                ['node' => [
+                                    'id' => 'gid://shopify/Order/12345',
+                                    'name' => '#1042',
+                                    'processedAt' => '2026-08-20T10:00:00Z',
+                                    'displayFulfillmentStatus' => 'FULFILLED',
+                                    'displayFinancialStatus' => 'PAID',
+                                    'totalPriceSet' => [
+                                        'shopMoney' => ['amount' => '80.00', 'currencyCode' => 'GBP'],
+                                        'presentmentMoney' => ['amount' => '80.00', 'currencyCode' => 'GBP'],
+                                    ],
+                                    'statusUrl' => 'https://scottstonebridge.com/account/orders/1042',
+                                    'fulfillments' => [
+                                        [
+                                            'trackingInfo' => [['number' => 'TRK123', 'url' => 'https://track.com', 'company' => 'Royal Mail']],
+                                            'estimatedDeliveryAt' => '2026-08-25T00:00:00Z',
+                                        ],
+                                    ],
+                                    'shippingAddress' => ['city' => 'London'],
+                                ]],
+                            ],
+                        ],
+                    ],
+                ],
+            ]);
+
+        $executor = new ToolExecutor(
+            $this->storefront,
+            $this->customer,
+            $this->emitter,
+            $this->upsell,
+            null,
+            null,
+            null,
+            $adminMock,
+        );
+
+        ob_start();
+        try {
+            $executor->execute('list_customer_orders', [], $ctx);
+        } finally {
+            $output = (string) ob_get_clean();
+        }
+
+        $this->assertStringContainsString('"type":"order_list"', $output);
+        $this->assertStringContainsString('"order_number":"1042"', $output);
+        $this->assertStringContainsString('"status":"delivered"', $output);
+        $this->assertStringContainsString('"order_url":"https://scottstonebridge.com/account/orders/1042"', $output);
+    }
+
+    public function test_customer_graph_failure_falls_back_to_admin_api_for_storefront_logged_in_customer(): void
+    {
+        $customer = new CustomerContextDTO(
+            customerId: '24567362388351',
+            loggedIn: true,
+            email: 'ajay.yadav@dotsquares.com',
+            locale: 'en',
+        );
+
+        $ctx = new ChatSessionContext(
+            sessionId: self::SESSION_ID,
+            shopDomain: self::SHOP,
+            customerAccessToken: 'stale_token',
+            isGuest: false,
+            customer: $customer,
+        );
+
+        $graph = $this->createMock(CustomerAccountGraphClient::class);
+        $graph->expects($this->once())
+            ->method('query')
+            ->willThrowException(new AuthRequiredException('Token expired'));
+
+        $adminMock = $this->createMock(AdminService::class);
+        $adminMock->expects($this->once())
+            ->method('request')
+            ->willReturn([
+                'data' => [
+                    'customer' => [
+                        'orders' => [
+                            'pageInfo' => ['hasNextPage' => false, 'endCursor' => null],
+                            'edges' => [
+                                ['node' => [
+                                    'id' => 'gid://shopify/Order/99999',
+                                    'name' => '#25601',
+                                    'processedAt' => '2026-08-12T10:00:00Z',
+                                    'displayFulfillmentStatus' => 'UNFULFILLED',
+                                    'displayFinancialStatus' => 'PAID',
+                                    'totalPriceSet' => [
+                                        'shopMoney' => ['amount' => '0.00', 'currencyCode' => 'GBP'],
+                                    ],
+                                    'statusUrl' => 'https://scottstonebridge.com/account/orders/25601',
+                                ]],
+                            ],
+                        ],
+                    ],
+                ],
+            ]);
+
+        $executor = new ToolExecutor(
+            $this->storefront,
+            $this->customer,
+            $this->emitter,
+            $this->upsell,
+            null,
+            $graph,
+            null,
+            $adminMock,
+        );
+
+        ob_start();
+        try {
+            $executor->execute('list_customer_orders', [], $ctx);
+        } finally {
+            $output = (string) ob_get_clean();
+        }
+
+        $this->assertStringNotContainsString('"type":"auth_required"', $output);
+        $this->assertStringContainsString('"type":"order_list"', $output);
+        $this->assertStringContainsString('"order_number":"25601"', $output);
     }
 
     public function test_expired_access_token_is_refreshed_as_public_client(): void

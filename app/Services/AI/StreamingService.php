@@ -117,7 +117,7 @@ class StreamingService extends BaseService implements StreamingServiceInterface
         $customerSummary = null;
         if (! $isGuest && in_array($intent->name, self::PERSONALISED_INTENTS, true)) {
             $shopDomain = (string) ($request->context->shopDomain ?? $conversation->shop_domain);
-            $customerSummary = $this->personalization->summaryFor($request->sessionId, $shopDomain, $isGuest);
+            $customerSummary = $this->personalization->summaryFor($request->sessionId, $shopDomain, $isGuest, $request->context->customer);
         }
 
         $messages = $this->promptBuilder->build(
@@ -168,6 +168,7 @@ class StreamingService extends BaseService implements StreamingServiceInterface
             isGuest: $isGuest,
             currency: $currency,
             country: $country,
+            customer: $request->context->customer,
         );
 
         $response = new StreamedResponse(function () use ($messages, $intent, $conversation, $sessionCtx) {

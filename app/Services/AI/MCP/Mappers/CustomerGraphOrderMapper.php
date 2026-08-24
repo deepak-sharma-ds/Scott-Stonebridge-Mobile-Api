@@ -129,7 +129,7 @@ final class CustomerGraphOrderMapper
             (string) ($node['financialStatus'] ?? $node['displayFinancialStatus'] ?? ''),
         );
 
-        $total = $node['totalPrice'] ?? [];
+        $total = $node['totalPrice'] ?? $node['totalPriceSet']['presentmentMoney'] ?? $node['totalPriceSet']['shopMoney'] ?? [];
         if (! is_array($total)) {
             $total = [];
         }
@@ -141,7 +141,7 @@ final class CustomerGraphOrderMapper
             processedAt: self::stringOrNull($node['processedAt'] ?? null),
             totalAmount: self::stringOrNull($total['amount'] ?? null),
             currencyCode: self::stringOrNull($total['currencyCode'] ?? null),
-            orderUrl: self::stringOrNull($node['statusPageUrl'] ?? null),
+            orderUrl: self::stringOrNull($node['statusPageUrl'] ?? $node['statusUrl'] ?? null),
         );
     }
 

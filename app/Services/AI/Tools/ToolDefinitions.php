@@ -192,7 +192,7 @@ final class ToolDefinitions
                     'type' => 'object',
                     'properties' => [
                         'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 20],
-                        'cursor' => ['type' => 'string', 'minLength' => 1],
+                        'cursor' => ['type' => 'string', 'description' => 'Pagination cursor from the previous order_list result. Omit or pass null if fetching the first page.'],
                     ],
                     'additionalProperties' => false,
                 ],

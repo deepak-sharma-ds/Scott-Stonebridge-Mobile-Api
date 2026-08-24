@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\AI;
 
 use App\DTOs\Chat\CartContextDTO;
+use App\DTOs\Chat\CustomerContextDTO;
 
 /**
  * Lightweight value object carrying the per-turn session envelope into the
@@ -30,6 +31,7 @@ final class ChatSessionContext
         public readonly bool $isGuest = false,
         public readonly string $currency = 'GBP',
         public readonly string $country = 'GB',
+        public readonly ?CustomerContextDTO $customer = null,
     ) {}
 
     public function withCustomerAccessToken(?string $token): self
@@ -46,6 +48,7 @@ final class ChatSessionContext
             isGuest: $this->isGuest,
             currency: $this->currency,
             country: $this->country,
+            customer: $this->customer,
         );
     }
 
@@ -63,6 +66,7 @@ final class ChatSessionContext
             isGuest: $this->isGuest,
             currency: $this->currency,
             country: $this->country,
+            customer: $this->customer,
         );
     }
 
@@ -80,6 +84,7 @@ final class ChatSessionContext
             isGuest: $this->isGuest,
             currency: $this->currency,
             country: $this->country,
+            customer: $this->customer,
         );
     }
 
@@ -104,6 +109,7 @@ final class ChatSessionContext
             isGuest: $this->isGuest,
             currency: $this->currency,
             country: $this->country,
+            customer: $this->customer,
         );
     }
 }

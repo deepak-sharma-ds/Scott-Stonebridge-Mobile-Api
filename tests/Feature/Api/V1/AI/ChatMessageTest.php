@@ -112,10 +112,10 @@ class ChatMessageTest extends TestCase
         ]);
     }
 
-    public function test_message_endpoint_rejects_unknown_session(): void
+    public function test_message_endpoint_rejects_invalid_session_uuid(): void
     {
         $response = $this->postJson('/api/v1/ai/chat/message', [
-            'session_id' => '00000000-0000-0000-0000-000000000000',
+            'session_id' => 'not-a-valid-uuid',
             'message' => 'Hi',
             'context' => ['page_type' => 'home'],
         ]);

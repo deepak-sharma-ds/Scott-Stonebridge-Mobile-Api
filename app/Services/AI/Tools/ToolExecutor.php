@@ -23,6 +23,7 @@ use App\Services\AI\MCP\Mappers\PolicyMapper;
 use App\Services\AI\MCP\Mappers\ProductMapper;
 use App\Services\AI\MCP\StorefrontMcpClient;
 use App\Services\AI\Streaming\ChunkEmitter;
+use App\Services\Shopify\AdminService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -44,6 +45,8 @@ class ToolExecutor
 
     private ?ChatbotConfigRepository $chatbotConfig;
 
+    private ?AdminService $adminApi;
+
     public function __construct(
         private readonly StorefrontMcpClient $storefront,
         private readonly CustomerMcpClient $customer,
@@ -52,10 +55,12 @@ class ToolExecutor
         ?StorefrontApiClientInterface $storefrontApi = null,
         ?CustomerAccountGraphClient $customerGraph = null,
         ?ChatbotConfigRepository $chatbotConfig = null,
+        ?AdminService $adminApi = null,
     ) {
         $this->storefrontApi = $storefrontApi;
         $this->customerGraph = $customerGraph;
         $this->chatbotConfig = $chatbotConfig;
+        $this->adminApi = $adminApi;
     }
 
     /**
@@ -84,6 +89,14 @@ class ToolExecutor
     private function storefrontApi(): StorefrontApiClientInterface
     {
         return $this->storefrontApi ??= app(StorefrontApiClientInterface::class);
+    }
+
+    /**
+     * Lazily resolve the Admin API client from the container.
+     */
+    private function adminApi(): AdminService
+    {
+        return $this->adminApi ??= app(AdminService::class);
     }
 
     /**
@@ -281,48 +294,57 @@ class ToolExecutor
     private function executeCustomerMcp(string $toolName, array $args, ChatSessionContext $ctx): ToolResult
     {
         $token = $ctx->customerAccessToken ?? $this->resolveCustomerToken($ctx->sessionId, $ctx->shopDomain, $ctx->isGuest);
-        if ($token === null) {
-            return $this->emitAuthRequired($ctx);
+
+        // 1. Active Customer Account OAuth token present (Customer Account API / MCP)
+        if ($token !== null) {
+            // Order history is list-shaped and has no Shopify MCP tool — query the
+            // Customer Account GraphQL API directly (same `customer-account-api:full`
+            // scope the single-order path already relies on).
+            if ($toolName === ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS) {
+                return $this->executeCustomerOrderListViaGraph($args, $ctx, $token);
+            }
+
+            try {
+                $result = $this->customer->callTool($toolName, $args, $ctx->shopDomain, $token);
+            } catch (AuthRequiredException $e) {
+                // MCP rejected a valid token. Fall back to the Customer Account
+                // GraphQL API, which uses the SAME `customer-account-api:full`
+                // scope but the GraphQL surface (always enabled on stock Headless
+                // apps). Bypassing MCP keeps the order flow working even when
+                // Shopify hasn't provisioned MCP for this app.
+                Log::channel('ai')->info('tool.customer_mcp_rejected_falling_back_to_graphql', [
+                    'session_id' => $ctx->sessionId,
+                    'shop_domain' => $ctx->shopDomain,
+                    'tool' => $toolName,
+                ]);
+
+                return $this->executeCustomerOrderViaGraph($toolName, $args, $ctx, $token);
+            }
+
+            $dto = OrderMapper::fromOrderStatus($result);
+            if ($dto === null) {
+                $this->emitter->emit('text', ['content' => "I couldn't find an order matching that request."]);
+
+                return ToolResult::error('Order not found.');
+            }
+
+            $payload = ['order_tracking' => $dto->toArray()];
+            $this->emitter->emit('order_tracking', $payload);
+
+            return ToolResult::success(
+                "Order {$dto->orderNumber} status: {$dto->status}.",
+                ['type' => 'order_tracking'] + $payload,
+            );
         }
 
-        // Order history is list-shaped and has no Shopify MCP tool — query the
-        // Customer Account GraphQL API directly (same `customer-account-api:full`
-        // scope the single-order path already relies on).
-        if ($toolName === ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS) {
-            return $this->executeCustomerOrderListViaGraph($args, $ctx, $token);
+        // 2. Customer is already signed in on storefront (context.customer.loggedIn = true) —
+        // fetch orders directly via Shopify Admin GraphQL API without forcing an OAuth popup!
+        if ($ctx->customer !== null && ! $ctx->isGuest && ($ctx->customer->customerId !== null || $ctx->customer->email !== null)) {
+            return $this->executeCustomerOrderViaAdmin($toolName, $args, $ctx);
         }
 
-        try {
-            $result = $this->customer->callTool($toolName, $args, $ctx->shopDomain, $token);
-        } catch (AuthRequiredException $e) {
-            // MCP rejected a valid token. Fall back to the Customer Account
-            // GraphQL API, which uses the SAME `customer-account-api:full`
-            // scope but the GraphQL surface (always enabled on stock Headless
-            // apps). Bypassing MCP keeps the order flow working even when
-            // Shopify hasn't provisioned MCP for this app.
-            Log::channel('ai')->info('tool.customer_mcp_rejected_falling_back_to_graphql', [
-                'session_id' => $ctx->sessionId,
-                'shop_domain' => $ctx->shopDomain,
-                'tool' => $toolName,
-            ]);
-
-            return $this->executeCustomerOrderViaGraph($toolName, $args, $ctx, $token);
-        }
-
-        $dto = OrderMapper::fromOrderStatus($result);
-        if ($dto === null) {
-            $this->emitter->emit('text', ['content' => "I couldn't find an order matching that request."]);
-
-            return ToolResult::error('Order not found.');
-        }
-
-        $payload = ['order_tracking' => $dto->toArray()];
-        $this->emitter->emit('order_tracking', $payload);
-
-        return ToolResult::success(
-            "Order {$dto->orderNumber} status: {$dto->status}.",
-            ['type' => 'order_tracking'] + $payload,
-        );
+        // 3. Guest visitor: Prompt OAuth sign in
+        return $this->emitAuthRequired($ctx);
     }
 
     /**
@@ -343,7 +365,7 @@ class ToolExecutor
             );
         } catch (AuthRequiredException $e) {
             // Token rejected by GraphQL — invalid / revoked / logged out.
-            // Invalidate the session in DB and prompt auth_required.
+            // Invalidate the session in DB and prompt auth_required (or fall back to Admin if storefront customer).
             Log::channel('ai')->warning('tool.customer_graph_rejected_valid_token', [
                 'session_id' => $ctx->sessionId,
                 'shop_domain' => $ctx->shopDomain,
@@ -355,9 +377,17 @@ class ToolExecutor
                 $this->invalidateCustomerSession($row, 'graphql_auth_required');
             }
 
+            if ($ctx->customer !== null && ! $ctx->isGuest && ($ctx->customer->customerId !== null || $ctx->customer->email !== null)) {
+                return $this->executeCustomerOrderViaAdmin($toolName, $args, $ctx);
+            }
+
             return $this->emitAuthRequired($ctx);
         } catch (Throwable $e) {
             $this->logToolError($toolName, $ctx, $e);
+
+            if ($ctx->customer !== null && ! $ctx->isGuest && ($ctx->customer->customerId !== null || $ctx->customer->email !== null)) {
+                return $this->executeCustomerOrderViaAdmin($toolName, $args, $ctx);
+            }
 
             $this->emitter->emit('text', [
                 'content' => "I couldn't reach the order service just now. Please try again in a moment.",
@@ -371,6 +401,10 @@ class ToolExecutor
             : CustomerGraphOrderMapper::fromMostRecent($data);
 
         if ($dto === null) {
+            if ($ctx->customer !== null && ! $ctx->isGuest && ($ctx->customer->customerId !== null || $ctx->customer->email !== null)) {
+                return $this->executeCustomerOrderViaAdmin($toolName, $args, $ctx);
+            }
+
             $this->emitter->emit('text', ['content' => "I couldn't find an order matching that request."]);
 
             return ToolResult::error('Order not found via GraphQL fallback.');
@@ -419,9 +453,17 @@ class ToolExecutor
                 $this->invalidateCustomerSession($row, 'graphql_auth_required');
             }
 
+            if ($ctx->customer !== null && ! $ctx->isGuest && ($ctx->customer->customerId !== null || $ctx->customer->email !== null)) {
+                return $this->executeCustomerOrderViaAdmin(ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS, $args, $ctx);
+            }
+
             return $this->emitAuthRequired($ctx);
         } catch (Throwable $e) {
             $this->logToolError(ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS, $ctx, $e);
+
+            if ($ctx->customer !== null && ! $ctx->isGuest && ($ctx->customer->customerId !== null || $ctx->customer->email !== null)) {
+                return $this->executeCustomerOrderViaAdmin(ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS, $args, $ctx);
+            }
 
             $this->emitter->emit('text', [
                 'content' => "I couldn't load your orders just now. Please try again in a moment.",
@@ -437,6 +479,10 @@ class ToolExecutor
         );
 
         if ($orders === []) {
+            if ($ctx->customer !== null && ! $ctx->isGuest && ($ctx->customer->customerId !== null || $ctx->customer->email !== null)) {
+                return $this->executeCustomerOrderViaAdmin(ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS, $args, $ctx);
+            }
+
             $this->emitter->emit('text', ['content' => "You don't have any orders yet."]);
 
             return ToolResult::success('No orders found for this customer.', ['type' => 'order_list', 'orders' => []]);
@@ -561,6 +607,210 @@ class ToolExecutor
         $node = $data['customer']['orders']['edges'][0]['node'] ?? null;
 
         return is_array($node) ? $node : [];
+    }
+
+    /**
+     * Fetch orders for a signed-in storefront customer via Shopify Admin GraphQL.
+     * Used when the customer is authenticated on the storefront (context.customer.loggedIn = true)
+     * but does not have a separate Customer Account OAuth session token.
+     *
+     * @param  array<string, mixed>  $args
+     */
+    private function executeCustomerOrderViaAdmin(string $toolName, array $args, ChatSessionContext $ctx): ToolResult
+    {
+        $customer = $ctx->customer;
+        $customerId = $customer?->customerId;
+        $email = $customer?->email;
+
+        if ($customerId === null && $email === null) {
+            return $this->emitAuthRequired($ctx);
+        }
+
+        $limit = (int) ($args['limit'] ?? 10);
+        $limit = $limit >= 1 && $limit <= 20 ? $limit : 10;
+        $cursor = isset($args['cursor']) && is_string($args['cursor']) && $args['cursor'] !== ''
+            ? $args['cursor']
+            : null;
+
+        try {
+            $customerGid = null;
+            $bareId = null;
+
+            if ($customerId !== null && $customerId !== '') {
+                $bareId = preg_replace('~^gid://shopify/Customer/~', '', $customerId);
+                if (is_numeric($bareId)) {
+                    $customerGid = "gid://shopify/Customer/{$bareId}";
+                }
+            }
+
+            if ($toolName === ToolDefinitions::TOOL_GET_ORDER_STATUS) {
+                $orderId = (string) ($args['order_id'] ?? $args['order_number'] ?? $args['name'] ?? '');
+                $orderId = ltrim($orderId, '#');
+                $searchQuery = $orderId !== '' ? "name:#{$orderId}" : '';
+                if ($bareId !== null) {
+                    $searchQuery .= ($searchQuery !== '' ? ' AND ' : '')."customer_id:{$bareId}";
+                } elseif ($email !== null && $email !== '') {
+                    $searchQuery .= ($searchQuery !== '' ? ' AND ' : '')."email:{$email}";
+                }
+
+                $data = $this->adminApi()->request($this->adminOrdersSearchQuery(), [
+                    'query' => $searchQuery,
+                    'first' => 1,
+                ]);
+            } elseif ($toolName === ToolDefinitions::TOOL_GET_MOST_RECENT_ORDER_STATUS) {
+                $searchQuery = $bareId !== null ? "customer_id:{$bareId}" : "email:{$email}";
+                $data = $this->adminApi()->request($this->adminOrdersSearchQuery(), [
+                    'query' => $searchQuery,
+                    'first' => 1,
+                ]);
+            } else {
+                // list_customer_orders
+                $query = $customerGid !== null ? $this->adminCustomerOrdersQuery() : $this->adminOrdersSearchQuery();
+                $vars = $customerGid !== null
+                    ? ['customerId' => $customerGid, 'first' => $limit]
+                    : ['query' => "email:{$email}", 'first' => $limit];
+
+                if ($cursor !== null) {
+                    $vars['after'] = $cursor;
+                }
+
+                $data = $this->adminApi()->request($query, $vars);
+
+                // If cursor query returned errors or no customer/orders, retry once without cursor
+                if ($cursor !== null && (empty($data['data']['customer']['orders']) && empty($data['data']['orders']))) {
+                    Log::channel('ai')->warning('tool.admin_order_cursor_failed_retrying_without_cursor', [
+                        'session_id' => $ctx->sessionId,
+                        'cursor' => $cursor,
+                        'errors' => $data['errors'] ?? null,
+                    ]);
+                    unset($vars['after']);
+                    $data = $this->adminApi()->request($query, $vars);
+                }
+            }
+        } catch (Throwable $e) {
+            $this->logToolError($toolName, $ctx, $e);
+
+            $this->emitter->emit('text', [
+                'content' => "I couldn't reach the order service just now. Please try again in a moment.",
+            ]);
+
+            return ToolResult::error("Admin order lookup failed: {$e->getMessage()}");
+        }
+
+        $ordersData = $data['data'] ?? [];
+
+        if ($toolName === ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS) {
+            $connection = $ordersData['customer']['orders'] ?? $ordersData['orders'] ?? [];
+            $list = CustomerGraphOrderMapper::listFromConnection(['customer' => ['orders' => $connection]]);
+            $orders = array_map(
+                static fn (CustomerOrderSummaryDTO $order): array => $order->toArray(),
+                $list['orders'],
+            );
+
+            if ($orders === []) {
+                $this->emitter->emit('text', ['content' => "You don't have any orders yet."]);
+
+                return ToolResult::success('No orders found for this customer.', ['type' => 'order_list', 'orders' => []]);
+            }
+
+            $payload = ['orders' => $orders, 'page_info' => $list['page_info']];
+            $this->emitter->emit('order_list', $payload);
+
+            $count = count($orders);
+
+            return ToolResult::success(
+                "Listed {$count} order(s) for the customer.",
+                ['type' => 'order_list'] + $payload,
+            );
+        }
+
+        // Single order tracking
+        $node = $ordersData['customer']['orders']['edges'][0]['node'] ?? $ordersData['orders']['edges'][0]['node'] ?? null;
+        if (! is_array($node)) {
+            $this->emitter->emit('text', ['content' => "I couldn't find an order matching that request."]);
+
+            return ToolResult::error('Order not found.');
+        }
+
+        $dto = CustomerGraphOrderMapper::fromOrderNode($node);
+        if ($dto === null) {
+            $this->emitter->emit('text', ['content' => "I couldn't find an order matching that request."]);
+
+            return ToolResult::error('Order not found.');
+        }
+
+        $payload = ['order_tracking' => $dto->toArray()];
+        $this->emitter->emit('order_tracking', $payload);
+
+        return ToolResult::success(
+            "Order {$dto->orderNumber} status: {$dto->status}.",
+            ['type' => 'order_tracking'] + $payload,
+        );
+    }
+
+    private function adminCustomerOrdersQuery(): string
+    {
+        return <<<'GRAPHQL'
+        query AdminCustomerOrders($customerId: ID!, $first: Int!, $after: String) {
+          customer(id: $customerId) {
+            id
+            orders(first: $first, after: $after, sortKey: PROCESSED_AT, reverse: true) {
+              pageInfo { hasNextPage endCursor }
+              edges {
+                cursor
+                node {
+                  id
+                  name
+                  processedAt
+                  displayFulfillmentStatus
+                  displayFinancialStatus
+                  statusUrl
+                  totalPriceSet {
+                    shopMoney { amount currencyCode }
+                    presentmentMoney { amount currencyCode }
+                  }
+                  fulfillments {
+                    estimatedDeliveryAt
+                    trackingInfo { number url company }
+                  }
+                  shippingAddress { city }
+                }
+              }
+            }
+          }
+        }
+        GRAPHQL;
+    }
+
+    private function adminOrdersSearchQuery(): string
+    {
+        return <<<'GRAPHQL'
+        query AdminOrdersSearch($query: String!, $first: Int!, $after: String) {
+          orders(first: $first, after: $after, query: $query, sortKey: PROCESSED_AT, reverse: true) {
+            pageInfo { hasNextPage endCursor }
+            edges {
+              cursor
+              node {
+                id
+                name
+                processedAt
+                displayFulfillmentStatus
+                displayFinancialStatus
+                statusUrl
+                totalPriceSet {
+                  shopMoney { amount currencyCode }
+                  presentmentMoney { amount currencyCode }
+                }
+                fulfillments {
+                  estimatedDeliveryAt
+                  trackingInfo { number url company }
+                }
+                shippingAddress { city }
+              }
+            }
+          }
+        }
+        GRAPHQL;
     }
 
     /**
