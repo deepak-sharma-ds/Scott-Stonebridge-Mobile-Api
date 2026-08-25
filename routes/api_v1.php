@@ -269,6 +269,21 @@ Route::prefix('v1')->middleware([
         Route::post('/escalate', [AIChatController::class, 'escalate'])
             ->middleware('throttle:ai-chat-message')
             ->name('escalate');
+
+        Route::post('/sync-settings', [AIChatController::class, 'syncWidgetSettings'])
+            ->middleware('throttle:ai-chat-message')
+            ->name('sync-settings');
+    });
+
+    /**
+     * AI Widget Configuration & Settings Sync
+     *
+     * POST /api/v1/ai/widget/sync - Synchronize storefront theme settings to shop_settings
+     */
+    Route::prefix('ai/widget')->name('api.v1.ai.widget.')->group(function () {
+        Route::post('/sync', [AIChatController::class, 'syncWidgetSettings'])
+            ->middleware('throttle:ai-chat-message')
+            ->name('sync');
     });
 
     /**

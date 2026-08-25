@@ -14,6 +14,7 @@ use App\Http\Requests\AI\EndSessionRequest;
 use App\Http\Requests\AI\EscalateRequest;
 use App\Http\Requests\AI\SendMessageRequest;
 use App\Http\Requests\AI\StartSessionRequest;
+use App\Http\Requests\AI\SyncWidgetSettingsRequest;
 use App\Http\Resources\AI\ConversationResource;
 use App\Http\Resources\AI\MessageResource;
 use App\Http\Resources\AI\ProductRecommendationResource;
@@ -97,6 +98,29 @@ class ChatController extends BaseApiController
             'brand_color' => $shop?->brand_color ?? '#7C3AED',
             'position' => $shop?->widget_position ?? 'right',
         ];
+    }
+
+    public function syncWidgetSettings(SyncWidgetSettingsRequest $request): JsonResponse
+    {
+        try {
+            $data = $request->validated();
+            $shopDomain = (string) $data['shop_domain'];
+            $themeSettings = (array) ($data['theme_settings'] ?? []);
+            $locale = (string) ($data['locale'] ?? 'en');
+
+            $shopSetting = $this->chatbot->syncThemeSettings($shopDomain, $themeSettings, $locale);
+
+            return $this->success('Widget settings synchronized.', [
+                'shop_domain' => $shopDomain,
+                'widget' => $this->widgetConfig($shopSetting),
+                'welcome_messages' => $shopSetting?->welcome_messages_json ?? [],
+                'free_shipping_threshold' => $shopSetting?->free_shipping_threshold,
+            ]);
+        } catch (Throwable $e) {
+            report($e);
+
+            return $this->error('Failed to sync widget settings.', [], ['error_code' => 'widget_sync_failed'], 500);
+        }
     }
 
     public function message(SendMessageRequest $request): JsonResponse

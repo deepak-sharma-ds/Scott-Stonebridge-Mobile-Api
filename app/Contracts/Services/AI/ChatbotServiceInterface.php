@@ -7,6 +7,7 @@ namespace App\Contracts\Services\AI;
 use App\DTOs\Chat\AIResponseDTO;
 use App\DTOs\Chat\ChatRequestDTO;
 use App\Models\AiConversation;
+use App\Models\ShopSetting;
 
 /**
  * Top-level orchestrator. Owns the full message pipeline:
@@ -32,4 +33,11 @@ interface ChatbotServiceInterface
      * Mark the conversation finished + dispatch summary/analytics jobs.
      */
     public function endSession(string $sessionId): AiConversation;
+
+    /**
+     * Synchronize storefront theme app embed settings to shop_settings table.
+     *
+     * @param  array<string, mixed>  $settings
+     */
+    public function syncThemeSettings(string $shopDomain, array $settings, string $locale = 'en'): ?ShopSetting;
 }
