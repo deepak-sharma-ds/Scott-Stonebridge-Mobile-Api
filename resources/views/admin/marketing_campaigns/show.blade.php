@@ -40,6 +40,7 @@
         <div class="card p-4" x-data="{ source: 'manual' }" style="margin-bottom:1.5rem;">
             <h3 style="margin-top:0;">Link a product</h3>
             <form action="{{ route('admin.marketing-campaigns.products.store', $campaign) }}" method="POST"
+                enctype="multipart/form-data"
                 x-data="productPicker(@js(route('admin.marketing-campaigns.products.available', $campaign)))" x-init="load()">
                 @csrf
                 <div class="row" style="display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:1rem;">
@@ -122,6 +123,24 @@
                         <label for="email_subject" class="form-label">Email Subject</label>
                         <input type="text" name="email_subject" id="email_subject" class="form-control">
                     </div>
+                </div>
+                <div class="mb-3">
+                    <label for="header_image" class="form-label">Header Banner Image <small
+                            style="color:var(--text-muted);">(shown at the top of the email; falls back to the site
+                            logo if left blank)</small></label>
+                    <input type="file" name="header_image" id="header_image" class="form-control" accept="image/*">
+                </div>
+                <div class="mb-3">
+                    <label for="email_content" class="form-label">Email Content <small
+                            style="color:var(--text-muted);">(shown above the reading; @{{ $productTitle }} /
+                            @{{ $campaignName }} available; leave blank to use the default copy)</small></label>
+                    <textarea name="email_content" id="email_content" class="form-control" rows="3"></textarea>
+                </div>
+                <div class="mb-3">
+                    <label for="email_footer" class="form-label">Email Footer <small
+                            style="color:var(--text-muted);">(shown below the reading; @{{ $productTitle }} /
+                            @{{ $campaignName }} available; leave blank to use the default copy)</small></label>
+                    <textarea name="email_footer" id="email_footer" class="form-control" rows="5"></textarea>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Response Source</label>
@@ -219,8 +238,32 @@
                                 <td colspan="5" style="background:var(--surface-muted, rgba(0,0,0,0.02));">
                                     <form
                                         action="{{ route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]) }}"
-                                        method="POST">
+                                        method="POST" enctype="multipart/form-data">
                                         @csrf
+                                        <div class="mb-3">
+                                            <label class="form-label">Header Banner Image <small
+                                                    style="color:var(--text-muted);">(leave blank to keep the
+                                                    current one)</small></label>
+                                            @if ($campaignProduct->header_image)
+                                                <div style="margin-bottom:0.5rem;">
+                                                    <img src="{{ asset('storage/campaign-header-images/'.$campaignProduct->header_image) }}"
+                                                        alt="" style="max-height:60px;border-radius:6px;">
+                                                </div>
+                                            @endif
+                                            <input type="file" name="header_image" class="form-control" accept="image/*">
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Email Content <small
+                                                    style="color:var(--text-muted);">(shown above the reading;
+                                                    @{{ $productTitle }} / @{{ $campaignName }} available)</small></label>
+                                            <textarea name="email_content" class="form-control" rows="3">{{ $campaignProduct->email_content }}</textarea>
+                                        </div>
+                                        <div class="mb-3">
+                                            <label class="form-label">Email Footer <small
+                                                    style="color:var(--text-muted);">(shown below the reading;
+                                                    @{{ $productTitle }} / @{{ $campaignName }} available)</small></label>
+                                            <textarea name="email_footer" class="form-control" rows="5">{{ $campaignProduct->email_footer }}</textarea>
+                                        </div>
                                         <div style="display:flex;gap:1.5rem;margin-bottom:0.75rem;">
                                             <label><input type="radio" name="source" value="ai" x-model="source">
                                                 Generate with AI</label>

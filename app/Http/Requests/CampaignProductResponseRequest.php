@@ -22,6 +22,9 @@ class CampaignProductResponseRequest extends FormRequest
             'source' => ['required', Rule::in([CampaignProductResponse::SOURCE_AI, CampaignProductResponse::SOURCE_MANUAL])],
             'prompt_template' => ['nullable', 'string'],
             'body' => ['required_if:source,'.CampaignProductResponse::SOURCE_MANUAL, 'nullable', 'string'],
+            'header_image' => ['nullable', 'image', 'max:5120'],
+            'email_content' => ['nullable', 'string'],
+            'email_footer' => ['nullable', 'string'],
         ];
     }
 }

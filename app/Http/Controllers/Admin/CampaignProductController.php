@@ -12,6 +12,8 @@ use App\Services\CampaignEmail\CampaignProductCatalogService;
 use App\Services\CampaignEmail\CampaignResponseGenerationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class CampaignProductController extends Controller
@@ -38,6 +40,10 @@ class CampaignProductController extends Controller
         $source = $data['source'] ?? CampaignProductResponse::SOURCE_MANUAL;
         $body = $data['body'] ?? null;
         unset($data['source'], $data['body']);
+
+        if ($request->hasFile('header_image')) {
+            $data['header_image'] = $this->storeHeaderImage($request->file('header_image'));
+        }
 
         $campaignProduct = $marketingCampaign->campaignProducts()->create($data);
 
@@ -76,6 +82,15 @@ class CampaignProductController extends Controller
 
         $data = $request->validated();
 
+        $templateFields = [
+            'email_content' => $data['email_content'] ?? null,
+            'email_footer' => $data['email_footer'] ?? null,
+        ];
+        if ($request->hasFile('header_image')) {
+            $templateFields['header_image'] = $this->storeHeaderImage($request->file('header_image'));
+        }
+        $campaignProduct->update($templateFields);
+
         if ($data['source'] === CampaignProductResponse::SOURCE_MANUAL) {
             $campaignProduct->response()->updateOrCreate(
                 ['campaign_product_id' => $campaignProduct->id],
@@ -107,5 +122,14 @@ class CampaignProductController extends Controller
 
             return back()->with('error', 'Failed to generate response: '.$e->getMessage());
         }
+    }
+
+    private function storeHeaderImage(UploadedFile $file): string
+    {
+        $fileName = time().'-'.$file->hashName();
+
+        Storage::disk('public')->putFileAs('campaign-header-images', $file, $fileName);
+
+        return $fileName;
     }
 }
