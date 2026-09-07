@@ -1,0 +1,52 @@
+<?php
+
+namespace App\Http\Requests;
+
+use App\Models\CampaignProductResponse;
+use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+
+class CampaignProductRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    /**
+     * @return array<string,mixed>
+     */
+    public function rules(): array
+    {
+        $campaign = $this->route('marketingCampaign');
+
+        return [
+            'shopify_product_id' => [
+                'required', 'integer', 'min:1',
+                Rule::unique('campaign_products', 'shopify_product_id')
+                    ->where('marketing_campaign_id', $campaign?->id),
+            ],
+            'shopify_variant_id' => ['required', 'integer', 'min:1'],
+            'product_title' => ['nullable', 'string', 'max:255'],
+            'header_image' => ['nullable', 'image', 'max:5120'],
+            'email_content' => ['nullable', 'string'],
+            'email_footer' => ['nullable', 'string'],
+            'prompt_template' => ['nullable', 'string'],
+            'email_subject' => ['nullable', 'string', 'max:255'],
+            'model' => ['nullable', 'string', 'max:255'],
+            'max_tokens' => ['nullable', 'integer', 'min:1', 'max:8000'],
+            'source' => ['nullable', Rule::in([CampaignProductResponse::SOURCE_AI, CampaignProductResponse::SOURCE_MANUAL])],
+            'body' => ['nullable', 'string'],
+        ];
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    public function messages(): array
+    {
+        return [
+            'shopify_product_id.unique' => 'This product is already linked to this campaign.',
+        ];
+    }
+}

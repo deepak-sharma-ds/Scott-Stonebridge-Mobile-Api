@@ -7,7 +7,6 @@ use App\Contracts\Shopify\AdminApiClientInterface;
 
 class AdminApiClient extends BaseShopifyClient implements AdminApiClientInterface
 {
-
     /**
      * Get the API endpoint URL
      */
@@ -43,8 +42,8 @@ class AdminApiClient extends BaseShopifyClient implements AdminApiClientInterfac
      * This method extends the base query method to add Admin API specific
      * functionality like automatic cache tagging and circuit breaker support.
      *
-     * @param string $queryPath Path to the GraphQL query file (e.g., "admin/customers/get_customer")
-     * @param array $variables Query variables
+     * @param  string  $queryPath  Path to the GraphQL query file (e.g., "admin/customers/get_customer")
+     * @param  array  $variables  Query variables
      * @return array Response data
      */
     public function query(string $queryPath, array $variables = []): array
@@ -57,7 +56,7 @@ class AdminApiClient extends BaseShopifyClient implements AdminApiClientInterfac
         // Execute with circuit breaker if enabled
         if ($this->circuitBreakerName !== null) {
             return $this->executeWithCircuitBreaker(
-                fn() => parent::query($queryPath, $variables),
+                fn () => parent::query($queryPath, $variables),
                 $this->circuitBreakerName
             );
         }
@@ -71,9 +70,9 @@ class AdminApiClient extends BaseShopifyClient implements AdminApiClientInterfac
      * Convenience method that automatically enables caching with default TTL
      * based on the operation type.
      *
-     * @param string $queryPath Path to the GraphQL query file
-     * @param array $variables Query variables
-     * @param string $resourceType Resource type for cache tagging (e.g., 'customer', 'order')
+     * @param  string  $queryPath  Path to the GraphQL query file
+     * @param  array  $variables  Query variables
+     * @param  string  $resourceType  Resource type for cache tagging (e.g., 'customer', 'order')
      * @return array Response data
      */
     public function queryWithCache(string $queryPath, array $variables = [], string $resourceType = 'admin'): array
@@ -90,7 +89,6 @@ class AdminApiClient extends BaseShopifyClient implements AdminApiClientInterfac
     /**
      * Get cache TTL for a resource type
      *
-     * @param string $resourceType
      * @return int TTL in seconds
      */
     protected function getCacheTtlForResource(string $resourceType): int

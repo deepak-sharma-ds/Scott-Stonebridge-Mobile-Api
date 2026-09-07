@@ -45,7 +45,7 @@ class ChatContextDTO extends BaseDTO
             product: ! empty($data['product']) ? ProductContextDTO::fromArray((array) $data['product']) : null,
             cart: ! empty($data['cart']) ? CartContextDTO::fromArray((array) $data['cart']) : null,
             customer: ! empty($data['customer']) ? CustomerContextDTO::fromArray((array) $data['customer']) : null,
-            recentlyViewed: array_values(array_filter((array) ($data['recently_viewed'] ?? $data['recentlyViewed'] ?? []), 'is_string')),
+            recentlyViewed: array_values(array_map('strval', (array) ($data['recently_viewed'] ?? $data['recentlyViewed'] ?? []))),
             shopDomain: isset($data['shop_domain']) ? (string) $data['shop_domain'] : (isset($data['shopDomain']) ? (string) $data['shopDomain'] : null),
             currency: isset($data['currency']) ? (string) $data['currency'] : null,
             locale: isset($data['locale']) ? (string) $data['locale'] : null,

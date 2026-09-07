@@ -14,19 +14,19 @@ class ShopifyCustomerAuth
     /**
      * Handle an incoming request.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
         $token = $request->bearerToken();
         $expiresAt = $request->header('X-Token-Expires-At');
-        if (!$token) {
+        if (! $token) {
             return response()->json(['error' => 'Unauthorized Customer'], 401);
         }
 
         // Optionally call Shopify GraphQL to verify token
         $verified = $this->verifyToken($token, $expiresAt);
-        if (!$verified) {
+        if (! $verified) {
             return response()->json(['error' => 'Invalid token'], 401);
         }
 
@@ -55,12 +55,14 @@ class ShopifyCustomerAuth
                 'token' => $accessToken,
                 'customer_id' => $customer['id'] ?? null,
             ]);
+
             return true;
         }
         $log->warning('Shopify customer token verification failed', [
             'token' => $accessToken,
             'expires_at' => $expiresAt,
         ]);
+
         return false;
     }
 }

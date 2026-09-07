@@ -9,10 +9,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * ApiLoggingMiddleware
- * 
+ *
  * Logs all API requests and responses with correlation ID, duration, and status.
  * Uses structured JSON format for log entries.
- * 
+ *
  * Requirements: 10.2, 10.5, 15.5
  */
 class ApiLoggingMiddleware
@@ -20,7 +20,7 @@ class ApiLoggingMiddleware
     /**
      * Handle an incoming request.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
@@ -28,7 +28,7 @@ class ApiLoggingMiddleware
         $startTime = microtime(true);
 
         // Get correlation ID from request (should be set by CorrelationIdMiddleware)
-        $correlationId = $request->attributes->get('correlation_id') 
+        $correlationId = $request->attributes->get('correlation_id')
             ?? $request->input('correlation_id')
             ?? 'unknown';
 
@@ -141,7 +141,7 @@ class ApiLoggingMiddleware
 
         foreach ($headers as $key => $value) {
             $lowerKey = strtolower($key);
-            
+
             if (in_array($lowerKey, $sensitiveHeaders, true)) {
                 $sanitized[$key] = ['***REDACTED***'];
             } else {

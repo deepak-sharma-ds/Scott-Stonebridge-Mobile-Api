@@ -2,8 +2,8 @@
 
 namespace App\Http\Requests;
 
-use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Contracts\Validation\Validator;
+use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Http\Exceptions\HttpResponseException;
 
 class ContactUsRequest extends FormRequest
@@ -16,9 +16,9 @@ class ContactUsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name'    => 'required|string|max:50',
+            'name' => 'required|string|max:50',
             'phone' => 'required|digits_between:7,15',
-            'email'   => 'required|email|max:50',
+            'email' => 'required|email|max:50',
             'message' => 'required|string|max:500',
         ];
     }
@@ -28,7 +28,7 @@ class ContactUsRequest extends FormRequest
         throw new HttpResponseException(response()->json([
             'success' => false,
             'message' => 'Validation errors',
-            'errors'  => $validator->errors(),
+            'errors' => $validator->errors(),
         ], 422));
     }
 }

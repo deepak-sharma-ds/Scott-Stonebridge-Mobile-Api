@@ -6,11 +6,12 @@ use App\DTOs\Order\OrderDTO;
 use App\DTOs\Order\OrderLineItemDTO;
 use App\Http\Resources\Order\OrderResource;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Tests\TestCase;
 
 /**
  * OrderResource Unit Tests
- * 
+ *
  * Tests transformation logic from OrderDTO to API response format.
  * Validates field mapping, calculated fields, nested resource handling, and edge cases.
  */
@@ -125,12 +126,12 @@ class OrderResourceTest extends TestCase
         $result = $resource->toArray($this->request);
 
         // Assert - line_items is a ResourceCollection, resolve it to array
-        $this->assertInstanceOf(\Illuminate\Http\Resources\Json\AnonymousResourceCollection::class, $result['line_items']);
+        $this->assertInstanceOf(AnonymousResourceCollection::class, $result['line_items']);
         $lineItemsArray = $result['line_items']->resolve($this->request);
-        
+
         $this->assertIsArray($lineItemsArray);
         $this->assertCount(1, $lineItemsArray);
-        
+
         $lineItemResult = $lineItemsArray[0];
         $this->assertEquals('Test Product', $lineItemResult['title']);
         $this->assertEquals(1, $lineItemResult['quantity']);
@@ -346,7 +347,7 @@ class OrderResourceTest extends TestCase
         $this->assertEquals('100.00', $result['subtotal_price']);
         $this->assertEquals('20.00', $result['total_tax']);
         $this->assertEquals('GBP', $result['currency']);
-        
+
         // Verify they are not nested in objects
         $this->assertIsString($result['total_price']);
         $this->assertIsString($result['subtotal_price']);
@@ -399,7 +400,7 @@ class OrderResourceTest extends TestCase
         $this->assertArrayHasKey('total_items', $result);
         $this->assertArrayHasKey('unique_items', $result);
         $this->assertArrayHasKey('shipping_address', $result);
-        
+
         // Verify camelCase fields are NOT present
         $this->assertArrayNotHasKey('orderNumber', $result);
         $this->assertArrayNotHasKey('processedAt', $result);

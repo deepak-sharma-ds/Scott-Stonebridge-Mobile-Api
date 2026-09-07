@@ -36,8 +36,7 @@ class MediaImageDTO extends BaseDTO
     /**
      * Create a MediaImageDTO from Shopify API response data.
      *
-     * @param array $data Raw media image node from Shopify GraphQL response
-     * @return self
+     * @param  array  $data  Raw media image node from Shopify GraphQL response
      */
     public static function fromShopifyResponse(array $data): self
     {

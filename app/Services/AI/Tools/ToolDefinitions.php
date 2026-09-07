@@ -40,8 +40,6 @@ final class ToolDefinitions
     public const STOREFRONT_MCP_TOOLS = [
         self::TOOL_SEARCH_CATALOG,
         self::TOOL_GET_PRODUCT_DETAILS,
-        self::TOOL_GET_CART,
-        self::TOOL_UPDATE_CART,
         self::TOOL_SEARCH_POLICIES,
     ];
 
@@ -54,12 +52,18 @@ final class ToolDefinitions
 
     /**
      * Internal tools are not proxied to any MCP server — handled directly by
-     * ToolExecutor. `start_checkout` is synthesised from a `get_cart` call so
-     * the AI can hand back the Shopify-hosted `cart.checkout_url`.
+     * ToolExecutor. The storefront's own cart (via `context.cart`, the live
+     * `/cart.js` snapshot) is the single source of truth for cart state
+     * (ADR 0010): `get_cart` reads it directly, `update_cart` emits a
+     * `cart_action` intent for the frontend to execute against the theme's
+     * native Ajax Cart API, and `start_checkout` emits a `checkout_action`
+     * intent to navigate to `/checkout` — none of the three call Shopify.
      *
      * @var list<string>
      */
     public const INTERNAL_TOOLS = [
+        self::TOOL_GET_CART,
+        self::TOOL_UPDATE_CART,
         self::TOOL_SUGGEST_QUICK_REPLIES,
         self::TOOL_SUGGEST_UPSELL,
         self::TOOL_START_CHECKOUT,
@@ -104,55 +108,34 @@ final class ToolDefinitions
                 ],
             ),
             $this->fn(self::TOOL_GET_CART,
-                'Use ONLY when the user asks what is currently in their cart and you have no recent cart_state from this turn. Never call right before start_checkout — start_checkout already reads the live cart. Never pass placeholder IDs.',
+                'Use when the user asks what is currently in their cart. Reads the cart the storefront already sent this turn — no arguments needed.',
                 [
                     'type' => 'object',
-                    'properties' => [
-                        'cart_id' => ['type' => 'string', 'minLength' => 1],
-                    ],
-                    'required' => ['cart_id'],
+                    'properties' => new \stdClass,
                     'additionalProperties' => false,
                 ],
             ),
             $this->fn(self::TOOL_UPDATE_CART,
-                'Use to add, change, or remove cart items. `cart_id` is OPTIONAL — when absent Shopify creates a new cart. Use `add_items` for new variants. To change quantity or remove a line, use the cart line `id` from the latest cart_state `items[].id` (NOT the variant id): `update_items` with that line id to change quantity, `remove_line_ids` with that line id to drop it.',
+                'Use to add, change the quantity of, or remove cart items. To add an item, provide the variant_id (or product handle). If the variant ID is not yet known, call get_product_details first to get it. Action `remove` or quantity 0 removes the item. Action `clear` removes all items. This performs the real cart mutation on the storefront directly — reply as if it already succeeded.',
                 [
                     'type' => 'object',
                     'properties' => [
-                        'cart_id' => ['type' => 'string'],
-                        'add_items' => [
+                        'items' => [
                             'type' => 'array',
+                            'minItems' => 1,
                             'items' => [
                                 'type' => 'object',
                                 'properties' => [
-                                    'product_variant_id' => ['type' => 'string', 'minLength' => 1],
-                                    'quantity' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 99],
+                                    'action' => ['type' => 'string', 'enum' => ['add', 'update', 'remove', 'clear']],
+                                    'variant_id' => ['type' => 'string', 'description' => 'Variant ID (or product handle) to add/update/remove. Can be GID or numeric ID.'],
+                                    'quantity' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 99, 'description' => 'Quantity for add/update. Set to 0 or use action "remove" to remove.'],
                                 ],
-                                'required' => ['product_variant_id', 'quantity'],
+                                'required' => ['action'],
                                 'additionalProperties' => false,
                             ],
-                        ],
-                        'update_items' => [
-                            'type' => 'array',
-                            'items' => [
-                                'type' => 'object',
-                                'properties' => [
-                                    'id' => ['type' => 'string', 'minLength' => 1],
-                                    'quantity' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 99],
-                                ],
-                                'required' => ['id', 'quantity'],
-                                'additionalProperties' => false,
-                            ],
-                        ],
-                        'remove_line_ids' => [
-                            'type' => 'array',
-                            'items' => ['type' => 'string', 'minLength' => 1],
-                        ],
-                        'discount_codes' => [
-                            'type' => 'array',
-                            'items' => ['type' => 'string', 'minLength' => 1],
                         ],
                     ],
+                    'required' => ['items'],
                     'additionalProperties' => false,
                 ],
             ),
@@ -185,7 +168,7 @@ final class ToolDefinitions
                 ],
             ),
             $this->fn(self::TOOL_GET_ORDER_STATUS,
-                'Use when the user asks about a SPECIFIC order by number ("where is order #1234?"). Requires the customer to be signed in; the system returns auth_required if not. Call this fresh every time the user asks — even if a previous turn returned auth_required, because the customer may have just signed in. Never answer an order question without calling this tool in the current turn.',
+                'Use when the user asks about a SPECIFIC order by number ("where is order #1234?"). Requires the customer to be signed in; if not signed in, returns auth_required directing them to https://scottstonebridge.com/account/login. Call this fresh every time the user asks. Never answer an order question without calling this tool in the current turn.',
                 [
                     'type' => 'object',
                     'properties' => [
@@ -196,7 +179,7 @@ final class ToolDefinitions
                 ],
             ),
             $this->fn(self::TOOL_GET_MOST_RECENT_ORDER_STATUS,
-                'Use when the user asks about their latest order without naming a number ("where is my order?", "did my order ship?"). Requires the customer to be signed in. Call this fresh every time the user asks — even if a previous turn returned auth_required, because the customer may have just signed in. Never answer an order question without calling this tool in the current turn.',
+                'Use when the user asks about their latest order without naming a number ("where is my order?", "did my order ship?"). Requires the customer to be signed in; if not signed in, returns auth_required directing them to https://scottstonebridge.com/account/login. Call this fresh every time the user asks. Never answer an order question without calling this tool in the current turn.',
                 [
                     'type' => 'object',
                     'properties' => new \stdClass,
@@ -204,29 +187,26 @@ final class ToolDefinitions
                 ],
             ),
             $this->fn(self::TOOL_LIST_CUSTOMER_ORDERS,
-                'Use when the user wants to see their order history or ALL their orders ("show me my orders", "my past orders", "order history", "list my orders"). Requires the customer to be signed in; the system returns auth_required if not. Returns a list of orders newest-first, each linking to its Shopify order-detail page. To load older orders when the user asks for more, pass the `cursor` value from the previous order_list result. Call this fresh every time the user asks — even if a previous turn returned auth_required, because the customer may have just signed in. Never answer an order question without calling this tool in the current turn.',
+                'Use when the user wants to see their order history or ALL their orders ("show me my orders", "my past orders", "order history", "list my orders"). Requires the customer to be signed in; if not signed in, returns auth_required directing them to https://scottstonebridge.com/account/login. Returns a list of orders newest-first, each linking to its Shopify order-detail page. To load older orders when the user asks for more, pass the `cursor` value from the previous order_list result. Call this fresh every time the user asks. Never answer an order question without calling this tool in the current turn.',
                 [
                     'type' => 'object',
                     'properties' => [
                         'limit' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 20],
-                        'cursor' => ['type' => 'string', 'minLength' => 1],
+                        'cursor' => ['type' => 'string', 'description' => 'Pagination cursor from the previous order_list result. Omit or pass null if fetching the first page.'],
                     ],
                     'additionalProperties' => false,
                 ],
             ),
             $this->fn(self::TOOL_START_CHECKOUT,
-                'Call IMMEDIATELY (do NOT pre-call get_cart) when the user says they want to check out, buy, place order, pay, or are ready to purchase. Returns the Shopify-hosted checkout URL surfaced from the live cart. Pass the latest cart_id you have seen in any previous cart_state result — do not invent or use placeholder IDs from the schema description.',
+                'Call IMMEDIATELY (do NOT pre-call get_cart) when the user says they want to check out, buy, place order, pay, or are ready to purchase. Sends the customer to the storefront\'s checkout for whatever is currently in their cart — no arguments needed.',
                 [
                     'type' => 'object',
-                    'properties' => [
-                        'cart_id' => ['type' => 'string', 'minLength' => 1],
-                    ],
-                    'required' => ['cart_id'],
+                    'properties' => new \stdClass,
                     'additionalProperties' => false,
                 ],
             ),
             $this->fn(self::TOOL_SUGGEST_QUICK_REPLIES,
-                'Use when the conversation reaches a decision point and the user would benefit from 2-5 short tap-to-send suggestions ("Tell me more", "Add to cart", "Show similar").',
+                'ALWAYS call this at the end of any turn where the customer must choose a next step (after showing products, product detail, cart state, or a recommendation). Provide 2-5 short tap-to-send suggestions ("Tell me more", "Add to cart", "Show similar"). Skip only for a pure factual one-liner or an auth_required reply.',
                 [
                     'type' => 'object',
                     'properties' => [
@@ -242,13 +222,10 @@ final class ToolDefinitions
                 ],
             ),
             $this->fn(self::TOOL_SUGGEST_UPSELL,
-                'Use immediately after a successful add-to-cart, or when the customer is browsing the cart, to surface complementary products (upsell / cross-sell).',
+                'Call this IMMEDIATELY after every successful add-to-cart, and whenever the customer is browsing their cart, to surface complementary products (upsell / cross-sell). Reads the cart the storefront already sent this turn — no arguments needed.',
                 [
                     'type' => 'object',
-                    'properties' => [
-                        'cart_id' => ['type' => 'string', 'minLength' => 1],
-                    ],
-                    'required' => ['cart_id'],
+                    'properties' => new \stdClass,
                     'additionalProperties' => false,
                 ],
             ),

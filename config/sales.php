@@ -119,6 +119,18 @@ return [
         // Pagination size for Admin API list queries.
         'admin_page_size' => (int) env('SALES_KNOWLEDGE_PAGE_SIZE', 50),
 
+        // Knowledge chunking (ADR 0009): a document is split when it
+        // crosses EITHER threshold below. Heading-based sections are tried
+        // first; a fixed ~chunk_words-word sliding window (with overlap) is
+        // the fallback for documents with no usable heading structure, and
+        // also caps any single heading-section that's still oversized.
+        'chunking' => [
+            'word_threshold' => (int) env('SALES_KNOWLEDGE_CHUNK_WORD_THRESHOLD', 400),
+            'heading_threshold' => (int) env('SALES_KNOWLEDGE_CHUNK_HEADING_THRESHOLD', 2),
+            'chunk_words' => (int) env('SALES_KNOWLEDGE_CHUNK_WORDS', 150),
+            'overlap_words' => (int) env('SALES_KNOWLEDGE_CHUNK_OVERLAP_WORDS', 25),
+        ],
+
         // Intent → content_type mapping for getKnowledgeForPrompt().
         // Broadened: every intent now sees `faq` + `custom` rows too so
         // merchant-authored knowledge always has a chance to land in the
@@ -181,7 +193,7 @@ return [
             'min_score' => (float) env('SALES_KNOWLEDGE_MIN_SCORE', 0.05),
             'candidate_limit' => (int) env('SALES_KNOWLEDGE_CANDIDATES', 40),
             'recency_half_life_days' => (float) env('SALES_KNOWLEDGE_RECENCY_HALFLIFE', 90.0),
-            'enable_semantic' => (bool) env('SALES_KNOWLEDGE_ENABLE_SEMANTIC', false),
+            'enable_semantic' => (bool) env('SALES_KNOWLEDGE_ENABLE_SEMANTIC', true),
         ],
 
         /*
@@ -195,6 +207,11 @@ return [
             'query_cache_ttl' => (int) env('SALES_KNOWLEDGE_EMBEDDING_TTL', 3600),
             'batch_size' => (int) env('SALES_KNOWLEDGE_EMBEDDING_BATCH', 50),
             'batch_sleep_ms' => (int) env('SALES_KNOWLEDGE_EMBEDDING_BATCH_SLEEP_MS', 0),
+            // A single query-embedding retry recovers most transient OpenAI
+            // hiccups outright; the delay is deliberately short since this
+            // runs synchronously in the chat request path.
+            'query_retry_attempts' => (int) env('SALES_KNOWLEDGE_EMBEDDING_QUERY_RETRY_ATTEMPTS', 1),
+            'query_retry_delay_ms' => (int) env('SALES_KNOWLEDGE_EMBEDDING_QUERY_RETRY_DELAY_MS', 150),
         ],
     ],
 
@@ -259,7 +276,7 @@ return [
     |
     */
     'prompt_guard' => [
-        'system_prompt_max_tokens' => (int) env('SALES_SYSTEM_PROMPT_MAX_TOKENS', 800),
+        'system_prompt_max_tokens' => (int) env('SALES_SYSTEM_PROMPT_MAX_TOKENS', 1200),
     ],
 
 ];

@@ -10,6 +10,9 @@ use App\Services\Sales\StoreKnowledgeService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
+use OpenAI\Laravel\Facades\OpenAI;
+use OpenAI\Responses\Embeddings\CreateResponse;
+use RuntimeException;
 use Tests\Mocks\MockShopifyClient;
 use Tests\TestCase;
 
@@ -156,6 +159,246 @@ class StoreKnowledgeServiceTest extends TestCase
         $this->assertStringContainsString('Refunds', $block);
         $this->assertStringNotContainsString('About', $block);
         $this->assertStringNotContainsString('Other shop policy', $block);
+    }
+
+    public function test_sync_all_chunks_a_long_page_into_multiple_summarise_jobs(): void
+    {
+        Queue::fake();
+
+        $longBody = '<h2>Origins</h2><p>'.str_repeat('origin word ', 60).'</p>'
+            .'<h2>Philosophy</h2><p>'.str_repeat('philosophy word ', 60).'</p>'
+            .'<h2>Today</h2><p>'.str_repeat('today word ', 60).'</p>';
+
+        $this->admin->mockResponse('admin/pages/list_pages', [
+            'data' => [
+                'pages' => [
+                    'edges' => [[
+                        'node' => [
+                            'id' => 'gid://shopify/Page/1',
+                            'title' => 'About Scott',
+                            'handle' => 'about-scott',
+                            'body' => $longBody,
+                            'updatedAt' => '2026-01-01T00:00:00Z',
+                        ],
+                        'cursor' => 'cur1',
+                    ]],
+                    'pageInfo' => ['hasNextPage' => false, 'endCursor' => 'cur1'],
+                ],
+            ],
+        ]);
+
+        $this->service->syncAll('demo.myshopify.com');
+
+        Queue::assertPushed(SummariseKnowledgeItemJob::class, 3);
+        foreach ([0, 1, 2] as $index) {
+            Queue::assertPushed(
+                SummariseKnowledgeItemJob::class,
+                fn (SummariseKnowledgeItemJob $job): bool => $job->handle === "about-scott#{$index}"
+                    && $job->documentHandle === 'about-scott'
+                    && $job->chunkIndex === $index
+            );
+        }
+    }
+
+    public function test_sync_all_does_not_chunk_a_short_page(): void
+    {
+        Queue::fake();
+
+        $this->admin->mockResponse('admin/pages/list_pages', [
+            'data' => [
+                'pages' => [
+                    'edges' => [[
+                        'node' => [
+                            'id' => 'gid://shopify/Page/1',
+                            'title' => 'Contact',
+                            'handle' => 'contact',
+                            'body' => '<p>Reach us at hello@example.com.</p>',
+                            'updatedAt' => '2026-01-01T00:00:00Z',
+                        ],
+                        'cursor' => 'cur1',
+                    ]],
+                    'pageInfo' => ['hasNextPage' => false, 'endCursor' => 'cur1'],
+                ],
+            ],
+        ]);
+
+        $this->service->syncAll('demo.myshopify.com');
+
+        // document_handle is still populated (every row this code path
+        // creates gets one) — only chunk_index reflects "never split".
+        Queue::assertPushed(
+            SummariseKnowledgeItemJob::class,
+            fn (SummariseKnowledgeItemJob $job): bool => $job->handle === 'contact'
+                && $job->documentHandle === 'contact'
+                && $job->chunkIndex === null
+        );
+    }
+
+    public function test_sync_all_reconciles_stale_chunks_when_a_document_shrinks(): void
+    {
+        Queue::fake();
+
+        // Simulate a previous sync that produced 3 chunks.
+        foreach ([0, 1, 2] as $index) {
+            StoreKnowledge::factory()->forShop('demo.myshopify.com')->ofType(StoreKnowledge::TYPE_PAGE)->create([
+                'handle' => "about-scott#{$index}",
+                'document_handle' => 'about-scott',
+                'chunk_index' => $index,
+            ]);
+        }
+
+        // The page has since been edited down to something short.
+        $this->admin->mockResponse('admin/pages/list_pages', [
+            'data' => [
+                'pages' => [
+                    'edges' => [[
+                        'node' => [
+                            'id' => 'gid://shopify/Page/1',
+                            'title' => 'About Scott',
+                            'handle' => 'about-scott',
+                            'body' => '<p>Scott founded the shop in 2020.</p>',
+                            'updatedAt' => '2026-02-01T00:00:00Z',
+                        ],
+                        'cursor' => 'cur1',
+                    ]],
+                    'pageInfo' => ['hasNextPage' => false, 'endCursor' => 'cur1'],
+                ],
+            ],
+        ]);
+
+        $this->service->syncAll('demo.myshopify.com');
+
+        $this->assertSame(
+            0,
+            StoreKnowledge::query()->where('document_handle', 'about-scott')->count(),
+            'stale chunk rows from the previous, longer version of the page must be gone'
+        );
+        Queue::assertPushed(
+            SummariseKnowledgeItemJob::class,
+            fn (SummariseKnowledgeItemJob $job): bool => $job->handle === 'about-scott' && $job->chunkIndex === null
+        );
+    }
+
+    public function test_sync_all_reconciles_a_legacy_single_row_when_a_document_grows_into_chunks(): void
+    {
+        Queue::fake();
+
+        // A row created before chunking existed: no document_handle at all.
+        StoreKnowledge::factory()->forShop('demo.myshopify.com')->ofType(StoreKnowledge::TYPE_PAGE)->create([
+            'handle' => 'about-scott',
+            'document_handle' => null,
+            'chunk_index' => null,
+        ]);
+
+        $longBody = '<h2>Origins</h2><p>'.str_repeat('origin word ', 60).'</p>'
+            .'<h2>Philosophy</h2><p>'.str_repeat('philosophy word ', 60).'</p>';
+
+        $this->admin->mockResponse('admin/pages/list_pages', [
+            'data' => [
+                'pages' => [
+                    'edges' => [[
+                        'node' => [
+                            'id' => 'gid://shopify/Page/1',
+                            'title' => 'About Scott',
+                            'handle' => 'about-scott',
+                            'body' => $longBody,
+                            'updatedAt' => '2026-02-01T00:00:00Z',
+                        ],
+                        'cursor' => 'cur1',
+                    ]],
+                    'pageInfo' => ['hasNextPage' => false, 'endCursor' => 'cur1'],
+                ],
+            ],
+        ]);
+
+        $this->service->syncAll('demo.myshopify.com');
+
+        $this->assertSame(
+            0,
+            StoreKnowledge::query()->where('handle', 'about-scott')->count(),
+            'the legacy unchunked row must be reconciled away once the document is chunked'
+        );
+        Queue::assertPushed(SummariseKnowledgeItemJob::class, 2);
+    }
+
+    public function test_embed_query_retries_once_then_succeeds_without_degrading(): void
+    {
+        config([
+            'sales.knowledge.retrieval.enable_semantic' => true,
+            'sales.knowledge.embedding.query_retry_attempts' => 1,
+            'sales.knowledge.embedding.query_retry_delay_ms' => 0,
+        ]);
+
+        StoreKnowledge::factory()->forShop('demo.myshopify.com')->create([
+            'title' => 'About Scott',
+            'summary' => 'Scott founded the shop.',
+            'embedding' => [1.0, 0.0],
+        ]);
+
+        // First attempt fails, retry succeeds.
+        OpenAI::fake([
+            new RuntimeException('transient failure'),
+            CreateResponse::fake(['data' => [['embedding' => [1.0, 0.0]]]]),
+        ]);
+
+        $block = $this->service->getKnowledgeForPrompt('demo.myshopify.com', ['product_support'], 'tell me about scott');
+
+        $this->assertStringContainsString('About Scott', $block);
+        $this->assertFalse($this->service->wasLastRetrievalDegraded());
+    }
+
+    public function test_embed_query_degrades_and_hedges_after_exhausting_retries(): void
+    {
+        config([
+            'sales.knowledge.retrieval.enable_semantic' => true,
+            'sales.knowledge.embedding.query_retry_attempts' => 1,
+            'sales.knowledge.embedding.query_retry_delay_ms' => 0,
+        ]);
+
+        StoreKnowledge::factory()->forShop('demo.myshopify.com')->create([
+            'title' => 'About Scott',
+            'summary' => 'Scott founded the shop.',
+            'embedding' => [1.0, 0.0],
+        ]);
+
+        // Both the initial attempt and the retry fail.
+        OpenAI::fake([
+            new RuntimeException('transient failure'),
+            new RuntimeException('still failing'),
+        ]);
+
+        $this->service->getKnowledgeForPrompt('demo.myshopify.com', ['product_support'], 'tell me about scott');
+
+        $this->assertTrue($this->service->wasLastRetrievalDegraded());
+    }
+
+    public function test_was_last_retrieval_degraded_resets_on_next_call(): void
+    {
+        config([
+            'sales.knowledge.retrieval.enable_semantic' => true,
+            'sales.knowledge.embedding.query_retry_attempts' => 1,
+            'sales.knowledge.embedding.query_retry_delay_ms' => 0,
+        ]);
+
+        StoreKnowledge::factory()->forShop('demo.myshopify.com')->create([
+            'title' => 'About Scott',
+            'summary' => 'Scott founded the shop.',
+            'embedding' => [1.0, 0.0],
+        ]);
+
+        OpenAI::fake([
+            new RuntimeException('fail 1'),
+            new RuntimeException('fail 2'),
+        ]);
+        $this->service->getKnowledgeForPrompt('demo.myshopify.com', ['product_support'], 'first query');
+        $this->assertTrue($this->service->wasLastRetrievalDegraded());
+
+        // A second, distinct call that never touches embeddings (no query)
+        // must not carry the previous call's degraded flag forward.
+        StoreKnowledge::factory()->forShop('demo.myshopify.com')->policy()->create();
+        config(['sales.knowledge.intent_content_map' => ['refund_policy' => ['policy']]]);
+        $this->service->getKnowledgeForPrompt('demo.myshopify.com', ['refund_policy']);
+        $this->assertFalse($this->service->wasLastRetrievalDegraded());
     }
 
     public function test_upsert_faq_creates_then_updates_same_handle(): void

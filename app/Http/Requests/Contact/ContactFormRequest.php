@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Contact;
 
 use App\Http\Requests\BaseApiRequest;
+use Illuminate\Contracts\Validation\ValidationRule;
 
 class ContactFormRequest extends BaseApiRequest
 {
@@ -11,7 +12,7 @@ class ContactFormRequest extends BaseApiRequest
      */
     protected function prepareForValidation(): void
     {
-        if (!$this->has('subject') || empty($this->subject)) {
+        if (! $this->has('subject') || empty($this->subject)) {
             $this->merge([
                 'subject' => 'General Inquiry',
             ]);
@@ -21,7 +22,7 @@ class ContactFormRequest extends BaseApiRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {

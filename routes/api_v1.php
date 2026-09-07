@@ -13,6 +13,8 @@ use App\Http\Controllers\Api\V1\NavigationController;
 use App\Http\Controllers\Api\V1\OrderController;
 use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProfileController;
+use App\Http\Controllers\Api\V1\Push\DeviceTokenController;
+use App\Http\Controllers\Api\V1\Push\NotificationController;
 use App\Http\Controllers\Api\V1\Sales\ConversionEventController as AIConversionEventController;
 use App\Http\Controllers\Api\V1\Sales\KnowledgeController as AIKnowledgeController;
 use App\Http\Controllers\Api\V1\Sales\LeadController as AILeadController;
@@ -267,6 +269,21 @@ Route::prefix('v1')->middleware([
         Route::post('/escalate', [AIChatController::class, 'escalate'])
             ->middleware('throttle:ai-chat-message')
             ->name('escalate');
+
+        Route::post('/sync-settings', [AIChatController::class, 'syncWidgetSettings'])
+            ->middleware('throttle:ai-chat-message')
+            ->name('sync-settings');
+    });
+
+    /**
+     * AI Widget Configuration & Settings Sync
+     *
+     * POST /api/v1/ai/widget/sync - Synchronize storefront theme settings to shop_settings
+     */
+    Route::prefix('ai/widget')->name('api.v1.ai.widget.')->group(function () {
+        Route::post('/sync', [AIChatController::class, 'syncWidgetSettings'])
+            ->middleware('throttle:ai-chat-message')
+            ->name('sync');
     });
 
     /**
@@ -352,6 +369,9 @@ Route::prefix('v1')->middleware([
 
         Route::get('/status', [AICustomerOAuthController::class, 'status'])
             ->name('status');
+
+        Route::post('/logout', [AICustomerOAuthController::class, 'logout'])
+            ->name('logout');
     });
 
     // ============================================
@@ -407,6 +427,34 @@ Route::prefix('v1')->middleware([
             Route::get('/details', [OrderController::class, 'show'])
                 // ->where('orderId', '.*')
                 ->name('api.v1.orders.show');
+        });
+
+        /**
+         * Push Notification Device Tokens
+         *
+         * POST   /api/v1/push/device-tokens - Register/refresh FCM token
+         * DELETE /api/v1/push/device-tokens - Unregister token (logout)
+         * PUT    /api/v1/push/preferences   - Opt in/out of marketing push
+         * GET    /api/v1/push/notifications - List caller's notifications (in-app inbox)
+         * GET    /api/v1/push/notifications/{pushNotification} - Notification detail (marks read)
+         * DELETE /api/v1/push/notifications - Clear all (hides them; data kept)
+         * DELETE /api/v1/push/notifications/{pushNotification} - Clear one (hides it; data kept)
+         */
+        Route::prefix('push')->group(function () {
+            Route::post('/device-tokens', [DeviceTokenController::class, 'store'])
+                ->name('api.v1.push.device-tokens.store');
+            Route::delete('/device-tokens', [DeviceTokenController::class, 'destroy'])
+                ->name('api.v1.push.device-tokens.destroy');
+            Route::put('/preferences', [DeviceTokenController::class, 'updatePreferences'])
+                ->name('api.v1.push.preferences.update');
+            Route::get('/notifications', [NotificationController::class, 'index'])
+                ->name('api.v1.push.notifications.index');
+            Route::delete('/notifications', [NotificationController::class, 'clearAll'])
+                ->name('api.v1.push.notifications.clear-all');
+            Route::get('/notifications/{pushNotification}', [NotificationController::class, 'show'])
+                ->name('api.v1.push.notifications.show');
+            Route::delete('/notifications/{pushNotification}', [NotificationController::class, 'destroy'])
+                ->name('api.v1.push.notifications.destroy');
         });
     });
 });

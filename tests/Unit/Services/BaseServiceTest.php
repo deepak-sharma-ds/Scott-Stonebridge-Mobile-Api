@@ -4,6 +4,7 @@ namespace Tests\Unit\Services;
 
 use App\Logging\CorrelationIdProcessor;
 use App\Services\Base\BaseService;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Tests\TestCase;
 
@@ -32,7 +33,7 @@ class BaseServiceTest extends TestCase
         $expectedId = 'test-correlation-id-123';
         CorrelationIdProcessor::setCorrelationId($expectedId);
 
-        $service = new ConcreteTestService();
+        $service = new ConcreteTestService;
 
         $this->assertEquals($expectedId, $this->getProtectedProperty($service, 'correlationId'));
     }
@@ -43,11 +44,11 @@ class BaseServiceTest extends TestCase
         $expectedId = 'request-correlation-id-456';
 
         // Create a request with the correlation ID header
-        $request = \Illuminate\Http\Request::create('/test', 'GET');
+        $request = Request::create('/test', 'GET');
         $request->headers->set('X-Correlation-ID', $expectedId);
         app()->instance('request', $request);
 
-        $service = new ConcreteTestService();
+        $service = new ConcreteTestService;
 
         $this->assertEquals($expectedId, $this->getProtectedProperty($service, 'correlationId'));
     }
@@ -55,7 +56,7 @@ class BaseServiceTest extends TestCase
     /** @test */
     public function it_generates_correlation_id_when_not_available()
     {
-        $service = new ConcreteTestService();
+        $service = new ConcreteTestService;
 
         $correlationId = $this->getProtectedProperty($service, 'correlationId');
 
@@ -71,7 +72,7 @@ class BaseServiceTest extends TestCase
     /** @test */
     public function it_sets_service_name_from_class_name()
     {
-        $service = new ConcreteTestService();
+        $service = new ConcreteTestService;
 
         $serviceName = $this->getProtectedProperty($service, 'serviceName');
 
@@ -99,7 +100,7 @@ class BaseServiceTest extends TestCase
                     && $context['custom_key'] === 'custom_value';
             });
 
-        $service = new ConcreteTestService();
+        $service = new ConcreteTestService;
         $service->testLogInfo('Test info message', ['custom_key' => 'custom_value']);
     }
 
@@ -120,7 +121,7 @@ class BaseServiceTest extends TestCase
                     && isset($context['correlation_id']);
             });
 
-        $service = new ConcreteTestService();
+        $service = new ConcreteTestService;
         $service->testLogWarning('Test warning message');
     }
 
@@ -141,7 +142,7 @@ class BaseServiceTest extends TestCase
                     && isset($context['correlation_id']);
             });
 
-        $service = new ConcreteTestService();
+        $service = new ConcreteTestService;
         $service->testLogError('Test error message');
     }
 
@@ -162,7 +163,7 @@ class BaseServiceTest extends TestCase
                     && isset($context['correlation_id']);
             });
 
-        $service = new ConcreteTestService();
+        $service = new ConcreteTestService;
         $service->testLogDebug('Test debug message');
     }
 
@@ -181,7 +182,7 @@ class BaseServiceTest extends TestCase
                     && $message === 'Test custom channel';
             });
 
-        $service = new ConcreteTestService();
+        $service = new ConcreteTestService;
         $service->testLogInfo('Test custom channel', [], 'shopify');
     }
 
@@ -204,7 +205,7 @@ class BaseServiceTest extends TestCase
                     && isset($context['correlation_id']);
             });
 
-        $service = new ConcreteTestService();
+        $service = new ConcreteTestService;
         $service->testLogPerformance('test_operation', 150.5);
     }
 
@@ -225,7 +226,7 @@ class BaseServiceTest extends TestCase
                     && $context['cache_hits'] === 3;
             });
 
-        $service = new ConcreteTestService();
+        $service = new ConcreteTestService;
         $service->testLogPerformance('test_operation', 200.0, [
             'query_count' => 5,
             'cache_hits' => 3,
@@ -248,7 +249,7 @@ class BaseServiceTest extends TestCase
                     && $context['status'] === 'success';
             });
 
-        $service = new ConcreteTestService();
+        $service = new ConcreteTestService;
         $result = $service->testWithPerformanceLogging('test_operation', function () {
             return 'success_result';
         });
@@ -273,7 +274,7 @@ class BaseServiceTest extends TestCase
                     && $context['error'] === 'Test exception';
             });
 
-        $service = new ConcreteTestService();
+        $service = new ConcreteTestService;
 
         $this->expectException(\RuntimeException::class);
         $this->expectExceptionMessage('Test exception');
@@ -306,7 +307,7 @@ class BaseServiceTest extends TestCase
                     && isset($context['correlation_id']);
             });
 
-        $service = new ConcreteTestService();
+        $service = new ConcreteTestService;
         $exception = new \RuntimeException('Test exception message');
 
         $service->testLogException($exception, 'test_operation');
@@ -328,7 +329,7 @@ class BaseServiceTest extends TestCase
                     && $context['request_data'] === 'test_data';
             });
 
-        $service = new ConcreteTestService();
+        $service = new ConcreteTestService;
         $exception = new \RuntimeException('Test exception');
 
         $service->testLogException($exception, 'test_operation', [
@@ -340,7 +341,7 @@ class BaseServiceTest extends TestCase
     /** @test */
     public function it_builds_log_context_with_defaults()
     {
-        $service = new ConcreteTestService();
+        $service = new ConcreteTestService;
         $context = $service->testBuildLogContext(['custom' => 'value']);
 
         $this->assertArrayHasKey('service', $context);
@@ -359,6 +360,7 @@ class BaseServiceTest extends TestCase
         $reflection = new \ReflectionClass($object);
         $property = $reflection->getProperty($property);
         $property->setAccessible(true);
+
         return $property->getValue($object);
     }
 }
@@ -408,4 +410,3 @@ class ConcreteTestService extends BaseService
         return $this->buildLogContext($context);
     }
 }
-

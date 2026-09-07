@@ -16,6 +16,7 @@ class AIResponseDTO extends BaseDTO
     /**
      * @param  list<ProductRecommendationDTO>  $products
      * @param  array<string, mixed>  $usage  ['prompt_tokens'=>int,'completion_tokens'=>int,'total_tokens'=>int]
+     * @param  list<array{type:string, items:list<array<string,mixed>>}>  $shownEntities  Compact refs to entities surfaced this turn (B1).
      */
     public function __construct(
         public readonly string $content,
@@ -25,6 +26,7 @@ class AIResponseDTO extends BaseDTO
         public readonly int $latencyMs,
         public readonly string $model,
         public readonly ?string $finishReason,
+        public readonly array $shownEntities = [],
     ) {
         $this->validate();
     }

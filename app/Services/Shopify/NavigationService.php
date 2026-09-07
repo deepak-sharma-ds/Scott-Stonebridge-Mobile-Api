@@ -8,10 +8,11 @@ use App\DTOs\Navigation\MenuDTO;
 use App\Exceptions\ShopifyNotFoundException;
 use App\Services\Base\BaseService;
 use App\Traits\CacheWithFallback;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Navigation Service
- * 
+ *
  * Handles navigation/menu operations from Shopify
  */
 class NavigationService extends BaseService implements NavigationServiceInterface
@@ -26,12 +27,12 @@ class NavigationService extends BaseService implements NavigationServiceInterfac
 
     /**
      * Get menu by handle
-     * 
+     *
      * Fetches menu from Shopify and caches for 6 hours.
      * Menus don't change frequently, so longer cache is acceptable.
-     * 
-     * @param string $handle Menu handle (e.g., 'main-menu', 'footer')
-     * @return MenuDTO
+     *
+     * @param  string  $handle  Menu handle (e.g., 'main-menu', 'footer')
+     *
      * @throws ShopifyNotFoundException
      */
     public function getMenu(string $handle): MenuDTO
@@ -42,7 +43,7 @@ class NavigationService extends BaseService implements NavigationServiceInterfac
             $menu = $this->cacheWithFallback(
                 "navigation:menu:{$handle}",
                 21600, // 6 hours
-                fn() => $this->fetchMenu($handle),
+                fn () => $this->fetchMenu($handle),
                 ['navigation', 'menu', $handle]
             );
 
@@ -62,9 +63,7 @@ class NavigationService extends BaseService implements NavigationServiceInterfac
 
     /**
      * Fetch menu from Shopify API
-     * 
-     * @param string $handle
-     * @return MenuDTO
+     *
      * @throws ShopifyNotFoundException
      */
     protected function fetchMenu(string $handle): MenuDTO
@@ -82,17 +81,15 @@ class NavigationService extends BaseService implements NavigationServiceInterfac
 
     /**
      * Clear navigation cache
-     * 
-     * @return void
      */
     public function clearNavigationCache(): void
     {
         $this->forgetCacheWithFallback(['navigation']);
-        
+
         // Clear specific menu caches if needed
         $commonHandles = ['main-menu', 'footer', 'mobile-menu'];
         foreach ($commonHandles as $handle) {
-            \Illuminate\Support\Facades\Cache::forget("navigation:menu:{$handle}");
+            Cache::forget("navigation:menu:{$handle}");
         }
     }
 }

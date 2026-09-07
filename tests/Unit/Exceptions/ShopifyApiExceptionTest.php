@@ -9,21 +9,21 @@ class ShopifyApiExceptionTest extends TestCase
 {
     public function test_it_has_correct_http_status_code(): void
     {
-        $exception = new ShopifyApiException();
+        $exception = new ShopifyApiException;
 
         $this->assertEquals(500, $exception->getHttpStatusCode());
     }
 
     public function test_it_has_correct_error_code(): void
     {
-        $exception = new ShopifyApiException();
+        $exception = new ShopifyApiException;
 
         $this->assertEquals('API_ERROR', $exception->getErrorCode());
     }
 
     public function test_it_has_default_message(): void
     {
-        $exception = new ShopifyApiException();
+        $exception = new ShopifyApiException;
 
         $this->assertEquals('External API error', $exception->getMessage());
     }

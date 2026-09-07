@@ -34,8 +34,25 @@ return [
     */
     'tokens' => [
         'input_budget' => (int) env('CHATBOT_TOKEN_BUDGET_INPUT', 3500),
-        'output_budget' => (int) env('CHATBOT_TOKEN_BUDGET_OUTPUT', 600),
+        'output_budget' => (int) env('CHATBOT_TOKEN_BUDGET_OUTPUT', 1100),
         'history_tail' => (int) env('CHATBOT_HISTORY_TAIL', 10),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Generation sampling
+    |--------------------------------------------------------------------------
+    |
+    | Temperature for the chat / tool-loop completions. The intent classifier
+    | stays deterministic (temperature 0) and is intentionally NOT driven by
+    | this key — see IntentDetectionService.
+    |
+    */
+    'generation' => [
+        'temperature' => (float) env('CHATBOT_TEMPERATURE', 0.6),
+        // Bounded retry attempts for OPENING the OpenAI stream (before any
+        // bytes stream). Mid-stream failures are never retried.
+        'stream_max_attempts' => (int) env('CHATBOT_STREAM_MAX_ATTEMPTS', 2),
     ],
 
     /*

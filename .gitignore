@@ -5,6 +5,7 @@
 /public/storage
 /storage/*.key
 /storage/pail
+/storage/app/firebase
 /vendor
 .env
 .env.backup
@@ -25,6 +26,7 @@ yarn-error.log
 /.cursor
 /.github
 /.agents
+/.scratch
 /.ai
 /.kiro
 /postman

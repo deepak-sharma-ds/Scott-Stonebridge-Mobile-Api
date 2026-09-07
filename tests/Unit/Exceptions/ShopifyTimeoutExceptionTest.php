@@ -9,21 +9,21 @@ class ShopifyTimeoutExceptionTest extends TestCase
 {
     public function test_it_has_correct_http_status_code(): void
     {
-        $exception = new ShopifyTimeoutException();
+        $exception = new ShopifyTimeoutException;
 
         $this->assertEquals(504, $exception->getHttpStatusCode());
     }
 
     public function test_it_has_correct_error_code(): void
     {
-        $exception = new ShopifyTimeoutException();
+        $exception = new ShopifyTimeoutException;
 
         $this->assertEquals('TIMEOUT', $exception->getErrorCode());
     }
 
     public function test_it_has_default_message(): void
     {
-        $exception = new ShopifyTimeoutException();
+        $exception = new ShopifyTimeoutException;
 
         $this->assertEquals('Request timeout', $exception->getMessage());
     }

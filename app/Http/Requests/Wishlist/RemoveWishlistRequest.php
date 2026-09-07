@@ -9,7 +9,7 @@ class RemoveWishlistRequest extends BaseApiRequest
     public function rules(): array
     {
         return [
-            'product_id'  => 'required|string',
+            'product_id' => 'required|string',
             'customer_id' => 'required|string',
         ];
     }

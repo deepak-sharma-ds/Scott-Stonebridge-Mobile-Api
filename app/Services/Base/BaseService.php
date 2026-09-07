@@ -11,31 +11,27 @@ use Illuminate\Support\Str;
 
 /**
  * Base Service Class
- * 
+ *
  * Provides common service patterns including:
  * - Correlation ID tracking
  * - Structured logging
  * - Performance logging helpers
  * - Error handling utilities
- * 
+ *
  * All service classes should extend this base class to ensure
  * consistent logging, error handling, and observability patterns.
- * 
+ *
  * Requirements: 5.8
  */
 abstract class BaseService
 {
     /**
      * The correlation ID for the current request
-     *
-     * @var string|null
      */
     protected ?string $correlationId = null;
 
     /**
      * The service name for logging context
-     *
-     * @var string
      */
     protected string $serviceName;
 
@@ -50,8 +46,6 @@ abstract class BaseService
 
     /**
      * Resolve correlation ID from request or processor
-     *
-     * @return string
      */
     protected function resolveCorrelationId(): string
     {
@@ -83,8 +77,6 @@ abstract class BaseService
 
     /**
      * Get the correlation ID
-     *
-     * @return string
      */
     protected function getCorrelationId(): string
     {
@@ -93,11 +85,6 @@ abstract class BaseService
 
     /**
      * Log an informational message with service context
-     *
-     * @param string $message
-     * @param array $context
-     * @param string|null $channel
-     * @return void
      */
     protected function logInfo(string $message, array $context = [], ?string $channel = null): void
     {
@@ -106,11 +93,6 @@ abstract class BaseService
 
     /**
      * Log a warning message with service context
-     *
-     * @param string $message
-     * @param array $context
-     * @param string|null $channel
-     * @return void
      */
     protected function logWarning(string $message, array $context = [], ?string $channel = null): void
     {
@@ -119,11 +101,6 @@ abstract class BaseService
 
     /**
      * Log an error message with service context
-     *
-     * @param string $message
-     * @param array $context
-     * @param string|null $channel
-     * @return void
      */
     protected function logError(string $message, array $context = [], ?string $channel = null): void
     {
@@ -132,11 +109,6 @@ abstract class BaseService
 
     /**
      * Log a debug message with service context
-     *
-     * @param string $message
-     * @param array $context
-     * @param string|null $channel
-     * @return void
      */
     protected function logDebug(string $message, array $context = [], ?string $channel = null): void
     {
@@ -148,12 +120,6 @@ abstract class BaseService
      *
      * Automatically adds correlation ID, service name, and timestamp
      * to all log entries for consistent structured logging.
-     *
-     * @param string $level
-     * @param string $message
-     * @param array $context
-     * @param string|null $channel
-     * @return void
      */
     protected function log(string $level, string $message, array $context = [], ?string $channel = null): void
     {
@@ -171,10 +137,7 @@ abstract class BaseService
     /**
      * Log performance metrics for an operation
      *
-     * @param string $operation
-     * @param float $duration Duration in milliseconds
-     * @param array $additionalMetrics
-     * @return void
+     * @param  float  $duration  Duration in milliseconds
      */
     protected function logPerformance(string $operation, float $duration, array $additionalMetrics = []): void
     {
@@ -188,11 +151,6 @@ abstract class BaseService
 
     /**
      * Execute a callable and log its performance
-     *
-     * @param string $operation
-     * @param callable $callback
-     * @param array $additionalMetrics
-     * @return mixed
      */
     protected function withPerformanceLogging(string $operation, callable $callback, array $additionalMetrics = []): mixed
     {
@@ -218,11 +176,6 @@ abstract class BaseService
 
     /**
      * Log an exception with full context
-     *
-     * @param \Throwable $exception
-     * @param string $operation
-     * @param array $context
-     * @return void
      */
     protected function logException(\Throwable $exception, string $operation, array $context = []): void
     {
@@ -240,9 +193,6 @@ abstract class BaseService
 
     /**
      * Build context array for logging
-     *
-     * @param array $context
-     * @return array
      */
     protected function buildLogContext(array $context = []): array
     {
@@ -255,16 +205,11 @@ abstract class BaseService
 
     /**
      * Performance tracking storage
-     *
-     * @var array
      */
     private array $performanceTracking = [];
 
     /**
      * Start performance tracking for an operation
-     *
-     * @param string $operation
-     * @return void
      */
     protected function logPerformanceStart(string $operation): void
     {
@@ -273,15 +218,12 @@ abstract class BaseService
 
     /**
      * End performance tracking and log metrics
-     *
-     * @param string $operation
-     * @param array $additionalMetrics
-     * @return void
      */
     protected function logPerformanceEnd(string $operation, array $additionalMetrics = []): void
     {
-        if (!isset($this->performanceTracking[$operation])) {
+        if (! isset($this->performanceTracking[$operation])) {
             $this->logWarning("Performance tracking not started for operation: {$operation}");
+
             return;
         }
 
@@ -295,11 +237,6 @@ abstract class BaseService
 
     /**
      * Log an error with exception details
-     *
-     * @param string $message
-     * @param \Throwable $exception
-     * @param array $context
-     * @return void
      */
     protected function logErrorWithException(string $message, \Throwable $exception, array $context = []): void
     {
@@ -315,7 +252,7 @@ abstract class BaseService
 
     /**
      * Get country code based on currency from Shopify markets
-     * 
+     *
      * Dynamically fetches the country code for the given currency from Shopify markets.
      * Falls back to a static mapping if markets data is unavailable.
      *
@@ -330,8 +267,8 @@ abstract class BaseService
 
     /**
      * Get country code from Shopify markets for a given currency
-     * 
-     * @param string $currency Currency code (e.g., 'GBP', 'USD')
+     *
+     * @param  string  $currency  Currency code (e.g., 'GBP', 'USD')
      * @return string|null Country code or null if not found
      */
     protected function getCountryCodeFromMarkets(string $currency): ?string
@@ -349,7 +286,7 @@ abstract class BaseService
                     $mapping = [];
                     foreach ($shopData->markets as $market) {
                         // Use the first country for each currency
-                        if (!isset($mapping[$market->currencyCode])) {
+                        if (! isset($mapping[$market->currencyCode])) {
                             $mapping[$market->currencyCode] = $market->countryCode;
                         }
                     }

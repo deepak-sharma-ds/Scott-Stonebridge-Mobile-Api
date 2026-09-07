@@ -2,28 +2,28 @@
 
 namespace Tests\Feature\Api\V1;
 
-use Tests\TestCase;
-use Tests\Mocks\MockShopifyClient;
 use Tests\Helpers\ShopifyResponseFactory;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Mocks\MockShopifyClient;
+use Tests\TestCase;
 
 /**
  * Integration tests for Order API endpoints
- * 
+ *
  * Tests Requirements: 2.1, 2.2, 2.3, 2.5, 2.6
  */
 class OrderEndpointsTest extends TestCase
 {
     private MockShopifyClient $mockAdminClient;
+
     private MockShopifyClient $mockStorefrontClient;
 
     protected function setUp(): void
     {
         parent::setUp();
-        
-        $this->mockAdminClient = new MockShopifyClient();
-        $this->mockStorefrontClient = new MockShopifyClient();
-        
+
+        $this->mockAdminClient = new MockShopifyClient;
+        $this->mockStorefrontClient = new MockShopifyClient;
+
         $this->app->instance('App\Contracts\Shopify\AdminApiClientInterface', $this->mockAdminClient);
         $this->app->instance('App\Contracts\Shopify\StorefrontApiClientInterface', $this->mockStorefrontClient);
     }
@@ -53,14 +53,14 @@ class OrderEndpointsTest extends TestCase
             'admin/orders/get_customer_orders.graphql',
             [
                 'data' => [
-                    'orders' => ShopifyResponseFactory::paginatedResponse($orders, false, null)
-                ]
+                    'orders' => ShopifyResponseFactory::paginatedResponse($orders, false, null),
+                ],
             ]
         );
 
         // Act
         $response = $this->getJson('/api/v1/orders', [
-            'Authorization' => 'Bearer ' . $accessToken
+            'Authorization' => 'Bearer '.$accessToken,
         ]);
 
         // Assert - Requirement 2.1: Maintain identical API response structures
@@ -71,7 +71,7 @@ class OrderEndpointsTest extends TestCase
             'data' => [
                 'orders',
             ],
-            'meta'
+            'meta',
         ]);
 
         $response->assertJson([
@@ -87,7 +87,7 @@ class OrderEndpointsTest extends TestCase
         // Arrange
         $accessToken = 'test-access-token';
         $orderId = 'gid://shopify/Order/123456';
-        
+
         $order = ShopifyResponseFactory::order([
             'id' => $orderId,
             'orderNumber' => 1001,
@@ -111,8 +111,8 @@ class OrderEndpointsTest extends TestCase
         );
 
         // Act
-        $response = $this->getJson('/api/v1/orders/' . urlencode($orderId), [
-            'Authorization' => 'Bearer ' . $accessToken
+        $response = $this->getJson('/api/v1/orders/'.urlencode($orderId), [
+            'Authorization' => 'Bearer '.$accessToken,
         ]);
 
         // Assert - Requirement 2.2: Maintain identical API endpoint paths
@@ -126,9 +126,9 @@ class OrderEndpointsTest extends TestCase
                     'order_number',
                     'financial_status',
                     'line_items',
-                ]
+                ],
             ],
-            'meta'
+            'meta',
         ]);
 
         $response->assertJson([
@@ -137,8 +137,8 @@ class OrderEndpointsTest extends TestCase
                 'order' => [
                     'id' => $orderId,
                     'order_number' => 1001,
-                ]
-            ]
+                ],
+            ],
         ]);
     }
 
@@ -175,8 +175,8 @@ class OrderEndpointsTest extends TestCase
         );
 
         // Act
-        $response = $this->getJson('/api/v1/orders/' . urlencode($orderId), [
-            'Authorization' => 'Bearer ' . $accessToken
+        $response = $this->getJson('/api/v1/orders/'.urlencode($orderId), [
+            'Authorization' => 'Bearer '.$accessToken,
         ]);
 
         // Assert - Requirement 2.5: Minimize changes to Mobile_App integration contracts
@@ -203,14 +203,14 @@ class OrderEndpointsTest extends TestCase
             'admin/orders/get_customer_orders.graphql',
             [
                 'data' => [
-                    'orders' => ShopifyResponseFactory::paginatedResponse($orders, false, null)
-                ]
+                    'orders' => ShopifyResponseFactory::paginatedResponse($orders, false, null),
+                ],
             ]
         );
 
         // Act
         $response = $this->getJson('/api/v1/orders', [
-            'Authorization' => 'Bearer ' . $accessToken
+            'Authorization' => 'Bearer '.$accessToken,
         ]);
 
         // Assert - Requirement 2.6: Maintain identical behavior

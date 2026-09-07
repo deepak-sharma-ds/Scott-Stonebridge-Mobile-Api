@@ -13,7 +13,6 @@ use Google_Service_Calendar_Event;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Storage;
 
 class BookingService
 {
@@ -25,8 +24,9 @@ class BookingService
 
         // 1. Validate availability date
         $availability = AvailabilityDate::where('date', $data['availability_date'])->first();
-        if (!$availability) {
+        if (! $availability) {
             $log->error('Availability date not found', ['date' => $data['availability_date']]);
+
             return ['error' => 'Availability date not found.'];
         }
         $availability_id = $availability->id;
@@ -37,6 +37,7 @@ class BookingService
             ->exists();
         if ($already) {
             $log->warning('Time slot already booked');
+
             return ['error' => 'This time slot is already booked.'];
         }
 
@@ -48,13 +49,14 @@ class BookingService
              * ======================================================
              */
             $googleToken = GoogleToken::first();
-            if (!$googleToken) {
+            if (! $googleToken) {
                 $log->error('Google token missing');
+
                 return ['error' => 'Calendar service not configured.'];
             }
 
             // Decrypt stored tokens
-            $accessToken  = Crypt::decryptString($googleToken->access_token);
+            $accessToken = Crypt::decryptString($googleToken->access_token);
             $refreshToken = $googleToken->refresh_token
                 ? Crypt::decryptString($googleToken->refresh_token)
                 : null;
@@ -64,7 +66,7 @@ class BookingService
              *  4. Initialize Google Client
              * ======================================================
              */
-            $client = new Google_Client();
+            $client = new Google_Client;
             $client->setClientId(config('google.client_id') ?: env('GOOGLE_CLIENT_ID'));
             $client->setClientSecret(config('google.client_secret') ?: env('GOOGLE_CLIENT_SECRET'));
             $client->setRedirectUri(config('google.redirect_uri'));
@@ -73,10 +75,10 @@ class BookingService
 
             // Rebuild token array to set on the client
             $tokenArray = [
-                'access_token'  => $accessToken,
+                'access_token' => $accessToken,
                 'refresh_token' => $refreshToken,
-                'created'       => $googleToken->created_at_timestamp,
-                'expires_in'    => null,  // google client will check using access token's internal expiry
+                'created' => $googleToken->created_at_timestamp,
+                'expires_in' => null,  // google client will check using access token's internal expiry
             ];
 
             // Set token to client
@@ -89,30 +91,31 @@ class BookingService
              */
             if ($client->isAccessTokenExpired()) {
 
-                if (!$refreshToken) {
+                if (! $refreshToken) {
                     $log->error('Refresh token missing — admin must reauthenticate.');
+
                     return ['error' => 'Google Calendar authentication expired.'];
                 }
 
                 $newToken = $client->fetchAccessTokenWithRefreshToken($refreshToken);
                 $client->setAccessToken($newToken);
 
-                $created  = $newToken['created'] ?? time();
-                $expires  = ($newToken['expires_in'] ?? 3600) + $created;
+                $created = $newToken['created'] ?? time();
+                $expires = ($newToken['expires_in'] ?? 3600) + $created;
 
                 // Save updated token to DB
                 $googleToken->update([
-                    'access_token'          => Crypt::encryptString($newToken['access_token']),
-                    'refresh_token'         => isset($newToken['refresh_token'])
+                    'access_token' => Crypt::encryptString($newToken['access_token']),
+                    'refresh_token' => isset($newToken['refresh_token'])
                         ? Crypt::encryptString($newToken['refresh_token'])
                         : $googleToken->refresh_token, // keep old if not returned
-                    'expires_at'            => Carbon::createFromTimestamp($expires),
-                    'token_type'            => $newToken['token_type'] ?? $googleToken->token_type,
-                    'scope'                 => $newToken['scope'] ?? $googleToken->scope,
-                    'created_at_timestamp'  => $created,
+                    'expires_at' => Carbon::createFromTimestamp($expires),
+                    'token_type' => $newToken['token_type'] ?? $googleToken->token_type,
+                    'scope' => $newToken['scope'] ?? $googleToken->scope,
+                    'created_at_timestamp' => $created,
                 ]);
 
-                $log->info("🔄 Google access token refreshed");
+                $log->info('🔄 Google access token refreshed');
             }
 
             /**
@@ -123,25 +126,26 @@ class BookingService
             $calendarService = new Google_Service_Calendar($client);
 
             $timeSlot = TimeSlot::find($data['time_slot_id']);
-            if (!$timeSlot) {
+            if (! $timeSlot) {
                 $log->error('Time slot not found', ['time_slot_id' => $data['time_slot_id']]);
+
                 return ['error' => 'Selected time slot not found'];
             }
 
             // Prepare dates
             $date = Carbon::parse($availability->date)->format('Y-m-d');
             $startDateTime = Carbon::parse("{$date} {$timeSlot->start_time}");
-            $endDateTime   = Carbon::parse("{$date} {$timeSlot->end_time}");
+            $endDateTime = Carbon::parse("{$date} {$timeSlot->end_time}");
 
             // Build event
             $event = new Google_Service_Calendar_Event([
-                'summary'     => 'Meeting with ' . $data['name'],
-                'description' => "Booking confirmed.\nPhone: " . $data['phone'],
-                'start'       => [
+                'summary' => 'Meeting with '.$data['name'],
+                'description' => "Booking confirmed.\nPhone: ".$data['phone'],
+                'start' => [
                     'dateTime' => $startDateTime->toRfc3339String(),
                     'timeZone' => config('app.timezone', 'Europe/London'),
                 ],
-                'end'         => [
+                'end' => [
                     'dateTime' => $endDateTime->toRfc3339String(),
                     'timeZone' => config('app.timezone', 'Europe/London'),
                 ],
@@ -164,35 +168,36 @@ class BookingService
             );
 
             $meetLink = $createdEvent->getHangoutLink();
-            $eventId  = $createdEvent->getId();
+            $eventId = $createdEvent->getId();
 
             // 7. Save meeting record
             $scheduledMeeting = ScheduledMeeting::create([
-                'user_id'              => null,
-                'name'                 => $data['name'],
-                'email'                => $data['email'],
-                'phone'                => $data['phone'],
-                'datetime'             => $startDateTime,
-                'meeting_link'         => $meetLink,
-                'event_id'             => $eventId,
-                'status'               => 'confirmed',
+                'user_id' => null,
+                'name' => $data['name'],
+                'email' => $data['email'],
+                'phone' => $data['phone'],
+                'datetime' => $startDateTime,
+                'meeting_link' => $meetLink,
+                'event_id' => $eventId,
+                'status' => 'confirmed',
                 'availability_date_id' => $availability_id,
-                'time_slot_id'         => $data['time_slot_id'],
-                'order_id'             => $data['order_id'] ?? null,
+                'time_slot_id' => $data['time_slot_id'],
+                'order_id' => $data['order_id'] ?? null,
             ]);
 
             return [
-                'success'        => true,
-                'booking'        => $scheduledMeeting,
-                'meeting_link'   => $meetLink,
-                'event_id'       => $eventId,
+                'success' => true,
+                'booking' => $scheduledMeeting,
+                'meeting_link' => $meetLink,
+                'event_id' => $eventId,
                 'formatted_time' => $startDateTime->format('F j, Y g:i A'),
             ];
         } catch (\Exception $e) {
             $log->error('Failed to create event or save booking', ['exception' => $e->getMessage()]);
+
             return [
-                'error'   => 'Failed to create event.',
-                'message' => $e->getMessage()
+                'error' => 'Failed to create event.',
+                'message' => $e->getMessage(),
             ];
         }
     }
@@ -203,16 +208,17 @@ class BookingService
         $log->info('================== START: BookingService::handleSlotBookingDeletion ==================');
         $log->info('Checking for booked meetings before deleting slot', [
             'time_slot_id' => $timeSlotId,
-            'availability_date_id' => $availabilityDateId
+            'availability_date_id' => $availabilityDateId,
         ]);
 
         // Find any active meeting for this slot
         $meeting = ScheduledMeeting::where('time_slot_id', $timeSlotId)
-            ->when($availabilityDateId, fn($q) => $q->where('availability_date_id', $availabilityDateId))
+            ->when($availabilityDateId, fn ($q) => $q->where('availability_date_id', $availabilityDateId))
             ->first();
 
-        if (!$meeting) {
+        if (! $meeting) {
             $log->info('No meeting found for slot', ['time_slot_id' => $timeSlotId]);
+
             return ['status' => 'no_booking'];
         }
 
@@ -223,8 +229,9 @@ class BookingService
              * ======================================================
              */
             $googleToken = GoogleToken::first();
-            if (!$googleToken) {
+            if (! $googleToken) {
                 $log->error('Google token missing');
+
                 return ['status' => 'error', 'message' => 'Google token missing'];
             }
 
@@ -238,7 +245,7 @@ class BookingService
              * 2. Initialize Google Client
              * ======================================================
              */
-            $client = new Google_Client();
+            $client = new Google_Client;
             $client->setClientId(config('google.client_id') ?: env('GOOGLE_CLIENT_ID'));
             $client->setClientSecret(config('google.client_secret') ?: env('GOOGLE_CLIENT_SECRET'));
             $client->setRedirectUri(config('google.redirect_uri'));
@@ -247,10 +254,10 @@ class BookingService
 
             // Rebuild token
             $tokenArray = [
-                'access_token'  => $accessToken,
+                'access_token' => $accessToken,
                 'refresh_token' => $refreshToken,
-                'created'       => $googleToken->created_at_timestamp,
-                'expires_in'    => null,
+                'created' => $googleToken->created_at_timestamp,
+                'expires_in' => null,
             ];
 
             $client->setAccessToken($tokenArray);
@@ -262,8 +269,9 @@ class BookingService
              */
             if ($client->isAccessTokenExpired()) {
 
-                if (!$refreshToken) {
+                if (! $refreshToken) {
                     $log->error('Refresh token missing — admin must reauthenticate.');
+
                     return ['status' => 'error', 'message' => 'Google token expired'];
                 }
 
@@ -275,14 +283,14 @@ class BookingService
 
                 // Save new token to DB
                 $googleToken->update([
-                    'access_token'          => Crypt::encryptString($newToken['access_token']),
-                    'refresh_token'         => isset($newToken['refresh_token'])
+                    'access_token' => Crypt::encryptString($newToken['access_token']),
+                    'refresh_token' => isset($newToken['refresh_token'])
                         ? Crypt::encryptString($newToken['refresh_token'])
                         : $googleToken->refresh_token,
-                    'expires_at'            => Carbon::createFromTimestamp($expires),
-                    'token_type'            => $newToken['token_type'] ?? $googleToken->token_type,
-                    'scope'                 => $newToken['scope'] ?? $googleToken->scope,
-                    'created_at_timestamp'  => $created,
+                    'expires_at' => Carbon::createFromTimestamp($expires),
+                    'token_type' => $newToken['token_type'] ?? $googleToken->token_type,
+                    'scope' => $newToken['scope'] ?? $googleToken->scope,
+                    'created_at_timestamp' => $created,
                 ]);
 
                 $log->info('🔄 Admin Google token refreshed');
@@ -295,19 +303,19 @@ class BookingService
              */
             $calendarService = new Google_Service_Calendar($client);
 
-            if (!empty($meeting->event_id)) {
+            if (! empty($meeting->event_id)) {
                 try {
                     $calendarService->events->delete('primary', $meeting->event_id, ['sendUpdates' => 'all']);
 
                     $log->info('Deleted Google Calendar event', [
                         'meeting_id' => $meeting->id,
-                        'event_id'   => $meeting->event_id
+                        'event_id' => $meeting->event_id,
                     ]);
                 } catch (\Throwable $th) {
                     $log->warning('Failed to delete event (maybe already deleted)', [
                         'meeting_id' => $meeting->id,
-                        'event_id'   => $meeting->event_id,
-                        'error'      => $th->getMessage()
+                        'event_id' => $meeting->event_id,
+                        'error' => $th->getMessage(),
                     ]);
                 }
 
@@ -336,23 +344,22 @@ class BookingService
             // self::notifyAdminForReschedule($meeting);
 
             return [
-                'status'     => 'reschedule_needed',
+                'status' => 'reschedule_needed',
                 'meeting_id' => $meeting->id,
             ];
         } catch (\Exception $e) {
 
             $log->error('Error during booked slot deletion', [
                 'time_slot_id' => $timeSlotId,
-                'exception'    => $e->getMessage()
+                'exception' => $e->getMessage(),
             ]);
 
             return [
-                'status'  => 'error',
+                'status' => 'error',
                 'message' => $e->getMessage(),
             ];
         }
     }
-
 
     protected static function notifyAdminForReschedule($meeting)
     {
@@ -365,13 +372,13 @@ class BookingService
                     ->subject('Meeting Slot Cancelled – Reschedule Required');
             });
 
-            $log->info("Reschedule reminder sent to admin for cancelled meeting", [
+            $log->info('Reschedule reminder sent to admin for cancelled meeting', [
                 'meeting_id' => $meeting->id,
-                'admin_email' => $adminEmail
+                'admin_email' => $adminEmail,
             ]);
         } catch (\Exception $e) {
-            $log->error("Failed to send reschedule reminder", [
-                'error' => $e->getMessage()
+            $log->error('Failed to send reschedule reminder', [
+                'error' => $e->getMessage(),
             ]);
         }
     }

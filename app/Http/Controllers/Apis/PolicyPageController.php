@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Apis;
 
-use Illuminate\Http\Request;
-use App\Http\Controllers\Controller;
 use App\Facades\Shopify;
+use App\Http\Controllers\Controller;
 use App\Traits\ShopifyResponseFormatter;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class PolicyPageController extends Controller
@@ -27,15 +27,15 @@ class PolicyPageController extends Controller
 
         // 🔑 Map slug → Shopify policy field
         $policyMap = [
-            'privacy-policy'   => 'privacyPolicy',
+            'privacy-policy' => 'privacyPolicy',
             'terms-of-service' => 'termsOfService',
-            'refund-policy'    => 'refundPolicy',
-            'shipping-policy'  => 'shippingPolicy',
+            'refund-policy' => 'refundPolicy',
+            'shipping-policy' => 'shippingPolicy',
         ];
 
         $handle = $request->input('handle');
 
-        if (!isset($policyMap[$handle])) {
+        if (! isset($policyMap[$handle])) {
             return $this->fail('Invalid policy handle');
         }
 
@@ -48,25 +48,25 @@ class PolicyPageController extends Controller
 
             $shop = data_get($response, 'data.shop');
 
-            if (!$shop) {
+            if (! $shop) {
                 return $this->fail('Policies not found');
             }
 
             $policyKey = $policyMap[$handle];
             $policy = $shop[$policyKey] ?? null;
 
-            if (!$policy) {
+            if (! $policy) {
                 return $this->fail('Requested policy not found');
             }
 
             return $this->success(
                 'Policy details fetched successfully',
                 [
-                    'id'         => $policy['id'],
-                    'handle'      => $handle,
-                    'title'       => $policy['title'],
-                    'url'         => $policy['url'],
-                    'body'        => $policy['body'],
+                    'id' => $policy['id'],
+                    'handle' => $handle,
+                    'title' => $policy['title'],
+                    'url' => $policy['url'],
+                    'body' => $policy['body'],
                 ]
             );
         } catch (\Throwable $e) {

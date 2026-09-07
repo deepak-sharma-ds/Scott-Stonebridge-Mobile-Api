@@ -15,20 +15,20 @@ use InvalidArgumentException;
 
 /**
  * Theme Template Service
- * 
+ *
  * Handles Shopify theme template operations using the Admin API.
  * Supports two main workflows:
  * 1. Fetch active theme ID
  * 2. Fetch template JSON and optionally rendered HTML
- * 
+ *
  * This service retrieves template data from Shopify Online Store 2.0
  * by accessing theme assets via the Admin REST API and optionally
  * fetching rendered HTML from the storefront.
- * 
+ *
  * Cache TTL:
  * - Active Theme ID: 30 minutes (1800 seconds)
  * - Templates: 10 minutes (600 seconds)
- * 
+ *
  * Template Resolution Flow:
  * 1. Get active theme ID (cached)
  * 2. Fetch template JSON from theme assets
@@ -59,9 +59,9 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
 
     /**
      * Constructor
-     * 
-     * @param AdminApiClientInterface $adminClient Admin API client for REST requests
-     * @param ShopifyCacheStrategy $cacheStrategy Cache strategy for key generation
+     *
+     * @param  AdminApiClientInterface  $adminClient  Admin API client for REST requests
+     * @param  ShopifyCacheStrategy  $cacheStrategy  Cache strategy for key generation
      */
     public function __construct(
         private readonly AdminApiClientInterface $adminClient,
@@ -72,10 +72,11 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
 
     /**
      * Get active theme information
-     * 
+     *
      * Retrieves the active theme ID and name with 30-minute cache TTL.
-     * 
+     *
      * @return array ['theme_id' => int, 'theme_name' => string]
+     *
      * @throws ShopifyApiException
      */
     public function getActiveTheme(): array
@@ -86,7 +87,7 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
             $theme = $this->cacheWithFallback(
                 $this->cacheStrategy->getCacheKey('active_theme', []),
                 1800, // 30 minutes
-                fn() => $this->fetchActiveTheme(),
+                fn () => $this->fetchActiveTheme(),
                 ['active_theme']
             );
 
@@ -104,19 +105,19 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
 
     /**
      * Get theme template by handle
-     * 
+     *
      * Retrieves a specific theme template by its handle with 10-minute cache TTL.
-     * 
-     * @param string $handle Template handle (e.g., "page", "page.about", "product.custom")
-     * @param bool $includeHtml Whether to include rendered HTML (default: false)
-     * @param string|null $pageHandle Page handle for HTML rendering (required if includeHtml is true)
-     * @return ThemeTemplateDTO
+     *
+     * @param  string  $handle  Template handle (e.g., "page", "page.about", "product.custom")
+     * @param  bool  $includeHtml  Whether to include rendered HTML (default: false)
+     * @param  string|null  $pageHandle  Page handle for HTML rendering (required if includeHtml is true)
+     *
      * @throws ShopifyNotFoundException
      * @throws ShopifyApiException
      */
     public function getTemplateByHandle(
-        string $handle, 
-        bool $includeHtml = false, 
+        string $handle,
+        bool $includeHtml = false,
         ?string $pageHandle = null
     ): ThemeTemplateDTO {
         try {
@@ -131,7 +132,7 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
             $template = $this->cacheWithFallback(
                 $cacheKey,
                 600, // 10 minutes
-                fn() => $this->fetchTemplateByHandle($handle, $includeHtml, $pageHandle),
+                fn () => $this->fetchTemplateByHandle($handle, $includeHtml, $pageHandle),
                 ['theme_template', $handle]
             );
 
@@ -150,20 +151,20 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
 
     /**
      * Get template by type and optional suffix
-     * 
+     *
      * Retrieves a theme template by type and optional suffix.
-     * 
-     * @param string $type Template type (product, collection, page, article, etc.)
-     * @param string|null $suffix Optional template suffix for alternate templates
-     * @param bool $includeHtml Whether to include rendered HTML (default: false)
-     * @param string|null $pageHandle Page handle for HTML rendering (required if includeHtml is true)
-     * @return ThemeTemplateDTO
+     *
+     * @param  string  $type  Template type (product, collection, page, article, etc.)
+     * @param  string|null  $suffix  Optional template suffix for alternate templates
+     * @param  bool  $includeHtml  Whether to include rendered HTML (default: false)
+     * @param  string|null  $pageHandle  Page handle for HTML rendering (required if includeHtml is true)
+     *
      * @throws InvalidArgumentException If template type is invalid
      * @throws ShopifyNotFoundException
      * @throws ShopifyApiException
      */
     public function getTemplateByType(
-        string $type, 
+        string $type,
         ?string $suffix = null,
         bool $includeHtml = false,
         ?string $pageHandle = null
@@ -172,9 +173,9 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
             $this->logPerformanceStart('getTemplateByType');
 
             // Validate template type
-            if (!in_array($type, self::VALID_TEMPLATE_TYPES, true)) {
+            if (! in_array($type, self::VALID_TEMPLATE_TYPES, true)) {
                 throw new InvalidArgumentException(
-                    "Invalid template type: {$type}. Supported types: " . 
+                    "Invalid template type: {$type}. Supported types: ".
                     implode(', ', self::VALID_TEMPLATE_TYPES)
                 );
             }
@@ -192,7 +193,7 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
             $template = $this->cacheWithFallback(
                 $cacheKey,
                 600, // 10 minutes
-                fn() => $this->fetchTemplateByHandle($handle, $includeHtml, $pageHandle),
+                fn () => $this->fetchTemplateByHandle($handle, $includeHtml, $pageHandle),
                 ['theme_template', $type]
             );
 
@@ -215,12 +216,13 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
 
     /**
      * Get template JSON by name
-     * 
+     *
      * Retrieves template JSON configuration from theme assets.
-     * 
-     * @param string $templateName Template name (e.g., "truro-psychic-charity")
-     * @param int|null $themeId Optional theme ID (uses active theme if not provided)
+     *
+     * @param  string  $templateName  Template name (e.g., "truro-psychic-charity")
+     * @param  int|null  $themeId  Optional theme ID (uses active theme if not provided)
      * @return array Template JSON structure
+     *
      * @throws ShopifyNotFoundException
      * @throws ShopifyApiException
      */
@@ -243,7 +245,7 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
             $templateJson = $this->cacheWithFallback(
                 $cacheKey,
                 600, // 10 minutes
-                fn() => $this->fetchTemplateJsonFromAsset($templateName, $themeId),
+                fn () => $this->fetchTemplateJsonFromAsset($templateName, $themeId),
                 ['template_json', $templateName]
             );
 
@@ -264,11 +266,12 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
 
     /**
      * Fetch rendered HTML from storefront
-     * 
+     *
      * Retrieves the fully rendered HTML of a page from the Shopify storefront.
-     * 
-     * @param string $handle Page handle (e.g., "about", "contact")
+     *
+     * @param  string  $handle  Page handle (e.g., "about", "contact")
      * @return string Rendered HTML
+     *
      * @throws ShopifyApiException
      */
     public function fetchRenderedHtml(string $handle): string
@@ -286,7 +289,7 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
                 throw new ShopifyNotFoundException("Page not found: {$handle}");
             }
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 throw new ShopifyApiException(
                     "Failed to fetch rendered HTML for page: {$handle}. Status: {$response->status()}"
                 );
@@ -300,7 +303,7 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
             ]);
 
             return $html;
-        } catch (ShopifyNotFoundException | ShopifyApiException $e) {
+        } catch (ShopifyNotFoundException|ShopifyApiException $e) {
             throw $e;
         } catch (\Exception $e) {
             throw new ShopifyApiException(
@@ -311,8 +314,9 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
 
     /**
      * Fetch active theme from Shopify Admin API
-     * 
+     *
      * @return array ['theme_id' => int, 'theme_name' => string]
+     *
      * @throws ShopifyApiException
      */
     private function fetchActiveTheme(): array
@@ -331,7 +335,7 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
                 ])
                 ->get($url);
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 throw new ShopifyApiException(
                     "Failed to fetch themes. Status: {$response->status()}"
                 );
@@ -340,14 +344,14 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
             $data = $response->json();
 
             if (empty($data['themes'])) {
-                throw new ShopifyApiException("No themes found");
+                throw new ShopifyApiException('No themes found');
             }
 
             // Find the active theme (role = "main")
             $activeTheme = collect($data['themes'])->firstWhere('role', 'main');
 
-            if (!$activeTheme) {
-                throw new ShopifyApiException("No active theme found");
+            if (! $activeTheme) {
+                throw new ShopifyApiException('No active theme found');
             }
 
             return [
@@ -365,17 +369,17 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
 
     /**
      * Fetch template by handle from Shopify Admin API
-     * 
-     * @param string $handle Template handle
-     * @param bool $includeHtml Whether to include rendered HTML
-     * @param string|null $pageHandle Page handle for HTML rendering
-     * @return ThemeTemplateDTO
+     *
+     * @param  string  $handle  Template handle
+     * @param  bool  $includeHtml  Whether to include rendered HTML
+     * @param  string|null  $pageHandle  Page handle for HTML rendering
+     *
      * @throws ShopifyNotFoundException
      * @throws ShopifyApiException
      */
     private function fetchTemplateByHandle(
-        string $handle, 
-        bool $includeHtml = false, 
+        string $handle,
+        bool $includeHtml = false,
         ?string $pageHandle = null
     ): ThemeTemplateDTO {
         // Step 1: Determine template file name
@@ -389,9 +393,9 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
 
         // Step 4: Optionally fetch rendered HTML
         if ($includeHtml) {
-            if (!$pageHandle) {
+            if (! $pageHandle) {
                 throw new InvalidArgumentException(
-                    "Page handle is required when includeHtml is true"
+                    'Page handle is required when includeHtml is true'
                 );
             }
             $templateData['html'] = $this->fetchRenderedHtml($pageHandle);
@@ -403,10 +407,11 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
 
     /**
      * Fetch template JSON from theme asset
-     * 
-     * @param string $templateName Template name (e.g., "truro-psychic-charity")
-     * @param int $themeId Theme ID
+     *
+     * @param  string  $templateName  Template name (e.g., "truro-psychic-charity")
+     * @param  int  $themeId  Theme ID
      * @return array Parsed template JSON
+     *
      * @throws ShopifyNotFoundException
      * @throws ShopifyApiException
      */
@@ -421,7 +426,7 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
         // Parse JSON
         try {
             $templateJson = json_decode($templateJsonString, true, 512, JSON_THROW_ON_ERROR);
-            
+
             return [
                 'template_name' => $templateName,
                 'sections' => $templateJson['sections'] ?? [],
@@ -438,8 +443,8 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
 
     /**
      * Extract blocks from sections
-     * 
-     * @param array $sections Sections data
+     *
+     * @param  array  $sections  Sections data
      * @return array All blocks from all sections
      */
     private function extractBlocksFromSections(array $sections): array
@@ -464,14 +469,14 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
 
     /**
      * Resolve template file name from handle
-     * 
+     *
      * Converts template handle to template file path.
      * Examples:
      * - "page" -> "templates/page.json"
      * - "page.about" -> "templates/page.about.json"
      * - "product.custom" -> "templates/product.custom.json"
-     * 
-     * @param string $handle Template handle
+     *
+     * @param  string  $handle  Template handle
      * @return string Template file path
      */
     private function resolveTemplateFileName(string $handle): string
@@ -481,12 +486,13 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
 
     /**
      * Fetch theme asset from Shopify Admin REST API
-     * 
+     *
      * Uses the Admin REST API to fetch theme template assets.
      * Endpoint: GET /admin/api/{version}/themes/{theme_id}/assets.json?asset[key]={template_file}
-     * 
-     * @param string $assetKey Asset key (e.g., "templates/page.about.json")
+     *
+     * @param  string  $assetKey  Asset key (e.g., "templates/page.about.json")
      * @return string Template JSON content
+     *
      * @throws ShopifyNotFoundException
      * @throws ShopifyApiException
      */
@@ -513,7 +519,7 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
                 throw new ShopifyNotFoundException("Theme template not found: {$assetKey}");
             }
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 throw new ShopifyApiException(
                     "Failed to fetch theme asset: {$assetKey}. Status: {$response->status()}"
                 );
@@ -521,12 +527,12 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
 
             $data = $response->json();
 
-            if (!isset($data['asset']['value'])) {
+            if (! isset($data['asset']['value'])) {
                 throw new ShopifyApiException("Invalid theme asset response: missing 'value' field");
             }
 
             return $data['asset']['value'];
-        } catch (ShopifyNotFoundException | ShopifyApiException $e) {
+        } catch (ShopifyNotFoundException|ShopifyApiException $e) {
             throw $e;
         } catch (\Exception $e) {
             throw new ShopifyApiException(
@@ -537,10 +543,11 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
 
     /**
      * Get active theme ID
-     * 
+     *
      * Retrieves the active theme ID from configuration or fetches it from Shopify.
-     * 
+     *
      * @return int Theme ID
+     *
      * @throws ShopifyApiException
      */
     private function getActiveThemeId(): int
@@ -554,15 +561,17 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
 
         // Fetch active theme from Shopify
         $activeTheme = $this->getActiveTheme();
+
         return $activeTheme['theme_id'];
     }
 
     /**
      * Fetch theme asset by theme ID
-     * 
-     * @param string $assetKey Asset key
-     * @param int $themeId Theme ID
+     *
+     * @param  string  $assetKey  Asset key
+     * @param  int  $themeId  Theme ID
      * @return string Asset value
+     *
      * @throws ShopifyNotFoundException
      * @throws ShopifyApiException
      */
@@ -588,7 +597,7 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
                 throw new ShopifyNotFoundException("Theme asset not found: {$assetKey}");
             }
 
-            if (!$response->successful()) {
+            if (! $response->successful()) {
                 throw new ShopifyApiException(
                     "Failed to fetch theme asset: {$assetKey}. Status: {$response->status()}"
                 );
@@ -596,12 +605,12 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
 
             $data = $response->json();
 
-            if (!isset($data['asset']['value'])) {
+            if (! isset($data['asset']['value'])) {
                 throw new ShopifyApiException("Invalid theme asset response: missing 'value' field");
             }
 
             return $data['asset']['value'];
-        } catch (ShopifyNotFoundException | ShopifyApiException $e) {
+        } catch (ShopifyNotFoundException|ShopifyApiException $e) {
             throw $e;
         } catch (\Exception $e) {
             throw new ShopifyApiException(
@@ -612,9 +621,9 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
 
     /**
      * Parse template JSON structure
-     * 
+     *
      * Parses the template JSON and extracts sections, blocks, and settings.
-     * 
+     *
      * Template structure example:
      * {
      *   "sections": {
@@ -629,10 +638,11 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
      *   },
      *   "order": [...]
      * }
-     * 
-     * @param string $templateJson Template JSON content
-     * @param string $handle Template handle
+     *
+     * @param  string  $templateJson  Template JSON content
+     * @param  string  $handle  Template handle
      * @return array Normalized template data
+     *
      * @throws ShopifyApiException
      */
     private function parseTemplateJson(string $templateJson, string $handle): array
@@ -684,8 +694,8 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
 
     /**
      * Parse blocks from section data
-     * 
-     * @param array $blocksData Blocks data from section
+     *
+     * @param  array  $blocksData  Blocks data from section
      * @return array Parsed blocks
      */
     private function parseBlocks(array $blocksData): array
@@ -705,15 +715,15 @@ class ThemeTemplateService extends BaseService implements ThemeServiceInterface
 
     /**
      * Generate human-readable template name from handle
-     * 
-     * @param string $handle Template handle
+     *
+     * @param  string  $handle  Template handle
      * @return string Template name
      */
     private function generateTemplateName(string $handle): string
     {
         $parts = explode('.', $handle);
         $type = ucfirst($parts[0]);
-        $suffix = isset($parts[1]) ? ' - ' . ucwords(str_replace(['-', '_'], ' ', $parts[1])) : '';
+        $suffix = isset($parts[1]) ? ' - '.ucwords(str_replace(['-', '_'], ' ', $parts[1])) : '';
 
         return "{$type} Template{$suffix}";
     }

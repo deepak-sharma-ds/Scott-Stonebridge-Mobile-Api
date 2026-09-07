@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Contracts\Services\ProductServiceInterface;
+use App\Exceptions\ShopifyNotFoundException;
 use App\Http\Controllers\Base\BaseApiController;
 use App\Http\Requests\Product\RelatedProductsRequest;
+use App\Http\Resources\Product\CollectionResource;
 use App\Http\Resources\Product\ProductResource;
 use App\Http\Resources\Product\RelatedProductResource;
 use Illuminate\Http\JsonResponse;
@@ -12,10 +14,10 @@ use Illuminate\Http\Request;
 
 /**
  * Product Controller (v1)
- * 
+ *
  * Handles product-related API endpoints.
  * Extends BaseApiController for standardized responses.
- * 
+ *
  * Requirements: 2.1, 2.2, 5.4, 11.6
  */
 class ProductController extends BaseApiController
@@ -26,20 +28,17 @@ class ProductController extends BaseApiController
 
     /**
      * Get product listing with pagination
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function index(Request $request): JsonResponse
     {
         try {
             $limit = (int) $request->input('limit', 20);
             $cursor = $request->input('cursor');
-            
+
             // Map snake_case request params to camelCase for service
             $sortKey = strtoupper($request->input('sort_key', 'TITLE'));
             $reverse = filter_var($request->input('reverse', false), FILTER_VALIDATE_BOOLEAN);
-            
+
             $filters = [
                 'sortKey' => $sortKey,
                 'reverse' => $reverse,
@@ -68,9 +67,6 @@ class ProductController extends BaseApiController
 
     /**
      * Get product detail by handle
-     * 
-     * @param string $handle
-     * @return JsonResponse
      */
     public function show(string $handle): JsonResponse
     {
@@ -83,7 +79,7 @@ class ProductController extends BaseApiController
                     'product' => new ProductResource($product),
                 ]
             );
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             return $this->notFound($e->getMessage());
         } catch (\Exception $e) {
             return $this->error(
@@ -97,9 +93,6 @@ class ProductController extends BaseApiController
 
     /**
      * Search products
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function search(Request $request): JsonResponse
     {
@@ -137,9 +130,6 @@ class ProductController extends BaseApiController
 
     /**
      * Get all collections
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function indexCollections(Request $request): JsonResponse
     {
@@ -152,7 +142,7 @@ class ProductController extends BaseApiController
             return $this->success(
                 'Collections fetched successfully',
                 [
-                    'collections' => \App\Http\Resources\Product\CollectionResource::collection($result['items']),
+                    'collections' => CollectionResource::collection($result['items']),
                 ],
                 ['pagination' => $result['pagination']]
             );
@@ -168,10 +158,6 @@ class ProductController extends BaseApiController
 
     /**
      * Get products by collection
-     * 
-     * @param string $handle
-     * @param Request $request
-     * @return JsonResponse
      */
     public function showCollectionProducts(string $handle, Request $request): JsonResponse
     {
@@ -186,12 +172,12 @@ class ProductController extends BaseApiController
             return $this->success(
                 'Collection products fetched successfully',
                 [
-                    'collection' => new \App\Http\Resources\Product\CollectionResource($result['collection']),
+                    'collection' => new CollectionResource($result['collection']),
                     'products' => ProductResource::collection($result['items']),
                 ],
                 ['pagination' => $result['pagination']]
             );
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             return $this->notFound($e->getMessage());
         } catch (\Exception $e) {
             return $this->error(
@@ -205,9 +191,6 @@ class ProductController extends BaseApiController
 
     /**
      * Get featured products
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function indexFeatured(Request $request): JsonResponse
     {
@@ -235,9 +218,6 @@ class ProductController extends BaseApiController
 
     /**
      * Get related products by Shopify product ID from request body.
-     *
-     * @param RelatedProductsRequest $request
-     * @return JsonResponse
      */
     public function related(RelatedProductsRequest $request): JsonResponse
     {

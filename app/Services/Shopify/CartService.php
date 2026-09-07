@@ -5,9 +5,9 @@ namespace App\Services\Shopify;
 use App\Contracts\Services\CartServiceInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\Cart\CartDTO;
-use App\Services\Base\BaseService;
 use App\Exceptions\ShopifyApiException;
 use App\Exceptions\ShopifyNotFoundException;
+use App\Services\Base\BaseService;
 use Illuminate\Support\Facades\Log;
 
 class CartService extends BaseService implements CartServiceInterface
@@ -21,8 +21,7 @@ class CartService extends BaseService implements CartServiceInterface
     /**
      * Create a new cart
      *
-     * @param string|null $accessToken Optional customer access token
-     * @return CartDTO
+     * @param  string|null  $accessToken  Optional customer access token
      */
     public function createCart(?string $accessToken = null): CartDTO
     {
@@ -39,16 +38,16 @@ class CartService extends BaseService implements CartServiceInterface
 
             // Ensure empty array is encoded as object {} not array []
             if (empty($input)) {
-                $input = new \stdClass();
+                $input = new \stdClass;
             }
 
             $variables = ['input' => $input, 'country' => $this->getCurrencyCountryCode()];
 
             $response = $this->storefrontClient->queryWithCurrency('storefront/cart/create_cart', $variables);
 
-            if (!empty($response['data']['cartCreate']['userErrors'])) {
+            if (! empty($response['data']['cartCreate']['userErrors'])) {
                 $errors = $response['data']['cartCreate']['userErrors'];
-                throw new ShopifyApiException('Failed to create cart: ' . json_encode($errors));
+                throw new ShopifyApiException('Failed to create cart: '.json_encode($errors));
             }
 
             if (empty($response['data']['cartCreate']['cart'])) {
@@ -74,8 +73,7 @@ class CartService extends BaseService implements CartServiceInterface
     /**
      * Get cart by ID
      *
-     * @param string $cartId Cart identifier
-     * @return CartDTO
+     * @param  string  $cartId  Cart identifier
      */
     public function getCart(string $cartId): CartDTO
     {
@@ -107,10 +105,9 @@ class CartService extends BaseService implements CartServiceInterface
     /**
      * Add a line item to cart
      *
-     * @param string $cartId Cart identifier
-     * @param string $variantId Product variant ID
-     * @param int $quantity Quantity to add
-     * @return CartDTO
+     * @param  string  $cartId  Cart identifier
+     * @param  string  $variantId  Product variant ID
+     * @param  int  $quantity  Quantity to add
      */
     public function addLineItem(string $cartId, string $variantId, int $quantity): CartDTO
     {
@@ -130,9 +127,9 @@ class CartService extends BaseService implements CartServiceInterface
 
             $response = $this->storefrontClient->queryWithCurrency('storefront/cart/add_line_item', $variables);
 
-            if (!empty($response['data']['cartLinesAdd']['userErrors'])) {
+            if (! empty($response['data']['cartLinesAdd']['userErrors'])) {
                 $errors = $response['data']['cartLinesAdd']['userErrors'];
-                throw new ShopifyApiException('Failed to add line item: ' . json_encode($errors));
+                throw new ShopifyApiException('Failed to add line item: '.json_encode($errors));
             }
 
             if (empty($response['data']['cartLinesAdd']['cart'])) {
@@ -157,12 +154,12 @@ class CartService extends BaseService implements CartServiceInterface
             throw $e;
         }
     }
+
     /**
      * Add multiple line items to cart
      *
-     * @param string $cartId Cart ID
-     * @param array $lines Array of line items with merchandise_id and quantity
-     * @return CartDTO
+     * @param  string  $cartId  Cart ID
+     * @param  array  $lines  Array of line items with merchandise_id and quantity
      */
     public function addLineItems(string $cartId, array $lines): CartDTO
     {
@@ -178,7 +175,7 @@ class CartService extends BaseService implements CartServiceInterface
                 ];
 
                 // Only add attributes if they exist and are not empty
-                if (!empty($line['attributes'])) {
+                if (! empty($line['attributes'])) {
                     $lineItem['attributes'] = $line['attributes'];
                 }
 
@@ -205,9 +202,9 @@ class CartService extends BaseService implements CartServiceInterface
                 'response' => $response,
             ]);
 
-            if (!empty($response['data']['cartLinesAdd']['userErrors'])) {
+            if (! empty($response['data']['cartLinesAdd']['userErrors'])) {
                 $errors = $response['data']['cartLinesAdd']['userErrors'];
-                throw new ShopifyApiException('Failed to add line items: ' . json_encode($errors));
+                throw new ShopifyApiException('Failed to add line items: '.json_encode($errors));
             }
 
             if (empty($response['data']['cartLinesAdd']['cart'])) {
@@ -231,14 +228,12 @@ class CartService extends BaseService implements CartServiceInterface
         }
     }
 
-
     /**
      * Update a line item quantity
      *
-     * @param string $cartId Cart identifier
-     * @param string $lineId Line item ID
-     * @param int $quantity New quantity
-     * @return CartDTO
+     * @param  string  $cartId  Cart identifier
+     * @param  string  $lineId  Line item ID
+     * @param  int  $quantity  New quantity
      */
     public function updateLineItem(string $cartId, string $lineId, int $quantity): CartDTO
     {
@@ -258,9 +253,9 @@ class CartService extends BaseService implements CartServiceInterface
 
             $response = $this->storefrontClient->queryWithCurrency('storefront/cart/update_line_item', $variables);
 
-            if (!empty($response['data']['cartLinesUpdate']['userErrors'])) {
+            if (! empty($response['data']['cartLinesUpdate']['userErrors'])) {
                 $errors = $response['data']['cartLinesUpdate']['userErrors'];
-                throw new ShopifyApiException('Failed to update line item: ' . json_encode($errors));
+                throw new ShopifyApiException('Failed to update line item: '.json_encode($errors));
             }
 
             if (empty($response['data']['cartLinesUpdate']['cart'])) {
@@ -289,9 +284,8 @@ class CartService extends BaseService implements CartServiceInterface
     /**
      * Remove a line item from cart
      *
-     * @param string $cartId Cart identifier
-     * @param string $lineId Line item ID
-     * @return CartDTO
+     * @param  string  $cartId  Cart identifier
+     * @param  string  $lineId  Line item ID
      */
     public function removeLineItem(string $cartId, string $lineId): CartDTO
     {
@@ -306,9 +300,9 @@ class CartService extends BaseService implements CartServiceInterface
 
             $response = $this->storefrontClient->queryWithCurrency('storefront/cart/remove_line_item', $variables);
 
-            if (!empty($response['data']['cartLinesRemove']['userErrors'])) {
+            if (! empty($response['data']['cartLinesRemove']['userErrors'])) {
                 $errors = $response['data']['cartLinesRemove']['userErrors'];
-                throw new ShopifyApiException('Failed to remove line item: ' . json_encode($errors));
+                throw new ShopifyApiException('Failed to remove line item: '.json_encode($errors));
             }
 
             if (empty($response['data']['cartLinesRemove']['cart'])) {
@@ -335,9 +329,8 @@ class CartService extends BaseService implements CartServiceInterface
     /**
      * Associate cart with customer
      *
-     * @param string $cartId Cart identifier
-     * @param string $accessToken Customer access token
-     * @return CartDTO
+     * @param  string  $cartId  Cart identifier
+     * @param  string  $accessToken  Customer access token
      */
     public function associateCustomer(string $cartId, string $accessToken): CartDTO
     {
@@ -354,9 +347,9 @@ class CartService extends BaseService implements CartServiceInterface
 
             $response = $this->storefrontClient->queryWithCurrency('storefront/cart/associate_customer', $variables);
 
-            if (!empty($response['data']['cartBuyerIdentityUpdate']['userErrors'])) {
+            if (! empty($response['data']['cartBuyerIdentityUpdate']['userErrors'])) {
                 $errors = $response['data']['cartBuyerIdentityUpdate']['userErrors'];
-                throw new ShopifyApiException('Failed to associate customer: ' . json_encode($errors));
+                throw new ShopifyApiException('Failed to associate customer: '.json_encode($errors));
             }
 
             if (empty($response['data']['cartBuyerIdentityUpdate']['cart'])) {
@@ -381,9 +374,8 @@ class CartService extends BaseService implements CartServiceInterface
     /**
      * Update buyer identity with email
      *
-     * @param string $cartId Cart identifier
-     * @param string $email Customer email
-     * @return CartDTO
+     * @param  string  $cartId  Cart identifier
+     * @param  string  $email  Customer email
      */
     public function updateBuyerIdentity(string $cartId, string $email): CartDTO
     {
@@ -400,9 +392,9 @@ class CartService extends BaseService implements CartServiceInterface
 
             $response = $this->storefrontClient->queryWithCurrency('storefront/cart/associate_customer', $variables);
 
-            if (!empty($response['data']['cartBuyerIdentityUpdate']['userErrors'])) {
+            if (! empty($response['data']['cartBuyerIdentityUpdate']['userErrors'])) {
                 $errors = $response['data']['cartBuyerIdentityUpdate']['userErrors'];
-                throw new ShopifyApiException('Failed to update buyer identity: ' . json_encode($errors));
+                throw new ShopifyApiException('Failed to update buyer identity: '.json_encode($errors));
             }
 
             if (empty($response['data']['cartBuyerIdentityUpdate']['cart'])) {

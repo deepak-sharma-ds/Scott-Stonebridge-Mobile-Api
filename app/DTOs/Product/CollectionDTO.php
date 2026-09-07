@@ -7,10 +7,10 @@ use InvalidArgumentException;
 
 /**
  * Collection Data Transfer Object
- * 
+ *
  * Represents a Shopify collection with typed properties and validation.
  * Collections are groups of products organized by theme, category, or other criteria.
- * 
+ *
  * Requirements: 11.1, 11.12
  */
 class CollectionDTO extends BaseDTO
@@ -30,7 +30,7 @@ class CollectionDTO extends BaseDTO
 
     /**
      * Validate the collection data.
-     * 
+     *
      * @throws InvalidArgumentException
      */
     protected function validate(): void
@@ -42,12 +42,11 @@ class CollectionDTO extends BaseDTO
 
     /**
      * Create a CollectionDTO from Shopify API response data.
-     * 
+     *
      * Transforms raw Shopify GraphQL collection response into a typed DTO instance.
      * Handles both simple collection lists and detailed collection data.
-     * 
-     * @param array $data Raw collection data from Shopify GraphQL response
-     * @return self
+     *
+     * @param  array  $data  Raw collection data from Shopify GraphQL response
      */
     public static function fromShopifyResponse(array $data): self
     {

@@ -1,6 +1,10 @@
 <?php
 
 use App\Http\Controllers\ShopifyController;
+use App\Http\Controllers\Webhook\Campaign\CampaignOrderCancelledWebhookController;
+use App\Http\Controllers\Webhook\Campaign\CampaignOrderUpdatedWebhookController;
+use App\Http\Controllers\Webhook\Campaign\CampaignPaidWebhookController;
+use App\Http\Controllers\Webhook\KlaviyoFlowWebhookController;
 use App\Http\Controllers\Webhook\ShopifyReadingOrderCancelledWebhookController;
 use App\Http\Controllers\Webhook\ShopifyReadingOrderUpdatedWebhookController;
 use App\Http\Controllers\Webhook\ShopifyReadingWebhookController;
@@ -25,4 +29,23 @@ Route::prefix('webhook')->group(function () {
     Route::post('/order-cancelled-reading', [ShopifyReadingOrderCancelledWebhookController::class, 'handle'])
         ->middleware('shopify.hmac')
         ->name('webhook.shopify.reading.cancelled');
+
+    Route::post('/order-paid-campaign', [CampaignPaidWebhookController::class, 'handle'])
+        ->middleware('shopify.hmac')
+        ->name('webhook.shopify.campaign');
+
+    Route::post('/order-updated-campaign', [CampaignOrderUpdatedWebhookController::class, 'handle'])
+        ->middleware('shopify.hmac')
+        ->name('webhook.shopify.campaign.updated');
+
+    Route::post('/order-cancelled-campaign', [CampaignOrderCancelledWebhookController::class, 'handle'])
+        ->middleware('shopify.hmac')
+        ->name('webhook.shopify.campaign.cancelled');
+
+    /**
+     * KLAVIYO Webhooks (marketing push notifications)
+     */
+    Route::post('/klaviyo-flow-email', [KlaviyoFlowWebhookController::class, 'handle'])
+        ->middleware('klaviyo.secret')
+        ->name('webhook.klaviyo.flow');
 });

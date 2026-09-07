@@ -2,31 +2,31 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Builder;
 
 class ScheduledMeeting extends Model
 {
     use HasFactory;
 
     protected $table = 'scheduled_meetings';
-    
+
     protected $fillable = [
-        'user_id', 
-        'name', 
-        'email', 
-        'phone', 
-        'datetime', 
-        'meeting_link', 
-        'event_id', 
-        'availability_date_id', 
-        'time_slot_id', 
-        'status'
+        'user_id',
+        'name',
+        'email',
+        'phone',
+        'datetime',
+        'meeting_link',
+        'event_id',
+        'availability_date_id',
+        'time_slot_id',
+        'status',
     ];
-    
+
     protected $casts = [
-        'datetime' => 'datetime'
+        'datetime' => 'datetime',
     ];
 
     /*
@@ -65,8 +65,8 @@ class ScheduledMeeting extends Model
     {
         return $query->where(function ($q) use ($term) {
             $q->where('name', 'like', "%{$term}%")
-              ->orWhere('email', 'like', "%{$term}%")
-              ->orWhere('phone', 'like', "%{$term}%");
+                ->orWhere('email', 'like', "%{$term}%")
+                ->orWhere('phone', 'like', "%{$term}%");
         });
     }
 
@@ -86,7 +86,7 @@ class ScheduledMeeting extends Model
     {
         return $query->with([
             'availabilityDate:id,date',
-            'timeSlot:id,start_time,end_time'
+            'timeSlot:id,start_time,end_time',
         ]);
     }
 }

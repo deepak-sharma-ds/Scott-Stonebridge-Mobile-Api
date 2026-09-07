@@ -7,18 +7,17 @@ use Illuminate\Http\Request;
 
 /**
  * Address API Resource
- * 
+ *
  * Transforms AddressDTO data to API response format.
  * Uses snake_case field naming for consistency.
- * 
+ *
  * Requirements: 12.3, 12.9, 12.10, 12.11
  */
 class AddressResource extends BaseApiResource
 {
     /**
      * Transform the resource into an array.
-     * 
-     * @param Request $request
+     *
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array

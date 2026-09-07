@@ -12,6 +12,7 @@ use App\Contracts\Services\AI\SafetyServiceInterface;
 use App\Contracts\Services\AI\ShopifyContextServiceInterface;
 use App\Contracts\Services\AI\StreamingServiceInterface;
 use App\DTOs\Chat\AIResponseDTO;
+use App\DTOs\Chat\ChatContextDTO;
 use App\DTOs\Chat\ChatRequestDTO;
 use App\DTOs\Chat\IntentDTO;
 use App\Exceptions\AI\AIException;
@@ -20,7 +21,9 @@ use App\Services\AI\Streaming\ChunkEmitter;
 use App\Services\AI\Tools\ToolDefinitions;
 use App\Services\AI\Tools\ToolExecutor;
 use App\Services\Base\BaseService;
+use App\Services\CurrencyCountryMapService;
 use OpenAI\Laravel\Facades\OpenAI;
+use OpenAI\Responses\StreamResponse;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
 
@@ -53,9 +56,24 @@ class StreamingService extends BaseService implements StreamingServiceInterface
         private readonly ChunkEmitter $emitter,
         private readonly ToolDefinitions $toolDefinitions,
         private readonly ToolExecutor $toolExecutor,
+        private readonly CustomerPersonalizationService $personalization,
+        private readonly ChatbotConfigRepository $chatbotConfig,
     ) {
         parent::__construct();
     }
+
+    /**
+     * Intents where a signed-in customer's order summary is worth the extra
+     * Customer Account API call. Kept narrow so ordinary turns take no hit.
+     *
+     * @var list<string>
+     */
+    private const PERSONALISED_INTENTS = [
+        IntentDTO::INTENT_GREETING,
+        IntentDTO::INTENT_RECOMMENDATION,
+        IntentDTO::INTENT_UPSELL_OPPORTUNITY,
+        IntentDTO::INTENT_CROSS_SELL_OPPORTUNITY,
+    ];
 
     public function stream(ChatRequestDTO $request): StreamedResponse
     {
@@ -92,6 +110,16 @@ class StreamingService extends BaseService implements StreamingServiceInterface
             'detected_by' => $intent->detectedBy,
         ]);
 
+        $isGuest = ($request->context->customer !== null && ! $request->context->customer->loggedIn && empty($request->accessToken));
+
+        // E1 — only fetch the signed-in order summary for intents that benefit,
+        // so ordinary turns never pay the Customer Account API round-trip.
+        $customerSummary = null;
+        if (! $isGuest && in_array($intent->name, self::PERSONALISED_INTENTS, true)) {
+            $shopDomain = (string) ($request->context->shopDomain ?? $conversation->shop_domain);
+            $customerSummary = $this->personalization->summaryFor($request->sessionId, $shopDomain, $isGuest, $request->context->customer);
+        }
+
         $messages = $this->promptBuilder->build(
             conversation: $conversation,
             context: $request->context,
@@ -99,14 +127,48 @@ class StreamingService extends BaseService implements StreamingServiceInterface
             userMessage: $sanitized,
             resolvedContext: $context,
             recommendations: [],
+            customerSummary: $customerSummary,
         );
+
+        $tail = (int) config('chatbot.tokens.history_tail', 10);
+        $initialShownVariants = $this->conversations->recentShownVariantIds($conversation, $tail);
+        $inboundVariants = $this->extractInboundVariantIds($sanitized, $request->context);
+        foreach ($inboundVariants as $vid => $true) {
+            $initialShownVariants[$vid] = true;
+        }
+
+        $currency = (string) ($request->context->currency ?? $request->context->cart?->currency ?? 'GBP');
+        if ($currency === '') {
+            $currency = 'GBP';
+        }
+        $country = CurrencyCountryMapService::getCountryCode($currency);
 
         $sessionCtx = new ChatSessionContext(
             sessionId: $request->sessionId,
             shopDomain: (string) ($request->context->shopDomain ?? $conversation->shop_domain),
             cartId: $request->context->cart?->id,
+            // Bridges an already-logged-in storefront customer straight
+            // through to the tool layer, skipping the Customer MCP OAuth
+            // popup for this turn — see ADR 0008. The storefront must
+            // actually send the shopper's Shopify Customer Account access
+            // token as `Authorization: Bearer <token>`; until the theme
+            // does so, this stays null and behaviour is unchanged.
+            customerAccessToken: $request->accessToken === '' ? null : $request->accessToken,
             locale: $request->context->locale ?? 'en',
             pageType: $request->context->pageType,
+            // The live storefront cart snapshot IS the single source of
+            // truth (ADR 0010) — get_cart/update_cart/suggest_upsell read
+            // it directly instead of maintaining a separate Shopify cart.
+            cartSnapshot: $request->context->cart,
+            // Seeds the same "what has the model already been shown"
+            // window historyTailAsMessages() renders into its own visible
+            // context, so update_cart's guard never rejects a legitimate
+            // reference the model can actually see.
+            shownVariantIds: $initialShownVariants,
+            isGuest: $isGuest,
+            currency: $currency,
+            country: $country,
+            customer: $request->context->customer,
         );
 
         $response = new StreamedResponse(function () use ($messages, $intent, $conversation, $sessionCtx) {
@@ -129,6 +191,7 @@ class StreamingService extends BaseService implements StreamingServiceInterface
     {
         $model = (string) config('chatbot.models.default');
         $maxOutput = (int) config('chatbot.tokens.output_budget', 600);
+        $temperature = (float) config('chatbot.generation.temperature', 0.6);
         $tools = $this->toolDefinitions->all();
         $startedAt = microtime(true);
 
@@ -138,13 +201,18 @@ class StreamingService extends BaseService implements StreamingServiceInterface
         $finishReason = null;
         $aborted = false;
 
+        // B1 — compact record of entities surfaced to the customer this turn
+        // (products / orders / cart), persisted so the next turn can resolve
+        // references like "add the second one".
+        $shownEntities = [];
+
         try {
             for ($loop = 0; $loop < self::MAX_TOOL_LOOPS; $loop++) {
                 $payload = [
                     'model' => $model,
                     'messages' => $messages,
                     'tools' => $tools,
-                    'temperature' => 0.4,
+                    'temperature' => $temperature,
                     'max_tokens' => $maxOutput,
                     'stream_options' => ['include_usage' => true],
                 ];
@@ -153,7 +221,7 @@ class StreamingService extends BaseService implements StreamingServiceInterface
                 $toolCalls = [];
                 $turnFinish = null;
 
-                $stream = OpenAI::chat()->createStreamed($payload);
+                $stream = $this->openStreamWithRetry($payload);
                 foreach ($stream as $chunk) {
                     $choice = $chunk->choices[0] ?? null;
                     if ($choice !== null) {
@@ -204,6 +272,13 @@ class StreamingService extends BaseService implements StreamingServiceInterface
                     $args = $this->decodeArguments($tc['function']['arguments'] ?? '');
                     $result = $this->toolExecutor->execute($name, $args, $ctx);
 
+                    $this->collectShownEntities($shownEntities, $result->emittedChunk);
+                    // Extends the model's own visible "shown" window for the
+                    // REST of this turn's tool calls too — e.g. search_catalog
+                    // then update_cart in the same response — so the guard in
+                    // handleUpdateCart() isn't limited to prior-turn history.
+                    $ctx = $ctx->withAdditionalShownVariantIds($this->variantIdsFromShownEntities($shownEntities));
+
                     $messages[] = [
                         'role' => 'tool',
                         'tool_call_id' => $tc['id'] ?? '',
@@ -230,6 +305,15 @@ class StreamingService extends BaseService implements StreamingServiceInterface
             return;
         }
 
+        // F1 — the tool loop hit its iteration cap while the model still wanted
+        // more tool calls. Rather than stop silently, surface one friendly
+        // continuation so the customer knows to nudge again.
+        if (! $aborted && $finishReason === 'tool_calls') {
+            $capMessage = "I'm still working through that — could you nudge me again in a moment?";
+            $this->emitter->emitText($capMessage);
+            $assistantText = $assistantText === '' ? $capMessage : $assistantText."\n\n".$capMessage;
+        }
+
         $latency = (int) round((microtime(true) - $startedAt) * 1000);
         $usage = [
             'prompt_tokens' => $promptTokens,
@@ -245,6 +329,7 @@ class StreamingService extends BaseService implements StreamingServiceInterface
             latencyMs: $latency,
             model: $model,
             finishReason: $aborted ? 'aborted' : $finishReason,
+            shownEntities: $shownEntities,
         );
 
         $this->conversations->recordAssistantMessage($conversation, $assistant);
@@ -315,5 +400,273 @@ class StreamingService extends BaseService implements StreamingServiceInterface
         }
 
         return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * Open the OpenAI stream, retrying transient failures BEFORE any bytes are
+     * streamed. Safe because a failed establishment has emitted nothing, so a
+     * retry cannot duplicate already-streamed text. A mid-stream failure is not
+     * retried here — it propagates to the caller's catch (hard-failure path).
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function openStreamWithRetry(array $payload): StreamResponse
+    {
+        $maxAttempts = max(1, (int) config('chatbot.generation.stream_max_attempts', 2));
+        $attempt = 0;
+
+        while (true) {
+            $attempt++;
+            try {
+                return OpenAI::chat()->createStreamed($payload);
+            } catch (Throwable $e) {
+                if ($attempt >= $maxAttempts) {
+                    throw $e;
+                }
+                $this->logWarning('OpenAI stream establishment failed; retrying', [
+                    'attempt' => $attempt,
+                    'max_attempts' => $maxAttempts,
+                    'error' => $e->getMessage(),
+                ], 'ai');
+                usleep($this->chatbotConfig->streamingRetryBackoffBaseMs() * 1000 * $attempt);
+            }
+        }
+    }
+
+    /**
+     * B1 — append a compact summary of a tool's emitted chunk to the running
+     * shown-entities list (skips chunks that surface nothing referenceable).
+     *
+     * @param  list<array<string, mixed>>  $shownEntities
+     * @param  array<string, mixed>  $chunk
+     */
+    private function collectShownEntities(array &$shownEntities, array $chunk): void
+    {
+        $summary = $this->summariseShownChunk($chunk);
+        if ($summary !== null) {
+            $shownEntities[] = $summary;
+        }
+    }
+
+    /**
+     * Flattens every variant_id out of the running shown-entities list —
+     * used to extend ChatSessionContext::$shownVariantIds so update_cart's
+     * guard (ADR 0010) covers products surfaced earlier in this same turn.
+     *
+     * @param  list<array<string, mixed>>  $shownEntities
+     * @return array<string, true>
+     */
+    private function variantIdsFromShownEntities(array $shownEntities): array
+    {
+        $ids = [];
+        foreach ($shownEntities as $group) {
+            foreach ((array) ($group['items'] ?? []) as $item) {
+                $variantId = is_array($item) ? ($item['variant_id'] ?? null) : null;
+                if (is_string($variantId) && $variantId !== '') {
+                    $ids[$variantId] = true;
+                }
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * @return array<string, true>
+     */
+    private function extractInboundVariantIds(string $message, ChatContextDTO $context): array
+    {
+        $ids = [];
+
+        // 1. Extract GIDs from message (e.g. gid://shopify/ProductVariant/41603517317294)
+        if (preg_match_all('#gid://shopify/ProductVariant/(\d+)#', $message, $matches)) {
+            foreach ($matches[0] as $gid) {
+                $ids[$gid] = true;
+            }
+            foreach ($matches[1] as $bare) {
+                $ids[$bare] = true;
+            }
+        }
+
+        // 2. Extract numeric variant IDs explicitly mentioned in message
+        if (preg_match_all('/(?:product_variant_id|variant_id|variant)\s*[:=]?\s*(?:gid:\/\/[^\s,\)]+\/)?(\d{6,})/i', $message, $matches)) {
+            foreach ($matches[1] as $num) {
+                $ids[$num] = true;
+                $ids["gid://shopify/ProductVariant/{$num}"] = true;
+            }
+        }
+
+        // 3. Extract from product page context
+        if ($context->product !== null) {
+            if ($context->product->id !== null && $context->product->id !== '') {
+                $ids[$context->product->id] = true;
+            }
+            foreach ($context->product->variants as $v) {
+                if (is_array($v)) {
+                    $vid = (string) ($v['id'] ?? $v['variant_id'] ?? '');
+                    if ($vid !== '') {
+                        $ids[$vid] = true;
+                    }
+                }
+            }
+        }
+
+        // 4. Extract from cart snapshot items
+        if ($context->cart !== null) {
+            foreach ($context->cart->items as $item) {
+                if (is_array($item)) {
+                    $vid = (string) ($item['variant_id'] ?? $item['id'] ?? '');
+                    if ($vid !== '') {
+                        $ids[$vid] = true;
+                    }
+                    $pid = (string) ($item['product_id'] ?? '');
+                    if ($pid !== '') {
+                        $ids[$pid] = true;
+                    }
+                }
+            }
+        }
+
+        // 5. Extract from recently viewed
+        foreach ($context->recentlyViewed as $rv) {
+            $rvStr = (string) $rv;
+            if ($rvStr !== '') {
+                $ids[$rvStr] = true;
+                $ids["gid://shopify/Product/{$rvStr}"] = true;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * Reduce a rich SSE chunk to the few identifiers needed to resolve later
+     * references ("the second one", "add that"). Returns null for chunk types
+     * that carry nothing referenceable.
+     *
+     * @param  array<string, mixed>  $chunk
+     * @return array{type:string, items:list<array<string,mixed>>}|null
+     */
+    private function summariseShownChunk(array $chunk): ?array
+    {
+        $cap = 10;
+        $keep = static fn ($v): bool => $v !== null && $v !== '';
+
+        switch ($chunk['type'] ?? null) {
+            case 'products':
+                $items = [];
+                foreach (array_slice($chunk['products'] ?? [], 0, $cap) as $p) {
+                    if (! is_array($p)) {
+                        continue;
+                    }
+                    $variants = is_array($p['variants'] ?? null) ? $p['variants'] : [];
+                    if ($variants !== []) {
+                        foreach ($variants as $v) {
+                            if (! is_array($v)) {
+                                continue;
+                            }
+                            $item = array_filter([
+                                'title' => $v['title'] ?? $p['title'] ?? null,
+                                'handle' => $p['handle'] ?? null,
+                                'variant_id' => $v['id'] ?? $v['variant_id'] ?? null,
+                            ], $keep);
+                            if ($item !== []) {
+                                $items[] = $item;
+                            }
+                        }
+                    } else {
+                        $item = array_filter([
+                            'title' => $p['title'] ?? null,
+                            'handle' => $p['handle'] ?? null,
+                            'variant_id' => $p['variant_id'] ?? null,
+                        ], $keep);
+                        if ($item !== []) {
+                            $items[] = $item;
+                        }
+                    }
+                }
+
+                return $items === [] ? null : ['type' => 'products', 'items' => $items];
+
+            case 'product_detail':
+                $p = $chunk['product'] ?? null;
+                if (! is_array($p)) {
+                    return null;
+                }
+                $items = [];
+                $variants = is_array($p['variants'] ?? null) ? $p['variants'] : [];
+                if ($variants !== []) {
+                    foreach ($variants as $v) {
+                        if (! is_array($v)) {
+                            continue;
+                        }
+                        $item = array_filter([
+                            'title' => $v['title'] ?? $p['title'] ?? null,
+                            'handle' => $p['handle'] ?? null,
+                            'variant_id' => $v['id'] ?? $v['variant_id'] ?? null,
+                        ], $keep);
+                        if ($item !== []) {
+                            $items[] = $item;
+                        }
+                    }
+                } else {
+                    $item = array_filter([
+                        'title' => $p['title'] ?? null,
+                        'handle' => $p['handle'] ?? null,
+                        'variant_id' => $p['variant_id'] ?? null,
+                    ], $keep);
+                    if ($item !== []) {
+                        $items[] = $item;
+                    }
+                }
+
+                return $items === [] ? null : ['type' => 'product', 'items' => $items];
+
+            case 'cart_action':
+                $items = [];
+                foreach ((array) ($chunk['items'] ?? []) as $row) {
+                    if (is_array($row) && isset($row['variant_id']) && is_string($row['variant_id'])) {
+                        $items[] = ['variant_id' => $row['variant_id']];
+                    }
+                }
+
+                return $items === [] ? null : ['type' => 'cart_action', 'items' => $items];
+
+            case 'order_list':
+                $items = [];
+                foreach (array_slice($chunk['orders'] ?? [], 0, $cap) as $o) {
+                    if (! is_array($o)) {
+                        continue;
+                    }
+                    $number = $o['order_number'] ?? $o['name'] ?? null;
+                    if ($keep($number)) {
+                        $items[] = ['order_number' => $number];
+                    }
+                }
+
+                return $items === [] ? null : ['type' => 'orders', 'items' => $items];
+
+            case 'cart_state':
+                $cart = $chunk['cart'] ?? null;
+                $lines = is_array($cart) ? ($cart['items'] ?? []) : [];
+                $items = [];
+                foreach (array_slice(is_array($lines) ? $lines : [], 0, $cap) as $line) {
+                    if (! is_array($line)) {
+                        continue;
+                    }
+                    $item = array_filter([
+                        'title' => $line['title'] ?? null,
+                        'variant_id' => $line['variant_id'] ?? null,
+                    ], $keep);
+                    if ($item !== []) {
+                        $items[] = $item;
+                    }
+                }
+
+                return $items === [] ? null : ['type' => 'cart', 'items' => $items];
+
+            default:
+                return null;
+        }
     }
 }

@@ -7,15 +7,14 @@ use Illuminate\Http\Request;
 
 /**
  * Menu Item API Resource
- * 
+ *
  * Transforms MenuItemDTO data to API response format
  */
 class MenuItemResource extends BaseApiResource
 {
     /**
      * Transform the resource into an array.
-     * 
-     * @param Request $request
+     *
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array

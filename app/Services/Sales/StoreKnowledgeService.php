@@ -10,6 +10,7 @@ use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\Jobs\Sales\SummariseKnowledgeItemJob;
 use App\Models\StoreKnowledge;
 use App\Services\Base\BaseService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -45,12 +46,20 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
 {
     private const CHARS_PER_TOKEN = 4;
 
+    /**
+     * Set by embedQuery() when the query-embedding call still fails after
+     * its retry. Reset at the start of every getKnowledgeForPrompt() /
+     * searchForTool() call so it always reflects only the most recent one.
+     */
+    private bool $lastRetrievalDegraded = false;
+
     public function __construct(
         private readonly AdminApiClientInterface $admin,
         // Nullable so legacy test factories that hand-construct the
         // service with only the admin client still pass. Production
         // wiring resolves both via the container.
         private readonly ?StorefrontApiClientInterface $storefront = null,
+        private readonly ?KnowledgeChunker $chunker = null,
     ) {
         parent::__construct();
     }
@@ -63,6 +72,74 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
     private function storefront(): StorefrontApiClientInterface
     {
         return $this->storefront ?? app(StorefrontApiClientInterface::class);
+    }
+
+    private function chunker(): KnowledgeChunker
+    {
+        return $this->chunker ?? app(KnowledgeChunker::class);
+    }
+
+    /**
+     * Splits $rawContent into chunks, reconciles the document's existing
+     * rows against the resulting chunk set, then dispatches one
+     * SummariseKnowledgeItemJob per chunk. Every sync path (pages,
+     * articles, policies, products, URLs) goes through this instead of
+     * dispatching SummariseKnowledgeItemJob directly, so long documents are
+     * chunked consistently everywhere. See ADR 0009.
+     */
+    private function dispatchKnowledgeItem(
+        string $shopDomain,
+        string $contentType,
+        string $title,
+        string $baseHandle,
+        string $rawContent,
+        ?string $shopifyUpdatedAt,
+        string $connection,
+        string $queue,
+    ): void {
+        $chunks = $this->chunker()->chunk($rawContent);
+        $chunkCount = count($chunks);
+        $this->reconcileKnowledgeChunks($shopDomain, $contentType, $baseHandle, $chunkCount);
+
+        foreach ($chunks as $index => $chunkContent) {
+            SummariseKnowledgeItemJob::dispatch(
+                $shopDomain,
+                $contentType,
+                $title,
+                $chunkCount > 1 ? "{$baseHandle}#{$index}" : $baseHandle,
+                $chunkContent,
+                $shopifyUpdatedAt,
+                $baseHandle,
+                $chunkCount > 1 ? $index : null,
+            )->onConnection($connection)->onQueue($queue);
+        }
+    }
+
+    /**
+     * Delete any existing rows for this document that no longer correspond
+     * to its current chunk set — e.g. a document that used to need 5
+     * chunks now needs 2, or a document that was a single row is now split
+     * into 3. Matches on `document_handle` (rows this feature created) as
+     * well as the bare handle (rows from before chunking existed, which
+     * never got a `document_handle`) so both generations reconcile
+     * correctly.
+     */
+    private function reconcileKnowledgeChunks(string $shopDomain, string $contentType, string $baseHandle, int $chunkCount): void
+    {
+        $keepHandles = $chunkCount > 1
+            ? array_map(static fn (int $i): string => "{$baseHandle}#{$i}", range(0, $chunkCount - 1))
+            : [$baseHandle];
+
+        StoreKnowledge::query()
+            ->forShop($shopDomain)
+            ->where('content_type', $contentType)
+            ->where(function (Builder $query) use ($baseHandle): void {
+                $query->where('document_handle', $baseHandle)
+                    ->orWhere('handle', $baseHandle)
+                    ->orWhere('handle', 'like', $baseHandle.'#%');
+            })
+            ->whereNotIn('handle', $keepHandles)
+            ->delete();
     }
 
     public function syncAll(string $shopDomain): void
@@ -78,14 +155,16 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
         // Pages
         try {
             $this->forEachAdminPage('admin/pages/list_pages', 'pages', $pageSize, function (array $node) use ($shopDomain, $connection, $queue): void {
-                SummariseKnowledgeItemJob::dispatch(
+                $this->dispatchKnowledgeItem(
                     $shopDomain,
                     StoreKnowledge::TYPE_PAGE,
                     (string) ($node['title'] ?? 'Untitled page'),
                     (string) ($node['handle'] ?? Str::slug((string) ($node['title'] ?? 'untitled'))),
                     (string) ($node['body'] ?? ''),
                     isset($node['updatedAt']) ? (string) $node['updatedAt'] : null,
-                )->onConnection($connection)->onQueue($queue);
+                    $connection,
+                    $queue,
+                );
             });
         } catch (Throwable $e) {
             $this->logWarning('Knowledge sync: pages list failed', [
@@ -103,14 +182,16 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
                     $handle = Str::slug((string) ($node['title'] ?? 'article'));
                 }
 
-                SummariseKnowledgeItemJob::dispatch(
+                $this->dispatchKnowledgeItem(
                     $shopDomain,
                     StoreKnowledge::TYPE_BLOG,
                     (string) ($node['title'] ?? 'Untitled article'),
                     $handle,
                     $body,
                     isset($node['updatedAt']) ? (string) $node['updatedAt'] : null,
-                )->onConnection($connection)->onQueue($queue);
+                    $connection,
+                    $queue,
+                );
             });
         } catch (Throwable $e) {
             $this->logWarning('Knowledge sync: articles list failed', [
@@ -128,14 +209,16 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
                     if (! is_array($policy)) {
                         continue;
                     }
-                    SummariseKnowledgeItemJob::dispatch(
+                    $this->dispatchKnowledgeItem(
                         $shopDomain,
                         StoreKnowledge::TYPE_POLICY,
                         (string) ($policy['title'] ?? 'Policy'),
                         (string) ($policy['type'] ?? $policy['handle'] ?? Str::slug((string) ($policy['title'] ?? 'policy'))),
                         (string) ($policy['body'] ?? ''),
                         isset($policy['updatedAt']) ? (string) $policy['updatedAt'] : null,
-                    )->onConnection($connection)->onQueue($queue);
+                        $connection,
+                        $queue,
+                    );
                 }
             }
         } catch (Throwable $e) {
@@ -148,6 +231,8 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
 
     public function getKnowledgeForPrompt(string $shopDomain, array $intents, ?string $userQuery = null): string
     {
+        $this->lastRetrievalDegraded = false;
+
         if ($shopDomain === '' || $intents === []) {
             return '';
         }
@@ -202,6 +287,8 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
 
     public function searchForTool(string $shopDomain, string $query, ?array $contentTypes = null, int $limit = 5): array
     {
+        $this->lastRetrievalDegraded = false;
+
         $shopDomain = trim($shopDomain);
         $query = trim($query);
         if ($shopDomain === '' || $query === '') {
@@ -218,6 +305,11 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
         $limit = max(1, min($limit, 8));
 
         return $this->rankedRows($shopDomain, $types, $query, $limit);
+    }
+
+    public function wasLastRetrievalDegraded(): bool
+    {
+        return $this->lastRetrievalDegraded;
     }
 
     public function invalidateCache(string $shopDomain): void
@@ -471,32 +563,62 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
      *
      * @return list<float>|null
      */
+    /**
+     * Resolves the query embedding, retrying once after a short delay on
+     * failure — most OpenAI embedding failures in the chat request path are
+     * transient (rate limit, brief hiccup) and a single retry recovers them
+     * outright. Only sets $lastRetrievalDegraded when every attempt fails,
+     * so the caller can tell the model results may be incomplete rather
+     * than asserting no information exists. The null result (degraded or
+     * not) is cached same as a success so a genuinely down embeddings API
+     * isn't hammered for the same query within the TTL.
+     */
     private function embedQuery(string $query): ?array
     {
         $model = (string) config('sales.knowledge.embedding.model', 'text-embedding-3-small');
         $ttl = (int) config('sales.knowledge.embedding.query_cache_ttl', 3600);
         $cacheKey = sprintf('ai:knowledge:qemb:%s:%s', $model, md5($query));
 
-        return Cache::remember($cacheKey, $ttl, function () use ($query, $model): ?array {
-            try {
-                $response = OpenAI::embeddings()->create([
-                    'model' => $model,
-                    'input' => $query,
-                ]);
-                $vector = $response->embeddings[0]->embedding ?? null;
-                if (! is_array($vector) || $vector === []) {
-                    return null;
+        $vector = Cache::remember($cacheKey, $ttl, function () use ($query, $model): ?array {
+            $attempts = max(1, (int) config('sales.knowledge.embedding.query_retry_attempts', 1)) + 1;
+            $delayMs = max(0, (int) config('sales.knowledge.embedding.query_retry_delay_ms', 150));
+
+            for ($attempt = 1; $attempt <= $attempts; $attempt++) {
+                try {
+                    $response = OpenAI::embeddings()->create([
+                        'model' => $model,
+                        'input' => $query,
+                    ]);
+                    $vector = $response->embeddings[0]->embedding ?? null;
+                    if (! is_array($vector) || $vector === []) {
+                        throw new \RuntimeException('Empty embedding vector returned.');
+                    }
+
+                    return array_map('floatval', $vector);
+                } catch (Throwable $e) {
+                    $isLastAttempt = $attempt >= $attempts;
+                    Log::channel('ai')->warning('knowledge: query embedding failed', [
+                        'attempt' => $attempt,
+                        'max_attempts' => $attempts,
+                        'error' => $e->getMessage(),
+                    ]);
+
+                    if ($isLastAttempt) {
+                        return null;
+                    }
+
+                    usleep($delayMs * 1000);
                 }
-
-                return array_map('floatval', $vector);
-            } catch (Throwable $e) {
-                Log::channel('ai')->warning('knowledge: query embedding failed', [
-                    'error' => $e->getMessage(),
-                ]);
-
-                return null;
             }
+
+            return null;
         });
+
+        if ($vector === null) {
+            $this->lastRetrievalDegraded = true;
+        }
+
+        return $vector;
     }
 
     /**
@@ -623,14 +745,16 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
 
                 $rawContent = $this->composeProductRawContent($node);
 
-                SummariseKnowledgeItemJob::dispatch(
+                $this->dispatchKnowledgeItem(
                     $shopDomain,
                     StoreKnowledge::TYPE_PRODUCT,
                     $title,
                     $handle,
                     $rawContent,
                     isset($node['updatedAt']) ? (string) $node['updatedAt'] : null,
-                )->onConnection($connection)->onQueue($queue);
+                    $connection,
+                    $queue,
+                );
 
                 $dispatched++;
             }
@@ -706,14 +830,16 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
                     continue;
                 }
 
-                SummariseKnowledgeItemJob::dispatch(
+                $this->dispatchKnowledgeItem(
                     $shopDomain,
                     StoreKnowledge::TYPE_URL,
                     $title,
                     'url-'.md5($url),
                     "URL: {$url}\n\n{$text}",
                     null,
-                )->onConnection($connection)->onQueue($queue);
+                    $connection,
+                    $queue,
+                );
 
                 $dispatched++;
             }

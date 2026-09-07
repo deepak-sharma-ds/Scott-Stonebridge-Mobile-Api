@@ -1,0 +1,25 @@
+query listUnlistedProducts($first: Int!) {
+  products(first: $first, query: "status:unlisted") {
+    edges {
+      node {
+        id
+        title
+        publishedOnCurrentPublication
+        featuredImage {
+          url
+          altText
+        }
+        variants(first: 100) {
+          edges {
+            node {
+              id
+              title
+              price
+              availableForSale
+            }
+          }
+        }
+      }
+    }
+  }
+}

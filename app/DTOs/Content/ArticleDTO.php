@@ -7,10 +7,10 @@ use InvalidArgumentException;
 
 /**
  * Article Data Transfer Object
- * 
+ *
  * Represents a Shopify blog article with content and metadata.
  * Articles are individual blog posts within a blog.
- * 
+ *
  * Requirements: 11.8, 11.11, 11.12
  */
 class ArticleDTO extends BaseDTO
@@ -31,7 +31,7 @@ class ArticleDTO extends BaseDTO
 
     /**
      * Validate the article data.
-     * 
+     *
      * @throws InvalidArgumentException
      */
     protected function validate(): void
@@ -43,12 +43,11 @@ class ArticleDTO extends BaseDTO
 
     /**
      * Create an ArticleDTO from Shopify API response data.
-     * 
+     *
      * Transforms raw Shopify GraphQL article response into a typed DTO instance.
      * Handles content, images, tags, and author information.
-     * 
-     * @param array $data Raw article data from Shopify GraphQL response
-     * @return self
+     *
+     * @param  array  $data  Raw article data from Shopify GraphQL response
      */
     public static function fromShopifyResponse(array $data): self
     {

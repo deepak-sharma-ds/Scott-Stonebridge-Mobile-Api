@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Apis;
 
-use Illuminate\Http\Request;
-use App\Http\Controllers\Controller;
 use App\Facades\Shopify;
+use App\Http\Controllers\Controller;
 use App\Traits\ShopifyResponseFormatter;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class BlogController extends Controller
@@ -19,8 +19,8 @@ class BlogController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'handle' => 'required|string',
-            'first'  => 'nullable|integer|min:1|max:50',
-            'after'  => 'nullable|string',
+            'first' => 'nullable|integer|min:1|max:50',
+            'after' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
@@ -30,15 +30,15 @@ class BlogController extends Controller
         try {
             $vars = [
                 'handle' => trim($request->input('handle')),
-                'first'  => (int)($request->input('first', 10)),
-                'after'  => $request->input('after') ? trim($request->input('after')) : null,
+                'first' => (int) ($request->input('first', 10)),
+                'after' => $request->input('after') ? trim($request->input('after')) : null,
             ];
 
             $response = Shopify::query('storefront', 'blogs/get_blog_details', $vars);
 
             $blog = data_get($response, 'data.blog');
 
-            if (!$blog) {
+            if (! $blog) {
                 return response()->json([
                     'status' => false,
                     'message' => 'Blog not found',
@@ -52,7 +52,9 @@ class BlogController extends Controller
             $articles = [];
             foreach ($edges as $edge) {
                 $node = $edge['node'] ?? null;
-                if (!$node) continue;
+                if (! $node) {
+                    continue;
+                }
 
                 $contentHtml = $node['contentHtml'] ?? '';
                 $featuredImage = $node['image'] ?? null;
@@ -60,13 +62,13 @@ class BlogController extends Controller
                 $image = $featuredImage ?: $fallbackImage;
 
                 $articles[] = [
-                    'id'          => $node['id'] ?? null,
-                    'title'       => $node['title'] ?? null,
-                    'handle'      => $node['handle'] ?? null,
-                    'excerpt'     => $node['excerpt'] ?? null,
+                    'id' => $node['id'] ?? null,
+                    'title' => $node['title'] ?? null,
+                    'handle' => $node['handle'] ?? null,
+                    'excerpt' => $node['excerpt'] ?? null,
                     'publishedAt' => $node['publishedAt'] ?? null,
-                    'author'      => data_get($node, 'authorV2.name'),
-                    'image'       => $image ?? null,
+                    'author' => data_get($node, 'authorV2.name'),
+                    'image' => $image ?? null,
 
                     // CONTENT ONLY (not raw HTML)
                     'content' => [
@@ -76,13 +78,13 @@ class BlogController extends Controller
             }
 
             $data = [
-                'id'     => $blog['id'] ?? null,
-                'title'  => $blog['title'] ?? null,
+                'id' => $blog['id'] ?? null,
+                'title' => $blog['title'] ?? null,
                 'handle' => $blog['handle'] ?? null,
                 'articles' => $articles,
                 'pageInfo' => [
                     'hasNextPage' => (bool) data_get($articlesConn, 'pageInfo.hasNextPage', false),
-                    'endCursor'   => data_get($articlesConn, 'pageInfo.endCursor'),
+                    'endCursor' => data_get($articlesConn, 'pageInfo.endCursor'),
                 ],
             ];
 
@@ -98,7 +100,7 @@ class BlogController extends Controller
     public function getArticleDetails(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'blog_handle'    => 'required|string',
+            'blog_handle' => 'required|string',
             'article_handle' => 'required|string',
         ]);
 
@@ -108,7 +110,7 @@ class BlogController extends Controller
 
         try {
             $vars = [
-                'blogHandle'    => trim($request->input('blog_handle')),
+                'blogHandle' => trim($request->input('blog_handle')),
                 'articleHandle' => trim($request->input('article_handle')),
             ];
 
@@ -117,7 +119,7 @@ class BlogController extends Controller
             $blog = data_get($response, 'data.blog');
             $article = data_get($response, 'data.blog.articleByHandle');
 
-            if (!$blog || !$article) {
+            if (! $blog || ! $article) {
                 return response()->json([
                     'status' => false,
                     'message' => 'Article not found',
@@ -132,18 +134,18 @@ class BlogController extends Controller
 
             $data = [
                 'blog' => [
-                    'id'     => $blog['id'] ?? null,
-                    'title'  => $blog['title'] ?? null,
+                    'id' => $blog['id'] ?? null,
+                    'title' => $blog['title'] ?? null,
                     'handle' => $blog['handle'] ?? null,
                 ],
                 'article' => [
-                    'id'          => $article['id'] ?? null,
-                    'title'       => $article['title'] ?? null,
-                    'handle'      => $article['handle'] ?? null,
-                    'excerpt'     => $article['excerpt'] ?? null,
+                    'id' => $article['id'] ?? null,
+                    'title' => $article['title'] ?? null,
+                    'handle' => $article['handle'] ?? null,
+                    'excerpt' => $article['excerpt'] ?? null,
                     'publishedAt' => $article['publishedAt'] ?? null,
-                    'author'      => data_get($article, 'authorV2.name'),
-                    'image'       => $image ?? null,
+                    'author' => data_get($article, 'authorV2.name'),
+                    'image' => $image ?? null,
 
                     // CONTENT ONLY (not raw HTML)
                     'content' => [
@@ -160,15 +162,19 @@ class BlogController extends Controller
 
     private function extractFirstImageFromHtml(string $html): ?array
     {
-        if (trim($html) === '') return null;
+        if (trim($html) === '') {
+            return null;
+        }
 
         libxml_use_internal_errors(true);
 
-        $dom = new \DOMDocument();
-        $dom->loadHTML('<?xml encoding="utf-8" ?><div>' . $html . '</div>');
+        $dom = new \DOMDocument;
+        $dom->loadHTML('<?xml encoding="utf-8" ?><div>'.$html.'</div>');
 
         $imgs = $dom->getElementsByTagName('img');
-        if ($imgs->length === 0) return null;
+        if ($imgs->length === 0) {
+            return null;
+        }
 
         $img = $imgs->item(0);
 
@@ -285,12 +291,12 @@ class BlogController extends Controller
         $raw = trim($url);
 
         // relative like "products/abc" => "/products/abc"
-        if (!str_starts_with($raw, 'http') && !str_starts_with($raw, '/')) {
-            $raw = '/' . $raw;
+        if (! str_starts_with($raw, 'http') && ! str_starts_with($raw, '/')) {
+            $raw = '/'.$raw;
         }
 
         $parsed = parse_url($raw);
-        $path = '/' . ltrim($parsed['path'] ?? '/', '/');
+        $path = '/'.ltrim($parsed['path'] ?? '/', '/');
 
         return [
             'raw' => $raw,
@@ -313,15 +319,19 @@ class BlogController extends Controller
     private function htmlToBlocks(string $html): array
     {
         $html = trim($html);
-        if ($html === '') return [];
+        if ($html === '') {
+            return [];
+        }
 
         libxml_use_internal_errors(true);
 
-        $dom = new \DOMDocument();
-        $dom->loadHTML('<?xml encoding="utf-8" ?><div>' . $html . '</div>');
+        $dom = new \DOMDocument;
+        $dom->loadHTML('<?xml encoding="utf-8" ?><div>'.$html.'</div>');
 
         $wrapper = $dom->getElementsByTagName('div')->item(0);
-        if (!$wrapper) return [];
+        if (! $wrapper) {
+            return [];
+        }
 
         $blocks = [];
 
@@ -336,10 +346,13 @@ class BlogController extends Controller
                         ],
                     ];
                 }
+
                 continue;
             }
 
-            if ($node->nodeType !== XML_ELEMENT_NODE) continue;
+            if ($node->nodeType !== XML_ELEMENT_NODE) {
+                continue;
+            }
 
             $tag = strtolower($node->nodeName);
 
@@ -351,18 +364,20 @@ class BlogController extends Controller
                     'level' => $level,
                     'text' => trim($node->textContent),
                 ];
+
                 continue;
             }
 
             // Paragraph
             if ($tag === 'p') {
                 $spans = $this->nodeToSpans($node);
-                if (!empty($spans)) {
+                if (! empty($spans)) {
                     $blocks[] = [
                         'type' => 'paragraph',
                         'spans' => $spans,
                     ];
                 }
+
                 continue;
             }
 
@@ -376,6 +391,7 @@ class BlogController extends Controller
                         'alt' => $node->getAttribute('alt') ?: null,
                     ];
                 }
+
                 continue;
             }
 
@@ -385,13 +401,14 @@ class BlogController extends Controller
                 foreach ($node->getElementsByTagName('li') as $li) {
                     $items[] = $this->nodeToSpans($li);
                 }
-                if (!empty($items)) {
+                if (! empty($items)) {
                     $blocks[] = [
                         'type' => 'list',
                         'ordered' => ($tag === 'ol'),
                         'items' => $items,
                     ];
                 }
+
                 continue;
             }
 
@@ -425,10 +442,13 @@ class BlogController extends Controller
                 if ($text !== '') {
                     $spans[] = ['type' => 'text', 'text' => $text];
                 }
+
                 continue;
             }
 
-            if ($child->nodeType !== XML_ELEMENT_NODE) continue;
+            if ($child->nodeType !== XML_ELEMENT_NODE) {
+                continue;
+            }
 
             $tag = strtolower($child->nodeName);
 
@@ -450,6 +470,7 @@ class BlogController extends Controller
                         $spans[] = ['type' => 'text', 'text' => $fallback];
                     }
                 }
+
                 continue;
             }
 
@@ -478,6 +499,7 @@ class BlogController extends Controller
     {
         $text = html_entity_decode($text ?? '');
         $text = preg_replace('/\s+/', ' ', $text);
+
         return trim($text);
     }
 }

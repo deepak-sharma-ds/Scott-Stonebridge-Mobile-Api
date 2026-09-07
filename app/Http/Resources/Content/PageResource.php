@@ -7,18 +7,17 @@ use Illuminate\Http\Request;
 
 /**
  * Page API Resource
- * 
+ *
  * Transforms PageDTO data to API response format.
  * Used for CMS pages and policy pages.
- * 
+ *
  * Requirements: 12.6, 12.9, 12.10, 12.11
  */
 class PageResource extends BaseApiResource
 {
     /**
      * Transform the resource into an array.
-     * 
-     * @param Request $request
+     *
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array

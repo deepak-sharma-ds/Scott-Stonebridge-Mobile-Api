@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class AudioRequest extends FormRequest
@@ -17,7 +18,7 @@ class AudioRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
@@ -30,7 +31,7 @@ class AudioRequest extends FormRequest
             'file' => [
                 $isUpdate ? 'nullable' : 'required',
                 'file',
-                'mimes:mp3,wav'
+                'mimes:mp3,wav',
             ],
             'duration_seconds' => 'nullable|integer',
         ];
@@ -43,10 +44,10 @@ class AudioRequest extends FormRequest
     {
         return [
             'package_id.required' => 'Please select a package.',
-            'package_id.exists'   => 'Selected package does not exist.',
-            'title.required'      => 'Please provide a title.',
-            'file.required'       => 'Please upload an audio file.',
-            'file.mimes'          => 'Audio file must be MP3 or WAV format.',
+            'package_id.exists' => 'Selected package does not exist.',
+            'title.required' => 'Please provide a title.',
+            'file.required' => 'Please upload an audio file.',
+            'file.mimes' => 'Audio file must be MP3 or WAV format.',
         ];
     }
 }

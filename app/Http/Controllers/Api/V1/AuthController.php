@@ -4,18 +4,23 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Contracts\Services\AuthServiceInterface;
 use App\Contracts\Services\CustomerServiceInterface;
+use App\Exceptions\ShopifyApiException;
+use App\Exceptions\ShopifyAuthException;
+use App\Exceptions\ShopifyNotFoundException;
 use App\Http\Controllers\Base\BaseApiController;
+use App\Http\Requests\Auth\ForgotPasswordRequest;
+use App\Http\Requests\Auth\ResetPasswordRequest;
 use App\Http\Resources\Customer\CustomerResource;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
  * Auth Controller (v1)
- * 
+ *
  * Handles authentication-related API endpoints.
  * Manages customer login, registration, and profile access.
  * Extends BaseApiController for standardized responses.
- * 
+ *
  * Requirements: 2.1, 2.2, 5.4, 11.6
  */
 class AuthController extends BaseApiController
@@ -27,9 +32,6 @@ class AuthController extends BaseApiController
 
     /**
      * Customer login
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function login(Request $request): JsonResponse
     {
@@ -51,7 +53,7 @@ class AuthController extends BaseApiController
                 );
             }
 
-            if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 return $this->validationError(
                     'Validation failed',
                     ['email' => ['The email must be a valid email address']]
@@ -67,7 +69,7 @@ class AuthController extends BaseApiController
                     'access_token' => $result['access_token'],
                 ]
             );
-        } catch (\App\Exceptions\ShopifyAuthException $e) {
+        } catch (ShopifyAuthException $e) {
             return $this->unauthorized($e->getMessage());
         } catch (\Exception $e) {
             return $this->error(
@@ -81,9 +83,6 @@ class AuthController extends BaseApiController
 
     /**
      * Customer registration
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function register(Request $request): JsonResponse
     {
@@ -100,7 +99,7 @@ class AuthController extends BaseApiController
 
             if (empty($email)) {
                 $errors['email'] = ['The email field is required'];
-            } elseif (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            } elseif (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
                 $errors['email'] = ['The email must be a valid email address'];
             }
 
@@ -110,7 +109,7 @@ class AuthController extends BaseApiController
                 $errors['password'] = ['The password must be at least 8 characters'];
             }
 
-            if (!empty($errors)) {
+            if (! empty($errors)) {
                 return $this->validationError('Validation failed', $errors);
             }
 
@@ -134,7 +133,7 @@ class AuthController extends BaseApiController
                 [],
                 201
             );
-        } catch (\App\Exceptions\ShopifyApiException $e) {
+        } catch (ShopifyApiException $e) {
             return $this->error(
                 'Registration failed',
                 ['error' => $e->getMessage()],
@@ -153,9 +152,6 @@ class AuthController extends BaseApiController
 
     /**
      * Get current customer profile
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function me(Request $request): JsonResponse
     {
@@ -174,7 +170,7 @@ class AuthController extends BaseApiController
                     'customer' => new CustomerResource($customer),
                 ]
             );
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             return $this->unauthorized($e->getMessage());
         } catch (\Exception $e) {
             return $this->error(
@@ -188,11 +184,8 @@ class AuthController extends BaseApiController
 
     /**
      * Request password reset
-     * 
-     * @param \App\Http\Requests\Auth\ForgotPasswordRequest $request
-     * @return JsonResponse
      */
-    public function forgotPassword(\App\Http\Requests\Auth\ForgotPasswordRequest $request): JsonResponse
+    public function forgotPassword(ForgotPasswordRequest $request): JsonResponse
     {
         try {
             $email = $request->validated('email');
@@ -203,7 +196,7 @@ class AuthController extends BaseApiController
                 'Password reset email sent successfully',
                 []
             );
-        } catch (\App\Exceptions\ShopifyApiException $e) {
+        } catch (ShopifyApiException $e) {
             return $this->error(
                 'Failed to send password reset email',
                 ['error' => $e->getMessage()],
@@ -222,11 +215,8 @@ class AuthController extends BaseApiController
 
     /**
      * Reset customer password
-     * 
-     * @param \App\Http\Requests\Auth\ResetPasswordRequest $request
-     * @return JsonResponse
      */
-    public function resetPassword(\App\Http\Requests\Auth\ResetPasswordRequest $request): JsonResponse
+    public function resetPassword(ResetPasswordRequest $request): JsonResponse
     {
         try {
             $token = $request->validated('token');
@@ -238,7 +228,7 @@ class AuthController extends BaseApiController
                 'Password reset successfully',
                 []
             );
-        } catch (\App\Exceptions\ShopifyApiException $e) {
+        } catch (ShopifyApiException $e) {
             return $this->error(
                 'Failed to reset password',
                 ['error' => $e->getMessage()],
@@ -257,9 +247,6 @@ class AuthController extends BaseApiController
 
     /**
      * Logout customer
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function logout(Request $request): JsonResponse
     {
@@ -276,7 +263,7 @@ class AuthController extends BaseApiController
                 'Logout successful',
                 []
             );
-        } catch (\App\Exceptions\ShopifyApiException $e) {
+        } catch (ShopifyApiException $e) {
             return $this->error(
                 'Logout failed',
                 ['error' => $e->getMessage()],
@@ -295,9 +282,6 @@ class AuthController extends BaseApiController
 
     /**
      * Suspend customer account
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function suspend(Request $request): JsonResponse
     {
@@ -321,7 +305,7 @@ class AuthController extends BaseApiController
                 'Account suspended successfully',
                 []
             );
-        } catch (\App\Exceptions\ShopifyApiException $e) {
+        } catch (ShopifyApiException $e) {
             return $this->error(
                 'Failed to suspend account',
                 ['error' => $e->getMessage()],

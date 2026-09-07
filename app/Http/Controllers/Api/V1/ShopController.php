@@ -9,10 +9,10 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Shop Controller (v1)
- * 
+ *
  * Handles shop-level endpoints including markets and currency information.
  * Public endpoints - no authentication required.
- * 
+ *
  * Requirements: Currency API
  */
 class ShopController extends BaseApiController
@@ -23,11 +23,9 @@ class ShopController extends BaseApiController
 
     /**
      * Get supported currencies
-     * 
+     *
      * Returns a list of all supported currency codes for the shop.
      * Public endpoint - no authentication required.
-     * 
-     * @return JsonResponse
      */
     public function currencies(): JsonResponse
     {
@@ -59,12 +57,10 @@ class ShopController extends BaseApiController
 
     /**
      * Get shop markets
-     * 
+     *
      * Returns detailed information about all supported markets including
      * countries, currencies, and regional settings.
      * Public endpoint - no authentication required.
-     * 
-     * @return JsonResponse
      */
     public function markets(): JsonResponse
     {

@@ -2,16 +2,16 @@
 
 namespace App\Logging;
 
+use Illuminate\Support\Str;
 use Monolog\LogRecord;
 use Monolog\Processor\ProcessorInterface;
-use Illuminate\Support\Str;
 
 /**
  * Monolog processor that adds correlation ID to all log records
- * 
+ *
  * This processor adds a correlation_id field to every log entry,
  * enabling request tracking across system layers and external services.
- * 
+ *
  * The correlation ID is:
  * - Generated once per request
  * - Stored in the request context
@@ -23,16 +23,11 @@ class CorrelationIdProcessor implements ProcessorInterface
 {
     /**
      * The correlation ID for the current request
-     *
-     * @var string|null
      */
     protected static ?string $correlationId = null;
 
     /**
      * Add correlation ID to the log record
-     *
-     * @param LogRecord $record
-     * @return LogRecord
      */
     public function __invoke(LogRecord $record): LogRecord
     {
@@ -46,8 +41,6 @@ class CorrelationIdProcessor implements ProcessorInterface
 
     /**
      * Get or generate correlation ID
-     *
-     * @return string
      */
     protected function getCorrelationId(): string
     {
@@ -75,9 +68,6 @@ class CorrelationIdProcessor implements ProcessorInterface
 
     /**
      * Set correlation ID (used by middleware)
-     *
-     * @param string $correlationId
-     * @return void
      */
     public static function setCorrelationId(string $correlationId): void
     {
@@ -86,8 +76,6 @@ class CorrelationIdProcessor implements ProcessorInterface
 
     /**
      * Get current correlation ID
-     *
-     * @return string|null
      */
     public static function getCurrentCorrelationId(): ?string
     {
@@ -96,8 +84,6 @@ class CorrelationIdProcessor implements ProcessorInterface
 
     /**
      * Reset correlation ID (useful for testing)
-     *
-     * @return void
      */
     public static function reset(): void
     {

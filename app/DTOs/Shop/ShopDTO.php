@@ -6,7 +6,7 @@ use App\DTOs\Base\BaseDTO;
 
 /**
  * Shop DTO
- * 
+ *
  * Represents shop information including supported currencies and markets
  */
 class ShopDTO extends BaseDTO
@@ -25,8 +25,6 @@ class ShopDTO extends BaseDTO
 
     /**
      * Validate the DTO data
-     * 
-     * @return void
      */
     protected function validate(): void
     {
@@ -39,9 +37,6 @@ class ShopDTO extends BaseDTO
 
     /**
      * Create from Shopify API response
-     * 
-     * @param array $data
-     * @return self
      */
     public static function fromShopifyResponse(array $data): self
     {
@@ -51,7 +46,7 @@ class ShopDTO extends BaseDTO
 
         // Extract enabled currencies
         $enabledCurrencies = $paymentSettings['enabledPresentmentCurrencies'] ?? [];
-        
+
         // Extract markets from available countries
         $markets = [];
         foreach ($localization['availableCountries'] ?? [] as $country) {
@@ -71,8 +66,6 @@ class ShopDTO extends BaseDTO
 
     /**
      * Convert to array
-     * 
-     * @return array
      */
     public function toArray(): array
     {
@@ -82,30 +75,28 @@ class ShopDTO extends BaseDTO
             'domain' => $this->domain,
             'primary_currency' => $this->primaryCurrency,
             'enabled_currencies' => $this->enabledCurrencies,
-            'markets' => array_map(fn($market) => $market->toArray(), $this->markets),
+            'markets' => array_map(fn ($market) => $market->toArray(), $this->markets),
             'country_code' => $this->countryCode,
         ];
     }
 
     /**
      * Get unique list of supported currency codes
-     * 
-     * @return array
      */
     public function getSupportedCurrencies(): array
     {
         $currencies = [];
-        
+
         // Add enabled presentment currencies
         foreach ($this->enabledCurrencies as $currency) {
             $currencies[$currency] = $currency;
         }
-        
+
         // Add currencies from markets
         foreach ($this->markets as $market) {
             $currencies[$market->currencyCode] = $market->currencyCode;
         }
-        
+
         return array_values($currencies);
     }
 }

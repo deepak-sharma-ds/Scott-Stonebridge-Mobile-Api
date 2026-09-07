@@ -9,7 +9,7 @@ use Tests\TestCase;
 
 /**
  * CartLineItemResource Unit Tests
- * 
+ *
  * Tests transformation logic from CartLineItemDTO to API response format.
  * Validates field mapping, pricing information, and edge cases.
  */
@@ -259,7 +259,7 @@ class CartLineItemResourceTest extends TestCase
         // Assert - verify snake_case field names
         $this->assertArrayHasKey('variant_id', $result);
         $this->assertArrayHasKey('product_id', $result);
-        
+
         // Verify camelCase fields are NOT present
         $this->assertArrayNotHasKey('variantId', $result);
         $this->assertArrayNotHasKey('productId', $result);
@@ -289,7 +289,7 @@ class CartLineItemResourceTest extends TestCase
         $this->assertArrayHasKey('currency', $result);
         $this->assertEquals('45.99', $result['price']);
         $this->assertEquals('USD', $result['currency']);
-        
+
         // Verify the price field is not an array
         $this->assertIsString($result['price']);
         $this->assertIsString($result['currency']);

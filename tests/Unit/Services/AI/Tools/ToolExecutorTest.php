@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace Tests\Unit\Services\AI\Tools;
 
 use App\Contracts\Services\Sales\UpsellServiceInterface;
+use App\Contracts\Shopify\StorefrontApiClientInterface;
+use App\DTOs\Chat\CartContextDTO;
+use App\DTOs\Chat\CustomerContextDTO;
 use App\Exceptions\AI\AuthRequiredException;
 use App\Models\AiConversation;
 use App\Models\AiCustomerSession;
@@ -15,6 +18,7 @@ use App\Services\AI\MCP\StorefrontMcpClient;
 use App\Services\AI\Streaming\ChunkEmitter;
 use App\Services\AI\Tools\ToolExecutor;
 use App\Services\AI\Tools\ToolResult;
+use App\Services\Shopify\AdminService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -66,17 +70,32 @@ class ToolExecutorTest extends TestCase
 
     public function test_search_catalog_routes_to_storefront_and_emits_products_chunk(): void
     {
-        $this->storefront
-            ->expects($this->once())
-            ->method('callTool')
-            ->with('search_catalog', ['query' => 'tarot'], self::SHOP)
+        $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
+        $storefrontApi->expects($this->once())
+            ->method('query')
             ->willReturn([
-                'products' => [[
-                    'id' => 'p1', 'title' => 'Deck', 'handle' => 'deck',
-                    'variants' => [['id' => 'v1', 'price' => '24.99']],
-                    'currency_code' => 'GBP',
-                ]],
+                'data' => [
+                    'collectionByHandle' => [
+                        'products' => [
+                            'edges' => [
+                                [
+                                    'node' => [
+                                        'id' => 'gid://shopify/Product/1',
+                                        'title' => 'Tarot Deck',
+                                        'handle' => 'tarot-deck',
+                                        'variants' => [
+                                            'edges' => [
+                                                ['node' => ['id' => 'gid://shopify/ProductVariant/11', 'price' => ['amount' => '24.99', 'currencyCode' => 'GBP'], 'availableForSale' => true]],
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
             ]);
+        $this->app->instance(StorefrontApiClientInterface::class, $storefrontApi);
 
         $output = $this->invoke('search_catalog', ['query' => 'tarot']);
 
@@ -84,12 +103,82 @@ class ToolExecutorTest extends TestCase
         $this->assertStringContainsString('"price_minor_units":2499', $output);
     }
 
+    public function test_search_catalog_passes_us_country_for_usd_currency(): void
+    {
+        $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
+        $storefrontApi->expects($this->once())
+            ->method('query')
+            ->with('storefront/collection/collection_products', [
+                'handle' => 'readings',
+                'limit' => 10,
+                'country' => 'US',
+            ])
+            ->willReturn([
+                'data' => [
+                    'collectionByHandle' => [
+                        'products' => [
+                            'edges' => [
+                                [
+                                    'node' => [
+                                        'id' => 'gid://shopify/Product/1',
+                                        'title' => 'Reading',
+                                        'handle' => 'reading',
+                                        'variants' => [
+                                            'edges' => [
+                                                ['node' => ['id' => 'gid://shopify/ProductVariant/11', 'price' => ['amount' => '21.00', 'currencyCode' => 'USD'], 'availableForSale' => true]],
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ]);
+        $this->app->instance(StorefrontApiClientInterface::class, $storefrontApi);
+
+        $ctx = new ChatSessionContext(
+            sessionId: 's1',
+            shopDomain: 'demo.myshopify.com',
+            currency: 'USD',
+            country: 'US',
+        );
+
+        $output = $this->invoke('search_catalog', ['query' => 'reading'], $ctx);
+
+        $this->assertStringContainsString('"type":"products"', $output);
+        $this->assertStringContainsString('"currency":"USD"', $output);
+        $this->assertStringContainsString('"price_minor_units":2100', $output);
+    }
+
     public function test_search_catalog_second_call_hits_cache(): void
     {
-        $this->storefront
-            ->expects($this->once())   // ← critical: only ONE upstream call
-            ->method('callTool')
-            ->willReturn(['products' => [['id' => 'p1', 'title' => 't', 'handle' => 'h', 'variants' => [['id' => 'v', 'price' => '1.00']]]]]);
+        $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
+        $storefrontApi->expects($this->once())   // ← critical: only ONE upstream call
+            ->method('query')
+            ->willReturn([
+                'data' => [
+                    'collectionByHandle' => [
+                        'products' => [
+                            'edges' => [
+                                [
+                                    'node' => [
+                                        'id' => 'gid://shopify/Product/1',
+                                        'title' => 'Tarot Deck',
+                                        'handle' => 'tarot-deck',
+                                        'variants' => [
+                                            'edges' => [
+                                                ['node' => ['id' => 'gid://shopify/ProductVariant/11', 'price' => ['amount' => '24.99', 'currencyCode' => 'GBP'], 'availableForSale' => true]],
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ]);
+        $this->app->instance(StorefrontApiClientInterface::class, $storefrontApi);
 
         $this->invoke('search_catalog', ['query' => 'tarot']);
         $this->invoke('search_catalog', ['query' => 'tarot']);
@@ -111,18 +200,215 @@ class ToolExecutorTest extends TestCase
         $this->assertStringContainsString('"price_minor_units":4900', $output);
     }
 
-    public function test_update_cart_emits_cart_state(): void
+    public function test_update_cart_emits_cart_action_for_a_shown_variant(): void
     {
-        $this->storefront->method('callTool')->willReturn([
-            'cart' => [
-                'id' => 'c1', 'currency_code' => 'GBP', 'checkout_url' => 'https://demo/checkout',
-                'lines' => [['merchandise_id' => 'v1', 'quantity' => 1, 'cost' => ['total' => ['amount' => '10.00']]]],
+        // update_cart never calls Shopify — the storefront's own cart is the
+        // single source of truth (ADR 0010). No mock expectation on
+        // $this->storefront is set, so any callTool() invocation would fail
+        // the test by itself.
+        $ctx = $this->ctx(shownVariantIds: ['gid://shopify/ProductVariant/11' => true]);
+
+        $output = $this->invoke('update_cart', [
+            'items' => [['action' => 'add', 'variant_id' => 'gid://shopify/ProductVariant/11', 'quantity' => 2]],
+        ], $ctx);
+
+        $this->assertStringContainsString('"type":"cart_action"', $output);
+        $this->assertStringContainsString('"variant_id":"gid://shopify/ProductVariant/11"', $output);
+        $this->assertStringContainsString('"quantity":2', $output);
+    }
+
+    public function test_update_cart_rejects_a_variant_never_shown_or_in_cart(): void
+    {
+        $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
+        $storefrontApi->method('query')->willReturn(['data' => ['node' => null]]);
+        $this->app->instance(StorefrontApiClientInterface::class, $storefrontApi);
+
+        ob_start();
+        try {
+            $result = $this->executor->execute(
+                'update_cart',
+                ['items' => [['action' => 'add', 'variant_id' => 'gid://shopify/ProductVariant/999', 'quantity' => 1]]],
+                $this->ctx(),
+            );
+        } finally {
+            ob_end_clean();
+        }
+
+        $this->assertFalse($result->isSuccess());
+    }
+
+    public function test_update_cart_validates_unshown_variant_via_storefront_api(): void
+    {
+        $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
+        $storefrontApi->expects($this->once())
+            ->method('query')
+            ->with('storefront/products/get_variant_by_id', [
+                'id' => 'gid://shopify/ProductVariant/41603517317294',
+                'country' => 'GB',
+            ])
+            ->willReturn([
+                'data' => [
+                    'node' => [
+                        'id' => 'gid://shopify/ProductVariant/41603517317294',
+                        'title' => 'Assorted Sticks',
+                        'availableForSale' => true,
+                    ],
+                ],
+            ]);
+        $this->app->instance(StorefrontApiClientInterface::class, $storefrontApi);
+
+        $output = $this->invoke('update_cart', [
+            'items' => [['action' => 'add', 'variant_id' => '41603517317294', 'quantity' => 1]],
+        ], $this->ctx());
+
+        $this->assertStringContainsString('"type":"cart_action"', $output);
+        $this->assertStringContainsString('"variant_id":"gid://shopify/ProductVariant/41603517317294"', $output);
+    }
+
+    public function test_update_cart_allows_removing_a_variant_already_in_the_cart_snapshot(): void
+    {
+        $cart = CartContextDTO::fromArray([
+            'id' => null,
+            'item_count' => 1,
+            'total_price' => '24.99',
+            'currency' => 'GBP',
+            'items' => [['variant_id' => 'gid://shopify/ProductVariant/11', 'quantity' => 1]],
+        ]);
+
+        $output = $this->invoke('update_cart', [
+            'items' => [['action' => 'remove', 'variant_id' => 'gid://shopify/ProductVariant/11']],
+        ], $this->ctx(cart: $cart));
+
+        $this->assertStringContainsString('"type":"cart_action"', $output);
+        $this->assertStringContainsString('"action":"remove"', $output);
+    }
+
+    public function test_get_cart_returns_variant_ids_in_summary(): void
+    {
+        $cart = CartContextDTO::fromArray([
+            'id' => null,
+            'item_count' => 2,
+            'total_price' => '50.00',
+            'currency' => 'GBP',
+            'items' => [
+                [
+                    'id' => 40729360466094,
+                    'variant_id' => 40729360466094,
+                    'product_id' => 7229405069486,
+                    'title' => 'Aura Candle',
+                    'handle' => 'aura-candle',
+                    'quantity' => 2,
+                    'price' => '25.00',
+                ],
             ],
         ]);
 
-        $output = $this->invoke('update_cart', ['cart_id' => 'c1', 'lines' => [['merchandise_id' => 'v1', 'quantity' => 1]]]);
+        $result = $this->executor->execute('get_cart', [], $this->ctx(cart: $cart));
 
-        $this->assertStringContainsString('"type":"cart_state"', $output);
+        $this->assertTrue($result->isSuccess());
+        $this->assertStringContainsString('variant_id: 40729360466094', $result->messageForAi);
+        $this->assertStringContainsString('handle: aura-candle', $result->messageForAi);
+        $this->assertStringContainsString('Aura Candle', $result->messageForAi);
+    }
+
+    public function test_update_cart_resolves_variant_from_title_or_handle_in_cart(): void
+    {
+        $cart = CartContextDTO::fromArray([
+            'id' => null,
+            'item_count' => 1,
+            'total_price' => '25.00',
+            'currency' => 'GBP',
+            'items' => [
+                [
+                    'id' => 40729360466094,
+                    'variant_id' => 40729360466094,
+                    'title' => 'Aura Candle',
+                    'handle' => 'aura-candle',
+                    'quantity' => 1,
+                ],
+            ],
+        ]);
+
+        $output = $this->invoke('update_cart', [
+            'items' => [['action' => 'remove', 'variant_id' => 'aura-candle']],
+        ], $this->ctx(cart: $cart));
+
+        $this->assertStringContainsString('"type":"cart_action"', $output);
+        $this->assertStringContainsString('"variant_id":"40729360466094"', $output);
+        $this->assertStringContainsString('"action":"remove"', $output);
+    }
+
+    public function test_update_cart_with_quantity_zero_normalizes_to_remove(): void
+    {
+        $cart = CartContextDTO::fromArray([
+            'id' => null,
+            'item_count' => 1,
+            'total_price' => '25.00',
+            'currency' => 'GBP',
+            'items' => [
+                [
+                    'id' => 40729360466094,
+                    'variant_id' => 40729360466094,
+                    'title' => 'Aura Candle',
+                    'quantity' => 1,
+                ],
+            ],
+        ]);
+
+        $output = $this->invoke('update_cart', [
+            'items' => [['action' => 'update', 'variant_id' => '40729360466094', 'quantity' => 0]],
+        ], $this->ctx(cart: $cart));
+
+        $this->assertStringContainsString('"type":"cart_action"', $output);
+        $this->assertStringContainsString('"action":"remove"', $output);
+        $this->assertStringContainsString('"quantity":0', $output);
+    }
+
+    public function test_update_cart_with_clear_action_removes_all_items(): void
+    {
+        $cart = CartContextDTO::fromArray([
+            'id' => null,
+            'item_count' => 2,
+            'total_price' => '50.00',
+            'currency' => 'GBP',
+            'items' => [
+                ['id' => '101', 'variant_id' => '101', 'title' => 'Item 1', 'quantity' => 1],
+                ['id' => '102', 'variant_id' => '102', 'title' => 'Item 2', 'quantity' => 1],
+            ],
+        ]);
+
+        $output = $this->invoke('update_cart', [
+            'items' => [['action' => 'clear']],
+        ], $this->ctx(cart: $cart));
+
+        $this->assertStringContainsString('"type":"cart_action"', $output);
+        $this->assertStringContainsString('"variant_id":"101"', $output);
+        $this->assertStringContainsString('"variant_id":"102"', $output);
+    }
+
+    public function test_customer_mcp_when_is_guest_emits_auth_required_without_checking_db(): void
+    {
+        $convo = AiConversation::factory()->create([
+            'session_id' => self::SESSION_ID,
+            'shop_domain' => self::SHOP,
+        ]);
+        AiCustomerSession::create([
+            'session_id' => $convo->session_id,
+            'customer_access_token' => 'shpca_active',
+            'expires_at' => now()->addHour(),
+        ]);
+
+        $guestCtx = new ChatSessionContext(
+            sessionId: self::SESSION_ID,
+            shopDomain: self::SHOP,
+            isGuest: true,
+        );
+
+        $this->customer->expects($this->never())->method('callTool');
+
+        $output = $this->invoke('get_order_status', ['order_number' => '1234'], $guestCtx);
+
+        $this->assertStringContainsString('"type":"auth_required"', $output);
     }
 
     public function test_policy_query_emits_policy_answer(): void
@@ -145,21 +431,11 @@ class ToolExecutorTest extends TestCase
         $output = $this->invoke('get_order_status', ['order_number' => '1234']);
 
         $this->assertStringContainsString('"type":"auth_required"', $output);
-        $this->assertStringContainsString('"reason":"customer_account"', $output);
+        $this->assertStringContainsString('https://scottstonebridge.com/account/login', $output);
     }
 
     public function test_get_order_status_with_auth_emits_order_tracking(): void
     {
-        $convo = AiConversation::factory()->create([
-            'session_id' => self::SESSION_ID,
-            'shop_domain' => self::SHOP,
-        ]);
-        AiCustomerSession::create([
-            'session_id' => $convo->session_id,
-            'customer_access_token' => 'shpca_active',
-            'expires_at' => now()->addHour(),
-        ]);
-
         $this->customer
             ->expects($this->once())
             ->method('callTool')
@@ -168,7 +444,14 @@ class ToolExecutorTest extends TestCase
                 'order' => ['name' => '#1234', 'fulfillment_status' => 'IN_TRANSIT', 'financial_status' => 'PAID'],
             ]);
 
-        $output = $this->invoke('get_order_status', ['order_number' => '1234']);
+        $ctx = new ChatSessionContext(
+            sessionId: self::SESSION_ID,
+            shopDomain: self::SHOP,
+            customerAccessToken: 'shpca_active',
+            isGuest: false,
+        );
+
+        $output = $this->invoke('get_order_status', ['order_number' => '1234'], $ctx);
 
         $this->assertStringContainsString('"type":"order_tracking"', $output);
         $this->assertStringContainsString('"status":"in_transit"', $output);
@@ -176,20 +459,22 @@ class ToolExecutorTest extends TestCase
 
     public function test_customer_mcp_401_falls_back_to_auth_required(): void
     {
-        $convo = AiConversation::factory()->create([
-            'session_id' => self::SESSION_ID, 'shop_domain' => self::SHOP,
-        ]);
-        AiCustomerSession::create([
-            'session_id' => $convo->session_id,
-            'customer_access_token' => 'expired',
-            'expires_at' => now()->addHour(),
-        ]);
-
         $this->customer
             ->method('callTool')
             ->willThrowException(new AuthRequiredException);
 
-        $output = $this->invoke('get_most_recent_order_status', []);
+        $graphMock = $this->createMock(CustomerAccountGraphClient::class);
+        $graphMock->method('query')->willThrowException(new AuthRequiredException);
+        $this->app->instance(CustomerAccountGraphClient::class, $graphMock);
+
+        $ctx = new ChatSessionContext(
+            sessionId: self::SESSION_ID,
+            shopDomain: self::SHOP,
+            customerAccessToken: 'expired',
+            isGuest: false,
+        );
+
+        $output = $this->invoke('get_most_recent_order_status', [], $ctx);
 
         $this->assertStringContainsString('"type":"auth_required"', $output);
     }
@@ -201,21 +486,11 @@ class ToolExecutorTest extends TestCase
         $output = $this->invoke('list_customer_orders', []);
 
         $this->assertStringContainsString('"type":"auth_required"', $output);
-        $this->assertStringContainsString('"reason":"customer_account"', $output);
+        $this->assertStringContainsString('https://scottstonebridge.com/account/login', $output);
     }
 
     public function test_list_customer_orders_with_auth_emits_order_list(): void
     {
-        $convo = AiConversation::factory()->create([
-            'session_id' => self::SESSION_ID,
-            'shop_domain' => self::SHOP,
-        ]);
-        AiCustomerSession::create([
-            'session_id' => $convo->session_id,
-            'customer_access_token' => 'shpca_active',
-            'expires_at' => now()->addHour(),
-        ]);
-
         $graph = $this->createMock(CustomerAccountGraphClient::class);
         $graph->expects($this->once())
             ->method('query')
@@ -253,9 +528,16 @@ class ToolExecutorTest extends TestCase
             $graph,
         );
 
+        $ctx = new ChatSessionContext(
+            sessionId: self::SESSION_ID,
+            shopDomain: self::SHOP,
+            customerAccessToken: 'shpca_active',
+            isGuest: false,
+        );
+
         ob_start();
         try {
-            $executor->execute('list_customer_orders', [], $this->ctx());
+            $executor->execute('list_customer_orders', [], $ctx);
         } finally {
             $output = (string) ob_get_clean();
         }
@@ -266,6 +548,148 @@ class ToolExecutorTest extends TestCase
         $this->assertStringContainsString('"order_url":"https://scottstonebridge.com/account/orders/adc11bfa"', $output);
         $this->assertStringContainsString('"has_next_page":true', $output);
         $this->assertStringContainsString('"cursor":"CURSOR_2"', $output);
+    }
+
+    public function test_list_customer_orders_with_storefront_logged_in_customer_queries_admin_api(): void
+    {
+        $customer = new CustomerContextDTO(
+            customerId: '24567362388351',
+            loggedIn: true,
+            email: 'ajay.yadav@dotsquares.com',
+            locale: 'en',
+        );
+
+        $ctx = new ChatSessionContext(
+            sessionId: self::SESSION_ID,
+            shopDomain: self::SHOP,
+            isGuest: false,
+            customer: $customer,
+        );
+
+        $adminMock = $this->createMock(AdminService::class);
+        $adminMock->expects($this->once())
+            ->method('request')
+            ->with($this->anything(), ['query' => 'email:ajay.yadav@dotsquares.com', 'first' => 10])
+            ->willReturn([
+                'data' => [
+                    'orders' => [
+                        'pageInfo' => ['hasNextPage' => false, 'endCursor' => null],
+                        'edges' => [
+                            ['node' => [
+                                'id' => 'gid://shopify/Order/12345',
+                                'name' => '#1042',
+                                'processedAt' => '2026-08-20T10:00:00Z',
+                                'displayFulfillmentStatus' => 'FULFILLED',
+                                'displayFinancialStatus' => 'PAID',
+                                'totalPriceSet' => [
+                                    'shopMoney' => ['amount' => '80.00', 'currencyCode' => 'GBP'],
+                                    'presentmentMoney' => ['amount' => '80.00', 'currencyCode' => 'GBP'],
+                                ],
+                                'statusUrl' => 'https://scottstonebridge.com/account/orders/1042',
+                                'fulfillments' => [
+                                    [
+                                        'trackingInfo' => [['number' => 'TRK123', 'url' => 'https://track.com', 'company' => 'Royal Mail']],
+                                        'estimatedDeliveryAt' => '2026-08-25T00:00:00Z',
+                                    ],
+                                ],
+                                'shippingAddress' => ['city' => 'London'],
+                            ]],
+                        ],
+                    ],
+                ],
+            ]);
+
+        $executor = new ToolExecutor(
+            $this->storefront,
+            $this->customer,
+            $this->emitter,
+            $this->upsell,
+            null,
+            null,
+            null,
+            $adminMock,
+        );
+
+        ob_start();
+        try {
+            $executor->execute('list_customer_orders', [], $ctx);
+        } finally {
+            $output = (string) ob_get_clean();
+        }
+
+        $this->assertStringContainsString('"type":"order_list"', $output);
+        $this->assertStringContainsString('"order_number":"1042"', $output);
+        $this->assertStringContainsString('"status":"delivered"', $output);
+        $this->assertStringContainsString('"order_url":"https://scottstonebridge.com/account/orders/1042"', $output);
+    }
+
+    public function test_customer_graph_failure_falls_back_to_admin_api_for_storefront_logged_in_customer(): void
+    {
+        $customer = new CustomerContextDTO(
+            customerId: '24567362388351',
+            loggedIn: true,
+            email: 'ajay.yadav@dotsquares.com',
+            locale: 'en',
+        );
+
+        $ctx = new ChatSessionContext(
+            sessionId: self::SESSION_ID,
+            shopDomain: self::SHOP,
+            customerAccessToken: 'stale_token',
+            isGuest: false,
+            customer: $customer,
+        );
+
+        $graph = $this->createMock(CustomerAccountGraphClient::class);
+        $graph->expects($this->once())
+            ->method('query')
+            ->willThrowException(new AuthRequiredException('Token expired'));
+
+        $adminMock = $this->createMock(AdminService::class);
+        $adminMock->expects($this->once())
+            ->method('request')
+            ->willReturn([
+                'data' => [
+                    'orders' => [
+                        'pageInfo' => ['hasNextPage' => false, 'endCursor' => null],
+                        'edges' => [
+                            ['node' => [
+                                'id' => 'gid://shopify/Order/99999',
+                                'name' => '#25601',
+                                'processedAt' => '2026-08-12T10:00:00Z',
+                                'displayFulfillmentStatus' => 'UNFULFILLED',
+                                'displayFinancialStatus' => 'PAID',
+                                'totalPriceSet' => [
+                                    'shopMoney' => ['amount' => '0.00', 'currencyCode' => 'GBP'],
+                                ],
+                                'statusUrl' => 'https://scottstonebridge.com/account/orders/25601',
+                            ]],
+                        ],
+                    ],
+                ],
+            ]);
+
+        $executor = new ToolExecutor(
+            $this->storefront,
+            $this->customer,
+            $this->emitter,
+            $this->upsell,
+            null,
+            $graph,
+            null,
+            $adminMock,
+        );
+
+        ob_start();
+        try {
+            $executor->execute('list_customer_orders', [], $ctx);
+        } finally {
+            $output = (string) ob_get_clean();
+        }
+
+        $this->assertStringNotContainsString('"type":"auth_required"', $output);
+        $this->assertStringContainsString('"type":"order_list"', $output);
+        $this->assertStringContainsString('"order_number":"25601"', $output);
     }
 
     public function test_expired_access_token_is_refreshed_as_public_client(): void
@@ -358,29 +782,81 @@ class ToolExecutorTest extends TestCase
         });
     }
 
-    public function test_start_checkout_synthesises_checkout_link_from_cart(): void
+    public function test_start_checkout_emits_checkout_action(): void
     {
-        // start_checkout is internal — it calls get_cart upstream and surfaces
-        // the cart's hosted checkout URL.
-        $this->storefront
-            ->expects($this->once())
-            ->method('callTool')
-            ->with('get_cart', ['cart_id' => 'c1'], self::SHOP)
-            ->willReturn([
-                'cart' => [
-                    'id' => 'c1',
-                    'total_quantity' => 2,
-                    'cost' => ['subtotal_amount' => ['amount' => '64.50', 'currency' => 'GBP']],
-                    'checkout_url' => 'https://demo.myshopify.com/checkouts/xyz',
-                ],
-            ]);
+        // start_checkout no longer calls Shopify — the storefront navigates
+        // to its own /checkout for whatever cart currently exists (ADR 0010).
+        // No mock expectation on $this->storefront is set, so any callTool()
+        // invocation would fail the test by itself.
+        $output = $this->invoke('start_checkout', []);
 
-        $output = $this->invoke('start_checkout', ['cart_id' => 'c1']);
+        $this->assertStringContainsString('"type":"checkout_action"', $output);
+        $this->assertStringContainsString('"path":"/checkout"', $output);
+    }
 
-        $this->assertStringContainsString('"type":"checkout_link"', $output);
-        $this->assertStringContainsString('"checkout_url":"https://demo.myshopify.com/checkouts/xyz"', $output);
-        $this->assertStringContainsString('"total_amount":64.5', $output);
-        $this->assertStringContainsString('"currency":"GBP"', $output);
+    public function test_get_cart_reads_from_storefront_snapshot_without_calling_shopify(): void
+    {
+        $cart = CartContextDTO::fromArray([
+            'id' => null,
+            'item_count' => 2,
+            'total_price' => '64.50',
+            'currency' => 'GBP',
+            'items' => [['title' => 'The Fool Tarot', 'quantity' => 2, 'variant_id' => 'gid://shopify/ProductVariant/11']],
+        ]);
+
+        // get_cart doesn't emit any SSE chunk — the frontend already knows
+        // its own live cart (that's where this snapshot came from). It only
+        // needs to answer the model in text. No mock expectation on
+        // $this->storefront is set, so any callTool() call would fail this
+        // test by itself.
+        $result = $this->executor->execute('get_cart', [], $this->ctx(cart: $cart));
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertStringContainsString('The Fool Tarot', $result->messageForAi);
+        $this->assertStringContainsString('x2', $result->messageForAi);
+        $this->assertStringContainsString('GBP 64.50', $result->messageForAi);
+    }
+
+    public function test_get_cart_reports_empty_when_no_snapshot_sent(): void
+    {
+        $result = $this->executor->execute('get_cart', [], $this->ctx());
+
+        $this->assertTrue($result->isSuccess());
+        $this->assertStringContainsString('empty', $result->messageForAi);
+    }
+
+    public function test_suggest_upsell_reads_cart_items_from_storefront_snapshot(): void
+    {
+        $cart = CartContextDTO::fromArray([
+            'id' => null,
+            'item_count' => 1,
+            'total_price' => '24.99',
+            'currency' => 'GBP',
+            'items' => [['product_id' => 'gid://shopify/Product/1', 'quantity' => 1]],
+        ]);
+
+        $this->upsell->expects($this->once())
+            ->method('getUpsells')
+            ->with([['product_id' => 'gid://shopify/Product/1', 'quantity' => 1]], self::SHOP, 'GBP')
+            ->willReturn([]);
+
+        // No mock expectation on $this->storefront is set, so any callTool()
+        // invocation (the old get_cart round-trip) would fail the test.
+        $output = $this->invoke('suggest_upsell', [], $this->ctx(cart: $cart));
+
+        $this->assertStringContainsString('"type":"upsell_offer"', $output);
+    }
+
+    public function test_suggest_upsell_errors_on_empty_cart(): void
+    {
+        ob_start();
+        try {
+            $result = $this->executor->execute('suggest_upsell', [], $this->ctx());
+        } finally {
+            ob_end_clean();
+        }
+
+        $this->assertFalse($result->isSuccess());
     }
 
     public function test_suggest_quick_replies_emits_quick_replies(): void
@@ -433,11 +909,11 @@ class ToolExecutorTest extends TestCase
         $this->assertStringContainsString('too many requests', $output);
     }
 
-    private function invoke(string $toolName, array $args): string
+    private function invoke(string $toolName, array $args, ?ChatSessionContext $ctx = null): string
     {
         ob_start();
         try {
-            $result = $this->executor->execute($toolName, $args, $this->ctx());
+            $result = $this->executor->execute($toolName, $args, $ctx ?? $this->ctx());
             $this->assertInstanceOf(ToolResult::class, $result);
         } finally {
             $output = (string) ob_get_clean();
@@ -446,11 +922,13 @@ class ToolExecutorTest extends TestCase
         return $output;
     }
 
-    private function ctx(): ChatSessionContext
+    private function ctx(?CartContextDTO $cart = null, array $shownVariantIds = []): ChatSessionContext
     {
         return new ChatSessionContext(
             sessionId: self::SESSION_ID,
             shopDomain: self::SHOP,
+            cartSnapshot: $cart,
+            shownVariantIds: $shownVariantIds,
         );
     }
 }

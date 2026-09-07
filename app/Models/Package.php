@@ -2,9 +2,9 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Database\Eloquent\Builder;
 
 class Package extends Model
 {
@@ -17,7 +17,7 @@ class Package extends Model
         'currency',
         'shopify_tag',
         'cover_image',
-        'status'
+        'status',
     ];
 
     protected $casts = [
@@ -55,8 +55,8 @@ class Package extends Model
     {
         return $query->where(function ($q) use ($term) {
             $q->where('title', 'like', "%{$term}%")
-              ->orWhere('description', 'like', "%{$term}%")
-              ->orWhere('shopify_tag', 'like', "%{$term}%");
+                ->orWhere('description', 'like', "%{$term}%")
+                ->orWhere('shopify_tag', 'like', "%{$term}%");
         });
     }
 
@@ -64,7 +64,7 @@ class Package extends Model
     {
         return $query->with(['audios' => function ($q) {
             $q->select('id', 'package_id', 'title', 'duration_seconds', 'order_index', 'is_hls_ready')
-              ->orderBy('order_index');
+                ->orderBy('order_index');
         }])->withCount('audios');
     }
 
@@ -78,7 +78,7 @@ class Package extends Model
     {
         // When soft deleting a package, also soft delete its audios
         static::deleting(function ($package) {
-            if (!method_exists($package, 'isForceDeleting') || !$package->isForceDeleting()) {
+            if (! method_exists($package, 'isForceDeleting') || ! $package->isForceDeleting()) {
                 $package->audios()->each(function ($audio) {
                     $audio->delete(); // soft delete
                 });

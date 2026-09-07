@@ -3,10 +3,10 @@
 namespace App\Services;
 
 use App\Models\Package;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class PackageService
 {
@@ -32,7 +32,7 @@ class PackageService
     {
         return Package::where('status', 'active')
             ->withCount('audios')
-            ->with(['audios' => fn($q) => $q->orderBy('order_index')])
+            ->with(['audios' => fn ($q) => $q->orderBy('order_index')])
             ->latest()
             ->get();
     }
@@ -42,7 +42,7 @@ class PackageService
      */
     public function findPackageWithRelations(int $id): ?Package
     {
-        return Package::with(['audios' => fn($q) => $q->orderBy('order_index')])
+        return Package::with(['audios' => fn ($q) => $q->orderBy('order_index')])
             ->withCount('audios')
             ->find($id);
     }
@@ -74,6 +74,7 @@ class PackageService
             }
 
             $package->update($data);
+
             return $package->fresh();
         });
     }
@@ -109,10 +110,10 @@ class PackageService
     public function searchPackages(string $query)
     {
         return Package::where(function ($q) use ($query) {
-                $q->where('title', 'like', "%{$query}%")
-                  ->orWhere('description', 'like', "%{$query}%")
-                  ->orWhere('shopify_tag', 'like', "%{$query}%");
-            })
+            $q->where('title', 'like', "%{$query}%")
+                ->orWhere('description', 'like', "%{$query}%")
+                ->orWhere('shopify_tag', 'like', "%{$query}%");
+        })
             ->withCount('audios')
             ->latest()
             ->get();
@@ -126,7 +127,7 @@ class PackageService
         return Package::where('shopify_tag', $tag)
             ->where('status', 'active')
             ->withCount('audios')
-            ->with(['audios' => fn($q) => $q->orderBy('order_index')])
+            ->with(['audios' => fn ($q) => $q->orderBy('order_index')])
             ->get();
     }
 
@@ -135,7 +136,8 @@ class PackageService
      */
     private function uploadCoverImage(UploadedFile $file): string
     {
-        $filename = time() . '_' . str_replace(' ', '_', $file->getClientOriginalName());
+        $filename = time().'_'.str_replace(' ', '_', $file->getClientOriginalName());
+
         return $file->storeAs('covers', $filename, 'public');
     }
 

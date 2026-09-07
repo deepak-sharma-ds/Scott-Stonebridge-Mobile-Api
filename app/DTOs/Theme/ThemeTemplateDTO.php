@@ -7,7 +7,7 @@ use InvalidArgumentException;
 
 /**
  * Theme Template Data Transfer Object
- * 
+ *
  * Represents a Shopify theme template with metadata and content.
  * Used for rendering dynamic theme-based content in the mobile API.
  */
@@ -32,7 +32,7 @@ class ThemeTemplateDTO extends BaseDTO
 
     /**
      * Validate the theme template data.
-     * 
+     *
      * @throws InvalidArgumentException
      */
     protected function validate(): void
@@ -45,9 +45,8 @@ class ThemeTemplateDTO extends BaseDTO
 
     /**
      * Create a ThemeTemplateDTO from Shopify API response data.
-     * 
-     * @param array $data Raw template data from Shopify Admin API response
-     * @return self
+     *
+     * @param  array  $data  Raw template data from Shopify Admin API response
      */
     public static function fromShopifyResponse(array $data): self
     {

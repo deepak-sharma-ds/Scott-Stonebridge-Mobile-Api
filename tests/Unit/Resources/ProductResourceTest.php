@@ -6,11 +6,12 @@ use App\DTOs\Product\ProductDTO;
 use App\DTOs\Product\ProductVariantDTO;
 use App\Http\Resources\Product\ProductResource;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Tests\TestCase;
 
 /**
  * ProductResource Unit Tests
- * 
+ *
  * Tests transformation logic from ProductDTO to API response format.
  * Validates field mapping, nested resource handling, and edge cases.
  */
@@ -128,12 +129,12 @@ class ProductResourceTest extends TestCase
         $result = $resource->toArray($this->request);
 
         // Assert - variants is a ResourceCollection, resolve it to array
-        $this->assertInstanceOf(\Illuminate\Http\Resources\Json\AnonymousResourceCollection::class, $result['variants']);
+        $this->assertInstanceOf(AnonymousResourceCollection::class, $result['variants']);
         $variantsArray = $result['variants']->resolve($this->request);
-        
+
         $this->assertIsArray($variantsArray);
         $this->assertCount(1, $variantsArray);
-        
+
         $variant = $variantsArray[0];
         $this->assertEquals('gid://shopify/ProductVariant/789', $variant['id']);
         $this->assertEquals('Default', $variant['title']);
@@ -235,7 +236,7 @@ class ProductResourceTest extends TestCase
 
         // Assert - resolve the ResourceCollection to array
         $variantsArray = $result['variants']->resolve($this->request);
-        
+
         $this->assertCount(2, $variantsArray);
         $this->assertEquals('Small', $variantsArray[0]['title']);
         $this->assertEquals('10.00', $variantsArray[0]['price']);
@@ -311,7 +312,7 @@ class ProductResourceTest extends TestCase
         $this->assertArrayHasKey('available_for_sale', $result);
         $this->assertArrayHasKey('published_at', $result);
         $this->assertArrayHasKey('updated_at', $result);
-        
+
         // Verify camelCase fields are NOT present
         $this->assertArrayNotHasKey('productType', $result);
         $this->assertArrayNotHasKey('availableForSale', $result);

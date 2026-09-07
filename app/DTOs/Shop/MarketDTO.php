@@ -6,7 +6,7 @@ use App\DTOs\Base\BaseDTO;
 
 /**
  * Market DTO
- * 
+ *
  * Represents a market/country with its currency information
  */
 class MarketDTO extends BaseDTO
@@ -25,8 +25,6 @@ class MarketDTO extends BaseDTO
 
     /**
      * Validate the DTO data
-     * 
-     * @return void
      */
     protected function validate(): void
     {
@@ -35,7 +33,7 @@ class MarketDTO extends BaseDTO
         if (empty($this->countryCode)) {
             throw new \InvalidArgumentException('Country code is required');
         }
-        
+
         if (empty($this->currencyCode)) {
             throw new \InvalidArgumentException('Currency code is required');
         }
@@ -43,9 +41,6 @@ class MarketDTO extends BaseDTO
 
     /**
      * Create from Shopify API response
-     * 
-     * @param array $data
-     * @return self
      */
     public static function fromShopifyResponse(array $data): self
     {
@@ -61,8 +56,6 @@ class MarketDTO extends BaseDTO
 
     /**
      * Convert to array
-     * 
-     * @return array
      */
     public function toArray(): array
     {
@@ -84,9 +77,6 @@ class MarketDTO extends BaseDTO
 
     /**
      * Create a new instance with currency flag
-     * 
-     * @param string $flagUrl
-     * @return self
      */
     public function withCurrencyFlag(string $flagUrl): self
     {

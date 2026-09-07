@@ -7,10 +7,10 @@ use InvalidArgumentException;
 
 /**
  * Address Data Transfer Object
- * 
+ *
  * Represents a customer address with typed properties and validation.
  * Used for shipping and billing addresses in customer profiles.
- * 
+ *
  * Requirements: 16.4, 16.6, 16.7
  */
 class AddressDTO extends BaseDTO
@@ -34,7 +34,7 @@ class AddressDTO extends BaseDTO
 
     /**
      * Validate the address data.
-     * 
+     *
      * @throws InvalidArgumentException
      */
     protected function validate(): void
@@ -45,18 +45,17 @@ class AddressDTO extends BaseDTO
 
     /**
      * Create an AddressDTO from Shopify API response data.
-     * 
+     *
      * Transforms raw Shopify GraphQL address response into a typed DTO instance.
      * Handles both edge/node structure and flat array structure.
-     * 
-     * @param array $data Raw address data from Shopify GraphQL response
-     * @return self
+     *
+     * @param  array  $data  Raw address data from Shopify GraphQL response
      */
     public static function fromShopifyResponse(array $data): self
     {
         // Handle edge/node structure if present
         $addressData = $data['node'] ?? $data;
-        
+
         return new self(
             id: $addressData['id'] ?? null,
             address1: $addressData['address1'] ?? null,

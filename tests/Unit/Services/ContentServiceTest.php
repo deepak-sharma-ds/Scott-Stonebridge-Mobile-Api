@@ -22,7 +22,7 @@ class ContentServiceTest extends TestCase
         $mediaImageId = 'gid://shopify/MediaImage/123';
         $mediaImageUrl = 'https://cdn.shopify.com/s/files/1/test/event-left.jpg';
 
-        $client = new MockShopifyClient();
+        $client = new MockShopifyClient;
         $client->mockResponse('storefront/content/page_get', [
             'data' => [
                 'pageByHandle' => [
@@ -66,7 +66,7 @@ class ContentServiceTest extends TestCase
             ],
         ]);
 
-        $service = new ContentService($client, new ShopifyCacheStrategy());
+        $service = new ContentService($client, new ShopifyCacheStrategy);
 
         $page = $service->getPageByHandle('event-page');
 

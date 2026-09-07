@@ -7,13 +7,16 @@ use Illuminate\Support\Facades\Http;
 class APIShopifyService
 {
     protected $baseUrl;
+
     protected $token;
+
     protected $storefrontAccessToken;
+
     protected $currency;
 
     public function __construct()
     {
-        $this->baseUrl = 'https://' . config('shopify.store_domain') . '/admin/api/' . config('shopify.api_version');
+        $this->baseUrl = 'https://'.config('shopify.store_domain').'/admin/api/'.config('shopify.api_version');
         $this->token = config('shopify.access_token');
         $this->storefrontAccessToken = config('shopify.storefront_access_token');
         $this->currency = config('app.currency', 'GBP');
@@ -44,7 +47,7 @@ class APIShopifyService
         // Get theme ID dynamically first, or hardcode active theme ID if known
         $themeId = 179834880383;
 
-        $url = "https://" . config('shopify.store_domain') . "/admin/api/" . config('shopify.api_version') . "/themes/{$themeId}/assets.json?asset[key]=templates/index.json";
+        $url = 'https://'.config('shopify.store_domain').'/admin/api/'.config('shopify.api_version')."/themes/{$themeId}/assets.json?asset[key]=templates/index.json";
 
         $response = Http::withHeaders([
             'X-Shopify-Access-Token' => config('shopify.access_token'),
@@ -67,7 +70,7 @@ class APIShopifyService
 
     public function getMenuByHandle(string $handle)
     {
-        $url = "https://" . config('shopify.store_domain') . "/api/" . config('shopify.api_version') . "/graphql.json";  // storefront endpoint
+        $url = 'https://'.config('shopify.store_domain').'/api/'.config('shopify.api_version').'/graphql.json';  // storefront endpoint
         $token = $this->storefrontAccessToken;
 
         $query = <<<'GRAPHQL'
@@ -113,7 +116,7 @@ class APIShopifyService
      */
     public function storefrontApiRequest($query, $variables = [])
     {
-        $url = "https://" . config('shopify.store_domain') . "/api/" . config('shopify.api_version') . "/graphql.json"; // Updated API version 2025-01
+        $url = 'https://'.config('shopify.store_domain').'/api/'.config('shopify.api_version').'/graphql.json'; // Updated API version 2025-01
 
         $headers = [
             'X-Shopify-Storefront-Access-Token' => $this->storefrontAccessToken,
@@ -137,7 +140,7 @@ class APIShopifyService
      */
     public function adminApiRequest($query, $variables = [])
     {
-        $url = "https://" . config('shopify.store_domain') . "/admin/api/" . config('shopify.api_version') . "/graphql.json"; // Updated API version 2025-01
+        $url = 'https://'.config('shopify.store_domain').'/admin/api/'.config('shopify.api_version').'/graphql.json'; // Updated API version 2025-01
 
         $headers = [
             'X-Shopify-Access-Token' => $this->token,
@@ -151,10 +154,6 @@ class APIShopifyService
 
         return $response->json();
     }
-
-
-
-
 
     public function getOrdersCountBetween($from, $to)
     {
@@ -178,7 +177,7 @@ class APIShopifyService
         ])->get($endpoint, $params);
 
         if ($response->failed()) {
-            throw new \Exception('Shopify getOrdersCountBetween failed: ' . $response->body());
+            throw new \Exception('Shopify getOrdersCountBetween failed: '.$response->body());
         }
 
         $orders = $response->json('orders') ?? [];
@@ -198,7 +197,7 @@ class APIShopifyService
             ]);
 
             if ($response->failed()) {
-                throw new \Exception('Shopify getOrdersCountBetween failed (pagination): ' . $response->body());
+                throw new \Exception('Shopify getOrdersCountBetween failed (pagination): '.$response->body());
             }
 
             $orders = $response->json('orders') ?? [];
@@ -238,13 +237,13 @@ class APIShopifyService
             ])->get($endpoint, $query);
 
             if ($response->failed()) {
-                throw new \Exception('Shopify getSalesTotalBetween failed: ' . $response->body());
+                throw new \Exception('Shopify getSalesTotalBetween failed: '.$response->body());
             }
 
             $orders = $response->json('orders') ?? [];
 
             foreach ($orders as $order) {
-                $total += isset($order['total_price']) ? (float)$order['total_price'] : 0;
+                $total += isset($order['total_price']) ? (float) $order['total_price'] : 0;
             }
 
             // Parse pagination
@@ -253,7 +252,6 @@ class APIShopifyService
 
         return round($total, 2);
     }
-
 
     public function getTopProducts($limit = 10)
     {
@@ -275,8 +273,8 @@ class APIShopifyService
 
         $response = $this->adminApiRequest($query, ['limit' => $limit]);
 
-        if (!isset($response['data']['products'])) {
-            throw new \Exception("Shopify getTopProducts error: " . json_encode($response));
+        if (! isset($response['data']['products'])) {
+            throw new \Exception('Shopify getTopProducts error: '.json_encode($response));
         }
 
         return $response['data']['products']['edges'] ?? [];
@@ -284,7 +282,9 @@ class APIShopifyService
 
     protected function extractNextPageInfo($linkHeader)
     {
-        if (!$linkHeader) return null;
+        if (! $linkHeader) {
+            return null;
+        }
 
         // Example Link:
         // <https://xxx.myshopify.com/admin/api/2024-10/orders.json?page_info=abc&limit=250>; rel="next"
