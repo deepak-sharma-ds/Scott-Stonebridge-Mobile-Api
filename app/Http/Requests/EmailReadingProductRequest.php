@@ -32,6 +32,9 @@ class EmailReadingProductRequest extends FormRequest
             ],
             'email_subject' => ['required', 'string', 'max:255'],
             'email_view' => ['nullable', 'string', 'max:255'],
+            'header_image' => ['nullable', 'image', 'max:15360'],
+            'email_content' => ['nullable', 'string'],
+            'email_footer' => ['nullable', 'string'],
             'model' => ['nullable', 'string', 'max:255'],
             'max_tokens' => ['nullable', 'integer', 'min:1', 'max:8000'],
             'is_active' => ['nullable', 'boolean'],
@@ -76,6 +79,7 @@ class EmailReadingProductRequest extends FormRequest
             'slug.unique' => 'This slug is already in use.',
             'questions_schema.required' => 'Add at least one question slot.',
             'questions_schema.min' => 'Add at least one question slot.',
+            'header_image.max' => 'The header image must not be greater than 15MB.',
         ];
     }
 }

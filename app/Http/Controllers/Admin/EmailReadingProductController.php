@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Http\Controllers\Admin\Concerns\StoresHeaderImages;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\EmailReadingProductRequest;
 use App\Models\EmailReadingProduct;
@@ -13,6 +14,8 @@ use Throwable;
 
 class EmailReadingProductController extends Controller
 {
+    use StoresHeaderImages;
+
     public function __construct(
         private readonly EmailReadingGenerationService $generation
     ) {}
@@ -34,7 +37,13 @@ class EmailReadingProductController extends Controller
     public function store(EmailReadingProductRequest $request): RedirectResponse
     {
         try {
-            EmailReadingProduct::create($request->validated());
+            $data = $request->validated();
+
+            if ($request->hasFile('header_image')) {
+                $data['header_image'] = $this->storeHeaderImage($request->file('header_image'), 'reading-header-images');
+            }
+
+            EmailReadingProduct::create($data);
 
             return redirect()
                 ->route('admin.email-reading-products.index')
@@ -54,7 +63,13 @@ class EmailReadingProductController extends Controller
     public function update(EmailReadingProductRequest $request, EmailReadingProduct $emailReadingProduct): RedirectResponse
     {
         try {
-            $emailReadingProduct->update($request->validated());
+            $data = $request->validated();
+
+            if ($request->hasFile('header_image')) {
+                $data['header_image'] = $this->storeHeaderImage($request->file('header_image'), 'reading-header-images');
+            }
+
+            $emailReadingProduct->update($data);
 
             return redirect()
                 ->route('admin.email-reading-products.index')

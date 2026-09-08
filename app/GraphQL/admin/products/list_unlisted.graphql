@@ -1,5 +1,5 @@
-query listUnlistedProducts($first: Int!) {
-  products(first: $first, query: "status:unlisted") {
+query listUnlistedProducts($first: Int!, $after: String) {
+  products(first: $first, after: $after, query: "status:unlisted") {
     edges {
       node {
         id
@@ -20,6 +20,10 @@ query listUnlistedProducts($first: Int!) {
           }
         }
       }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
     }
   }
 }

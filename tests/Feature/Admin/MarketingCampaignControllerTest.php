@@ -2,10 +2,10 @@
 
 namespace Tests\Feature\Admin;
 
-use App\Contracts\Shopify\AdminApiClientInterface;
 use App\Models\CampaignProduct;
 use App\Models\CampaignProductResponse;
 use App\Models\MarketingCampaign;
+use App\Models\UnlistedProduct;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use OpenAI\Laravel\Facades\OpenAI;
@@ -398,42 +398,14 @@ class MarketingCampaignControllerTest extends TestCase
         $response->assertSee('https://test-shop.myshopify.com/cart/5001:1?properties=', false);
     }
 
-    private function fakeShopifyAdminProducts(array $productNodes): void
-    {
-        $this->mock(AdminApiClientInterface::class, function ($mock) use ($productNodes) {
-            $mock->shouldReceive('query')
-                ->with('admin/products/list_unlisted', ['first' => 250])
-                ->andReturn([
-                    'data' => [
-                        'products' => [
-                            'edges' => array_map(fn (array $node) => ['node' => $node], $productNodes),
-                        ],
-                    ],
-                ]);
-        });
-    }
-
-    private function unlistedProductNode(int $id, string $title, bool $published = true, array $variants = []): array
-    {
-        return [
-            'id' => "gid://shopify/Product/{$id}",
-            'title' => $title,
-            'publishedOnCurrentPublication' => $published,
-            'featuredImage' => ['url' => "https://cdn.shopify.test/{$id}.jpg", 'altText' => null],
-            'variants' => [
-                'edges' => array_map(fn (array $variant) => ['node' => $variant], $variants ?: [
-                    ['id' => "gid://shopify/ProductVariant/{$id}01", 'title' => 'Default Title', 'price' => '19.99', 'availableForSale' => true],
-                ]),
-            ],
-        ];
-    }
-
     public function test_available_products_endpoint_returns_unlisted_published_products(): void
     {
         $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
-
-        $this->fakeShopifyAdminProducts([
-            $this->unlistedProductNode(111, 'Love Reading'),
+        UnlistedProduct::create([
+            'shopify_product_id' => 111,
+            'title' => 'Love Reading',
+            'variants' => [['id' => 11101, 'title' => 'Default Title', 'price' => '19.99', 'available_for_sale' => true]],
+            'is_published' => true,
         ]);
 
         $response = $this->actingAs(User::factory()->create())
@@ -457,11 +429,8 @@ class MarketingCampaignControllerTest extends TestCase
     {
         $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
         CampaignProduct::create(['marketing_campaign_id' => $campaign->id, 'shopify_product_id' => 111]);
-
-        $this->fakeShopifyAdminProducts([
-            $this->unlistedProductNode(111, 'Already Linked'),
-            $this->unlistedProductNode(222, 'Still Available'),
-        ]);
+        UnlistedProduct::create(['shopify_product_id' => 111, 'title' => 'Already Linked', 'is_published' => true]);
+        UnlistedProduct::create(['shopify_product_id' => 222, 'title' => 'Still Available', 'is_published' => true]);
 
         $response = $this->actingAs(User::factory()->create())
             ->getJson(route('admin.marketing-campaigns.products.available', $campaign));
@@ -474,16 +443,112 @@ class MarketingCampaignControllerTest extends TestCase
     public function test_available_products_endpoint_excludes_products_not_published_to_online_store(): void
     {
         $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
-
-        $this->fakeShopifyAdminProducts([
-            $this->unlistedProductNode(111, 'Not Published', published: false),
-        ]);
+        UnlistedProduct::create(['shopify_product_id' => 111, 'title' => 'Not Published', 'is_published' => false]);
 
         $response = $this->actingAs(User::factory()->create())
             ->getJson(route('admin.marketing-campaigns.products.available', $campaign));
 
         $response->assertOk();
         $this->assertSame([], $response->json('products'));
+    }
+
+    public function test_available_products_endpoint_prefills_saved_defaults(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        UnlistedProduct::create([
+            'shopify_product_id' => 111,
+            'title' => 'Love Reading',
+            'header_image' => 'saved-header.jpg',
+            'email_content' => 'Saved content.',
+            'email_footer' => 'Saved footer.',
+            'is_published' => true,
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->getJson(route('admin.marketing-campaigns.products.available', $campaign));
+
+        $response->assertOk();
+        $response->assertJson([
+            'products' => [
+                [
+                    'id' => 111,
+                    'header_image' => 'saved-header.jpg',
+                    'email_content' => 'Saved content.',
+                    'email_footer' => 'Saved footer.',
+                ],
+            ],
+        ]);
+    }
+
+    public function test_linking_a_product_saves_its_template_fields_back_onto_the_unlisted_product(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        UnlistedProduct::create(['shopify_product_id' => 111, 'title' => 'Love Reading', 'is_published' => true]);
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('admin.marketing-campaigns.products.store', $campaign), [
+                'shopify_product_id' => 111,
+                'shopify_variant_id' => 5001,
+                'email_content' => 'New content.',
+                'email_footer' => 'New footer.',
+            ]);
+
+        $this->assertDatabaseHas('unlisted_products', [
+            'shopify_product_id' => 111,
+            'email_content' => 'New content.',
+            'email_footer' => 'New footer.',
+        ]);
+    }
+
+    public function test_linking_a_product_with_no_matching_unlisted_product_does_not_create_one(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('admin.marketing-campaigns.products.store', $campaign), [
+                'shopify_product_id' => 999,
+                'shopify_variant_id' => 5001,
+                'email_content' => 'New content.',
+            ])->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
+
+        $this->assertDatabaseCount('unlisted_products', 0);
+    }
+
+    public function test_linking_a_product_reuses_the_default_header_image_filename_without_a_fresh_upload(): void
+    {
+        $campaignA = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        $campaignB = MarketingCampaign::create(['campaign_key' => 'campaign-b', 'name' => 'B', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        UnlistedProduct::create([
+            'shopify_product_id' => 111,
+            'title' => 'Love Reading',
+            'header_image' => 'saved-header.jpg',
+            'is_published' => true,
+        ]);
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post(route('admin.marketing-campaigns.products.store', $campaignA), [
+            'shopify_product_id' => 111,
+            'shopify_variant_id' => 5001,
+            'default_header_image' => 'saved-header.jpg',
+        ]);
+
+        $this->assertDatabaseHas('campaign_products', [
+            'marketing_campaign_id' => $campaignA->id,
+            'shopify_product_id' => 111,
+            'header_image' => 'saved-header.jpg',
+        ]);
+
+        $this->actingAs($user)->post(route('admin.marketing-campaigns.products.store', $campaignB), [
+            'shopify_product_id' => 111,
+            'shopify_variant_id' => 5002,
+            'default_header_image' => 'saved-header.jpg',
+        ]);
+
+        $this->assertDatabaseHas('campaign_products', [
+            'marketing_campaign_id' => $campaignB->id,
+            'shopify_product_id' => 111,
+            'header_image' => 'saved-header.jpg',
+        ]);
     }
 
     public function test_admin_can_unlink_a_product_from_a_campaign(): void

@@ -19,7 +19,7 @@
         </div>
     @endif
 
-    <form action="{{ route('admin.email-reading-products.store') }}" method="POST" class="card p-4">
+    <form action="{{ route('admin.email-reading-products.store') }}" method="POST" enctype="multipart/form-data" class="card p-4">
         @include('admin.email_reading_products._form')
     </form>
 

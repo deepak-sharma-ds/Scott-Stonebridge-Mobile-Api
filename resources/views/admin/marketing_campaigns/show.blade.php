@@ -113,6 +113,7 @@
 
                         <input type="hidden" name="shopify_product_id" :value="selected ? selected.id : ''">
                         <input type="hidden" name="shopify_variant_id" :value="variantId ?? ''">
+                        <input type="hidden" name="default_header_image" :value="defaultHeaderImage">
                     </div>
                     <div class="mb-3">
                         <label for="product_title" class="form-label">Product Title <small
@@ -129,18 +130,23 @@
                             style="color:var(--text-muted);">(shown at the top of the email; falls back to the site
                             logo if left blank)</small></label>
                     <input type="file" name="header_image" id="header_image" class="form-control" accept="image/*">
+                    <div x-show="defaultHeaderImageUrl" x-cloak style="margin-top:0.5rem;">
+                        <img :src="defaultHeaderImageUrl" style="max-height:60px;border-radius:6px;">
+                        <small style="color:var(--text-muted);display:block;">Using this product's saved default
+                            image — choose a file above to replace it.</small>
+                    </div>
                 </div>
                 <div class="mb-3">
                     <label for="email_content" class="form-label">Email Content <small
                             style="color:var(--text-muted);">(shown above the reading; @{{ $productTitle }} /
                             @{{ $campaignName }} available; leave blank to use the default copy)</small></label>
-                    <textarea name="email_content" id="email_content" class="form-control" rows="3"></textarea>
+                    <textarea name="email_content" id="email_content" class="form-control" rows="3" data-rich-text></textarea>
                 </div>
                 <div class="mb-3">
                     <label for="email_footer" class="form-label">Email Footer <small
                             style="color:var(--text-muted);">(shown below the reading; @{{ $productTitle }} /
                             @{{ $campaignName }} available; leave blank to use the default copy)</small></label>
-                    <textarea name="email_footer" id="email_footer" class="form-control" rows="5"></textarea>
+                    <textarea name="email_footer" id="email_footer" class="form-control" rows="5" data-rich-text></textarea>
                 </div>
                 <div class="mb-3">
                     <label class="form-label">Response Source</label>
@@ -212,7 +218,7 @@
                                 <td class="text-end">
                                     <div style="display:inline-flex;gap:0.5rem;">
                                         <button type="button" class="btn btn-sm btn-primary"
-                                            x-on:click="formOpen = !formOpen">
+                                            x-on:click="formOpen = !formOpen; $nextTick(() => initRichTextEditors())">
                                             {{ $campaignProduct->response ? 'Edit Response' : 'Add Response' }}
                                         </button>
                                         <form
@@ -256,13 +262,13 @@
                                             <label class="form-label">Email Content <small
                                                     style="color:var(--text-muted);">(shown above the reading;
                                                     @{{ $productTitle }} / @{{ $campaignName }} available)</small></label>
-                                            <textarea name="email_content" class="form-control" rows="3">{{ $campaignProduct->email_content }}</textarea>
+                                            <textarea name="email_content" class="form-control" rows="3" data-rich-text>{{ $campaignProduct->email_content }}</textarea>
                                         </div>
                                         <div class="mb-3">
                                             <label class="form-label">Email Footer <small
                                                     style="color:var(--text-muted);">(shown below the reading;
                                                     @{{ $productTitle }} / @{{ $campaignName }} available)</small></label>
-                                            <textarea name="email_footer" class="form-control" rows="5">{{ $campaignProduct->email_footer }}</textarea>
+                                            <textarea name="email_footer" class="form-control" rows="5" data-rich-text>{{ $campaignProduct->email_footer }}</textarea>
                                         </div>
                                         <div style="display:flex;gap:1.5rem;margin-bottom:0.75rem;">
                                             <label><input type="radio" name="source" value="ai" x-model="source">
@@ -305,6 +311,10 @@
     </div>
 @endsection
 
+@section('custom_js_scripts')
+    @include('admin.components.rich-text-editor-scripts')
+@endsection
+
 <script>
     function copyCampaignLink(text) {
         if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -341,6 +351,8 @@
             selected: null,
             variantId: null,
             title: '',
+            defaultHeaderImage: '',
+            defaultHeaderImageUrl: null,
             async load() {
                 this.loading = true;
                 this.loadError = '';
@@ -383,10 +395,26 @@
                 this.title = product.title;
                 this.open = false;
                 this.query = '';
+                this.defaultHeaderImage = product.header_image || '';
+                this.defaultHeaderImageUrl = product.header_image_url || null;
+                this.applyDefault('email_content', product.email_content);
+                this.applyDefault('email_footer', product.email_footer);
+            },
+            applyDefault(fieldId, value) {
+                const el = document.getElementById(fieldId);
+                if (!el || !value) {
+                    return;
+                }
+                el.value = value;
+                if (el.ckEditorInstance) {
+                    el.ckEditorInstance.setData(value);
+                }
             },
             clear() {
                 this.selected = null;
                 this.variantId = null;
+                this.defaultHeaderImage = '';
+                this.defaultHeaderImageUrl = null;
             },
         };
     }

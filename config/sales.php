@@ -186,8 +186,13 @@ return [
         */
         'retrieval' => [
             'top_n' => (int) env('SALES_KNOWLEDGE_TOP_N', 8),
-            'fulltext_weight' => (float) env('SALES_KNOWLEDGE_FT_WEIGHT', 0.3),
-            'semantic_weight' => (float) env('SALES_KNOWLEDGE_SEM_WEIGHT', 0.6),
+            // Rebalanced (ADR 0011): FULLTEXT natural-language matching needs
+            // literal word overlap, so it swings wildly across paraphrases of
+            // the same question. Semantic (cosine) is the signal actually
+            // designed to survive paraphrasing, so it now carries most of the
+            // weight; keyword score stays as a secondary/tie-breaking signal.
+            'fulltext_weight' => (float) env('SALES_KNOWLEDGE_FT_WEIGHT', 0.15),
+            'semantic_weight' => (float) env('SALES_KNOWLEDGE_SEM_WEIGHT', 0.75),
             'recency_weight' => (float) env('SALES_KNOWLEDGE_REC_WEIGHT', 0.1),
             'intent_boost' => (float) env('SALES_KNOWLEDGE_INTENT_BOOST', 0.15),
             'min_score' => (float) env('SALES_KNOWLEDGE_MIN_SCORE', 0.05),

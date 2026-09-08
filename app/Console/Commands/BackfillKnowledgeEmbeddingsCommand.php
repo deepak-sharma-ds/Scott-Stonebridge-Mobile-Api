@@ -82,7 +82,9 @@ class BackfillKnowledgeEmbeddingsCommand extends Command
                     $reachedLimit = true;
                     break;
                 }
-                $text = trim(((string) $row->title)."\n\n".((string) $row->summary));
+                // Raw content, not summary — must match SummariseKnowledgeItemJob::embed()
+                // so every row's embedding is built from the same text basis (ADR 0011).
+                $text = trim(((string) $row->title)."\n\n".((string) $row->raw_content));
                 if ($text === '') {
                     $processed++;
                     $bar->advance();

@@ -2,22 +2,24 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Http\Controllers\Admin\Concerns\StoresHeaderImages;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CampaignProductRequest;
 use App\Http\Requests\CampaignProductResponseRequest;
 use App\Models\CampaignProduct;
 use App\Models\CampaignProductResponse;
 use App\Models\MarketingCampaign;
+use App\Models\UnlistedProduct;
 use App\Services\CampaignEmail\CampaignProductCatalogService;
 use App\Services\CampaignEmail\CampaignResponseGenerationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 use Throwable;
 
 class CampaignProductController extends Controller
 {
+    use StoresHeaderImages;
+
     public function __construct(
         private readonly CampaignResponseGenerationService $generation,
         private readonly CampaignProductCatalogService $catalog
@@ -42,10 +44,15 @@ class CampaignProductController extends Controller
         unset($data['source'], $data['body']);
 
         if ($request->hasFile('header_image')) {
-            $data['header_image'] = $this->storeHeaderImage($request->file('header_image'));
+            $data['header_image'] = $this->storeHeaderImage($request->file('header_image'), 'campaign-header-images');
+        } elseif (filled($data['default_header_image'] ?? null)) {
+            $data['header_image'] = $data['default_header_image'];
         }
+        unset($data['default_header_image']);
 
         $campaignProduct = $marketingCampaign->campaignProducts()->create($data);
+
+        $this->syncProductDefaults((int) $data['shopify_product_id'], $data);
 
         if ($source === CampaignProductResponse::SOURCE_MANUAL && filled($body)) {
             $campaignProduct->response()->create([
@@ -87,9 +94,10 @@ class CampaignProductController extends Controller
             'email_footer' => $data['email_footer'] ?? null,
         ];
         if ($request->hasFile('header_image')) {
-            $templateFields['header_image'] = $this->storeHeaderImage($request->file('header_image'));
+            $templateFields['header_image'] = $this->storeHeaderImage($request->file('header_image'), 'campaign-header-images');
         }
         $campaignProduct->update($templateFields);
+        $this->syncProductDefaults($campaignProduct->shopify_product_id, $templateFields);
 
         if ($data['source'] === CampaignProductResponse::SOURCE_MANUAL) {
             $campaignProduct->response()->updateOrCreate(
@@ -124,12 +132,24 @@ class CampaignProductController extends Controller
         }
     }
 
-    private function storeHeaderImage(UploadedFile $file): string
+    /**
+     * Remember this product's header image / content / footer on its
+     * UnlistedProduct catalog row, so the next time it's linked to a
+     * different campaign the picker can prefill them. Only ever updates an
+     * existing catalog row — never fabricates one for a product outside the
+     * synced Unlisted catalog.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function syncProductDefaults(int $shopifyProductId, array $data): void
     {
-        $fileName = time().'-'.$file->hashName();
+        $defaults = array_filter(
+            array_intersect_key($data, array_flip(['header_image', 'email_content', 'email_footer'])),
+            fn ($value) => filled($value)
+        );
 
-        Storage::disk('public')->putFileAs('campaign-header-images', $file, $fileName);
-
-        return $fileName;
+        if ($defaults !== []) {
+            UnlistedProduct::where('shopify_product_id', $shopifyProductId)->update($defaults);
+        }
     }
 }

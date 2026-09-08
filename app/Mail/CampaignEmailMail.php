@@ -4,12 +4,12 @@ namespace App\Mail;
 
 use App\Models\CampaignDelivery;
 use App\Models\CampaignProduct;
+use App\Support\TemplatePlaceholder;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Blade;
 
 class CampaignEmailMail extends Mailable
 {
@@ -56,15 +56,11 @@ class CampaignEmailMail extends Mailable
     }
 
     /**
-     * Renders admin-authored copy as a Blade template, mirroring
-     * CampaignResponseGenerationService::renderPrompt() so `{{ $productTitle }}`
-     * / `{{ $campaignName }}` placeholders work the same way they do there.
-     *
      * @param  array<string,mixed>  $vars
      */
     private function renderTemplateField(?string $template, array $vars, string $default): string
     {
-        return Blade::render($template ?: $default, $vars);
+        return TemplatePlaceholder::render($template, $vars, $default);
     }
 
     private function defaultContent(): string

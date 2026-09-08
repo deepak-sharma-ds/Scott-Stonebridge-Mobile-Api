@@ -61,3 +61,18 @@ Schedule::command('push:sweep-klaviyo-campaigns')
     ->everyTenMinutes()
     ->withoutOverlapping()
     ->name('push-sweep-klaviyo-campaigns');
+
+/*
+|--------------------------------------------------------------------------
+| Campaign Product Picker — Unlisted Products sync
+|--------------------------------------------------------------------------
+|
+| Keeps the local `unlisted_products` catalog in step with Shopify so the
+| "Link a product" picker on a campaign's show page never has to call
+| Shopify live.
+|
+*/
+Schedule::command('shopify:sync-unlisted-products')
+    ->hourly()
+    ->withoutOverlapping()
+    ->name('sync-unlisted-products');

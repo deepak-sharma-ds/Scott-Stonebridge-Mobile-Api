@@ -61,11 +61,17 @@ class SummariseKnowledgeItemJob implements ShouldQueue
 
         $summary = $this->summarise($this->rawContent);
 
-        // Embed the summary so the retrieval picker can rank by cosine
-        // similarity. Best-effort: if the embeddings API fails the row
-        // still saves with embedding=null and the keyword path keeps
-        // working — `knowledge:embed --missing-only` can backfill later.
-        $embedding = $this->embed("{$this->title}\n\n{$summary}");
+        // Embed the raw chunk (not the summary) so cosine similarity has
+        // the full detail to match against — a summary compressed to
+        // config('sales.knowledge.item_summary_max_tokens') tokens can
+        // drop the exact phrasing/nuance a paraphrased question needs to
+        // match confidently (ADR 0011). The summary itself is still
+        // generated and stored for prompt-injection token savings; it just
+        // no longer feeds the embedding. Best-effort: if the embeddings API
+        // fails the row still saves with embedding=null and the keyword
+        // path keeps working — `knowledge:embed --missing-only` can
+        // backfill later.
+        $embedding = $this->embed("{$this->title}\n\n{$this->rawContent}");
 
         $attrs = [
             'title' => $this->title,
