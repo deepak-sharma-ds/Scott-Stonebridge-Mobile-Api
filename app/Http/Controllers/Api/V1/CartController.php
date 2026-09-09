@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Contracts\Services\CartServiceInterface;
+use App\Exceptions\ShopifyApiException;
+use App\Exceptions\ShopifyNotFoundException;
 use App\Http\Controllers\Base\BaseApiController;
 use App\Http\Requests\Cart\AddToCartRequest;
 use App\Http\Requests\Cart\CreateCartRequest;
@@ -14,11 +16,11 @@ use Illuminate\Http\Request;
 
 /**
  * Cart Controller (v1)
- * 
+ *
  * Handles cart-related API endpoints.
  * Supports both guest and authenticated cart operations.
  * Extends BaseApiController for standardized responses.
- * 
+ *
  * Requirements: 2.1, 2.2, 5.4, 11.6
  */
 class CartController extends BaseApiController
@@ -29,9 +31,6 @@ class CartController extends BaseApiController
 
     /**
      * Create a new cart
-     * 
-     * @param CreateCartRequest $request
-     * @return JsonResponse
      */
     public function store(CreateCartRequest $request): JsonResponse
     {
@@ -60,9 +59,6 @@ class CartController extends BaseApiController
 
     /**
      * Get cart by ID
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function show(Request $request): JsonResponse
     {
@@ -82,7 +78,7 @@ class CartController extends BaseApiController
                     'cart' => new CartResource($cart),
                 ]
             );
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             return $this->notFound($e->getMessage());
         } catch (\Exception $e) {
             return $this->error(
@@ -96,9 +92,6 @@ class CartController extends BaseApiController
 
     /**
      * Add item to cart
-     * 
-     * @param AddToCartRequest $request
-     * @return JsonResponse
      */
     public function addItem(AddToCartRequest $request): JsonResponse
     {
@@ -114,9 +107,9 @@ class CartController extends BaseApiController
                     'cart' => new CartResource($cart),
                 ]
             );
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             return $this->notFound($e->getMessage());
-        } catch (\App\Exceptions\ShopifyApiException $e) {
+        } catch (ShopifyApiException $e) {
             return $this->error(
                 'Failed to add item to cart',
                 ['error' => $e->getMessage()],
@@ -135,9 +128,6 @@ class CartController extends BaseApiController
 
     /**
      * Update cart item quantity
-     * 
-     * @param UpdateCartRequest $request
-     * @return JsonResponse
      */
     public function updateItem(UpdateCartRequest $request): JsonResponse
     {
@@ -175,9 +165,9 @@ class CartController extends BaseApiController
                     'cart' => new CartResource($cart),
                 ]
             );
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             return $this->notFound($e->getMessage());
-        } catch (\App\Exceptions\ShopifyApiException $e) {
+        } catch (ShopifyApiException $e) {
             return $this->error(
                 'Failed to update cart item',
                 ['error' => $e->getMessage()],
@@ -196,9 +186,6 @@ class CartController extends BaseApiController
 
     /**
      * Remove item from cart
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function removeItem(Request $request): JsonResponse
     {
@@ -228,9 +215,9 @@ class CartController extends BaseApiController
                     'cart' => new CartResource($cart),
                 ]
             );
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             return $this->notFound($e->getMessage());
-        } catch (\App\Exceptions\ShopifyApiException $e) {
+        } catch (ShopifyApiException $e) {
             return $this->error(
                 'Failed to remove cart item',
                 ['error' => $e->getMessage()],
@@ -249,10 +236,6 @@ class CartController extends BaseApiController
 
     /**
      * Update cart buyer identity
-     * 
-     * @param string $cartId
-     * @param UpdateBuyerIdentityRequest $request
-     * @return JsonResponse
      */
     public function updateBuyerIdentity(string $cartId, UpdateBuyerIdentityRequest $request): JsonResponse
     {
@@ -267,9 +250,9 @@ class CartController extends BaseApiController
                     'cart' => new CartResource($cart),
                 ]
             );
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             return $this->notFound($e->getMessage());
-        } catch (\App\Exceptions\ShopifyApiException $e) {
+        } catch (ShopifyApiException $e) {
             return $this->error(
                 'Failed to update buyer identity',
                 ['error' => $e->getMessage()],

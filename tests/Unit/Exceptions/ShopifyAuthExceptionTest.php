@@ -9,21 +9,21 @@ class ShopifyAuthExceptionTest extends TestCase
 {
     public function test_it_has_correct_http_status_code(): void
     {
-        $exception = new ShopifyAuthException();
+        $exception = new ShopifyAuthException;
 
         $this->assertEquals(401, $exception->getHttpStatusCode());
     }
 
     public function test_it_has_correct_error_code(): void
     {
-        $exception = new ShopifyAuthException();
+        $exception = new ShopifyAuthException;
 
         $this->assertEquals('AUTH_FAILED', $exception->getErrorCode());
     }
 
     public function test_it_has_default_message(): void
     {
-        $exception = new ShopifyAuthException();
+        $exception = new ShopifyAuthException;
 
         $this->assertEquals('Authentication failed', $exception->getMessage());
     }

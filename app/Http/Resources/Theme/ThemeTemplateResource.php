@@ -3,11 +3,12 @@
 namespace App\Http\Resources\Theme;
 
 use App\Http\Resources\Base\BaseApiResource;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
  * Theme Template API Resource
- * 
+ *
  * Transforms ThemeTemplateDTO data to API response format.
  * Used for theme template endpoints.
  */
@@ -15,8 +16,7 @@ class ThemeTemplateResource extends BaseApiResource
 {
     /**
      * Transform the resource into an array.
-     * 
-     * @param Request $request
+     *
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array
@@ -39,16 +39,14 @@ class ThemeTemplateResource extends BaseApiResource
 
     /**
      * Customize the response for the resource.
-     * 
+     *
      * Removes HTML escaping flags to allow HTML content to be properly
      * encoded in the JSON response without excessive escaping.
-     * 
+     *
      * Note: The HTML will still be valid JSON (quotes and backslashes escaped),
      * but HTML tags won't be converted to unicode escape sequences.
-     * 
-     * @param Request $request
-     * @param \Illuminate\Http\JsonResponse $response
-     * @return void
+     *
+     * @param  JsonResponse  $response
      */
     public function withResponse(Request $request, $response): void
     {

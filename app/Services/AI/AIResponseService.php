@@ -23,13 +23,14 @@ class AIResponseService extends BaseService implements AIResponseServiceInterfac
     {
         $model = (string) config('chatbot.models.default');
         $maxOutput = (int) config('chatbot.tokens.output_budget', 600);
+        $temperature = (float) config('chatbot.generation.temperature', 0.6);
         $start = microtime(true);
 
         try {
             $response = OpenAI::chat()->create([
                 'model' => $model,
                 'messages' => $messages,
-                'temperature' => 0.4,
+                'temperature' => $temperature,
                 'max_tokens' => $maxOutput,
             ]);
         } catch (Throwable $e) {

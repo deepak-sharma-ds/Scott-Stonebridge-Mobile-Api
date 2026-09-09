@@ -2,14 +2,12 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
+use App\Models\Audio;
+use App\Models\CustomerEntitlement;
+use App\Models\PlaybackSession;
+use App\Models\PlaySession;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
-use App\Models\PlaySession;
-use App\Models\CustomerEntitlement;
-use App\Models\Package;
-use App\Models\Audio;
-use App\Models\PlaybackSession;
 
 class PlaySessionController extends Controller
 {
@@ -22,7 +20,7 @@ class PlaySessionController extends Controller
 
         $audio = Audio::with('package')->findOrFail($audioId);
         $pkg = $audio->package;
-        if (!$pkg || !$pkg->shopify_tag) {
+        if (! $pkg || ! $pkg->shopify_tag) {
             return response()->json(['error' => 'Package tag not configured'], 403);
         }
 
@@ -30,7 +28,9 @@ class PlaySessionController extends Controller
             ->where('package_tag', $pkg->shopify_tag)
             ->exists();
 
-        if (!$entitled) return response()->json(['error' => 'Not entitled'], 403);
+        if (! $entitled) {
+            return response()->json(['error' => 'Not entitled'], 403);
+        }
 
         $rawToken = Str::random(64);
         $hashed = hash('sha256', $rawToken);
@@ -47,7 +47,7 @@ class PlaySessionController extends Controller
         return response()->json([
             'status' => 'ok',
             'token' => $rawToken,
-            'playlist_url' => route('hls.playlist', ['audio' => $audioId, 'token' => $rawToken])
+            'playlist_url' => route('hls.playlist', ['audio' => $audioId, 'token' => $rawToken]),
         ]);
     }
 
@@ -67,7 +67,7 @@ class PlaySessionController extends Controller
                 'package_tag' => $request->package_tag,
             ],
             [
-                'last_position_seconds' => (float)$request->position,
+                'last_position_seconds' => (float) $request->position,
             ]
         );
 

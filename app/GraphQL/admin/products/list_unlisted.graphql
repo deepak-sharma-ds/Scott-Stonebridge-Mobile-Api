@@ -1,0 +1,29 @@
+query listUnlistedProducts($first: Int!, $after: String) {
+  products(first: $first, after: $after, query: "status:unlisted") {
+    edges {
+      node {
+        id
+        title
+        publishedOnCurrentPublication
+        featuredImage {
+          url
+          altText
+        }
+        variants(first: 100) {
+          edges {
+            node {
+              id
+              title
+              price
+              availableForSale
+            }
+          }
+        }
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}

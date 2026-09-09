@@ -7,18 +7,17 @@ use Illuminate\Http\Request;
 
 /**
  * Article API Resource
- * 
+ *
  * Transforms ArticleDTO data to API response format.
  * Includes content, images, tags, and author information.
- * 
+ *
  * Requirements: 12.8, 12.9, 12.10, 12.11
  */
 class ArticleResource extends BaseApiResource
 {
     /**
      * Transform the resource into an array.
-     * 
-     * @param Request $request
+     *
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array

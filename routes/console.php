@@ -45,3 +45,34 @@ Schedule::call(function (): void {
             ->onQueue((string) config('sales.queue.sync', 'sync'));
     }
 })->dailyAt(sprintf('%02d:00', (int) env('KNOWLEDGE_SYNC_HOUR', 2)))->name('ai-knowledge-sync');
+
+/*
+|--------------------------------------------------------------------------
+| Marketing Push — Klaviyo campaign sweep
+|--------------------------------------------------------------------------
+|
+| Klaviyo has no campaign-sent webhook on the standard plan, so this polls
+| the Campaigns API every ten minutes for newly SENT campaigns and fans out
+| per-recipient pushes. Guarded by push.enabled + push.sweep.enabled inside
+| the command; withoutOverlapping prevents a slow run from stacking.
+|
+*/
+Schedule::command('push:sweep-klaviyo-campaigns')
+    ->everyTenMinutes()
+    ->withoutOverlapping()
+    ->name('push-sweep-klaviyo-campaigns');
+
+/*
+|--------------------------------------------------------------------------
+| Campaign Product Picker — Unlisted Products sync
+|--------------------------------------------------------------------------
+|
+| Keeps the local `unlisted_products` catalog in step with Shopify so the
+| "Link a product" picker on a campaign's show page never has to call
+| Shopify live.
+|
+*/
+Schedule::command('shopify:sync-unlisted-products')
+    ->hourly()
+    ->withoutOverlapping()
+    ->name('sync-unlisted-products');

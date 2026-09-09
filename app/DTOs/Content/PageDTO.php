@@ -7,10 +7,10 @@ use InvalidArgumentException;
 
 /**
  * Page Data Transfer Object
- * 
+ *
  * Represents a Shopify page with content and metadata.
  * Used for CMS pages and policy pages in the mobile API.
- * 
+ *
  * Requirements: 11.6, 11.11, 11.12
  */
 class PageDTO extends BaseDTO
@@ -32,7 +32,7 @@ class PageDTO extends BaseDTO
 
     /**
      * Validate the page data.
-     * 
+     *
      * @throws InvalidArgumentException
      */
     protected function validate(): void
@@ -44,12 +44,11 @@ class PageDTO extends BaseDTO
 
     /**
      * Create a PageDTO from Shopify API response data.
-     * 
+     *
      * Transforms raw Shopify GraphQL page response into a typed DTO instance.
      * Handles both regular pages and policy pages.
-     * 
-     * @param array $data Raw page data from Shopify GraphQL response
-     * @return self
+     *
+     * @param  array  $data  Raw page data from Shopify GraphQL response
      */
     public static function fromShopifyResponse(array $data): self
     {
@@ -74,7 +73,7 @@ class PageDTO extends BaseDTO
      */
     private static function normalizeSeo(?array $seo): ?array
     {
-        if (!$seo) {
+        if (! $seo) {
             return null;
         }
 
@@ -87,19 +86,18 @@ class PageDTO extends BaseDTO
     /**
      * Normalize Shopify metafields to a predictable list.
      *
-     * @param mixed $metafields
      * @return array<int, array{namespace: string|null, key: string, value: mixed}>
      */
     private static function normalizeMetafields(mixed $metafields): array
     {
-        if (!is_array($metafields)) {
+        if (! is_array($metafields)) {
             return [];
         }
 
         $normalized = [];
 
         foreach ($metafields as $metafield) {
-            if (!is_array($metafield) || empty($metafield['key'])) {
+            if (! is_array($metafield) || empty($metafield['key'])) {
                 continue;
             }
 
@@ -117,32 +115,31 @@ class PageDTO extends BaseDTO
     /**
      * Normalize Shopify metaobject references into a flat list.
      *
-     * @param mixed $references
      * @return array<int, array{id: string, type: string|null, fields: array<string, mixed>}>
      */
     private static function normalizeReferences(mixed $references): array
     {
-        if (!is_array($references)) {
+        if (! is_array($references)) {
             return [];
         }
 
         $nodes = $references['nodes'] ?? [];
 
-        if (!is_array($nodes)) {
+        if (! is_array($nodes)) {
             return [];
         }
 
         $normalized = [];
 
         foreach ($nodes as $node) {
-            if (!is_array($node) || empty($node['id'])) {
+            if (! is_array($node) || empty($node['id'])) {
                 continue;
             }
 
             $fields = [];
 
             foreach ($node['fields'] ?? [] as $field) {
-                if (!is_array($field) || empty($field['key'])) {
+                if (! is_array($field) || empty($field['key'])) {
                     continue;
                 }
 
@@ -162,7 +159,7 @@ class PageDTO extends BaseDTO
     /**
      * Build a flat metadata map keyed by metafield key.
      *
-     * @param array<int, array{namespace: string|null, key: string, value: mixed}> $metafields
+     * @param  array<int, array{namespace: string|null, key: string, value: mixed}>  $metafields
      * @return array<string, mixed>|null
      */
     private static function buildMetadataMap(array $metafields): ?array
@@ -180,7 +177,7 @@ class PageDTO extends BaseDTO
 
             $metadata[$key] = $value;
 
-            if ($namespace && !str_contains($key, '.')) {
+            if ($namespace && ! str_contains($key, '.')) {
                 $metadata["{$namespace}.{$key}"] = $value;
             }
         }

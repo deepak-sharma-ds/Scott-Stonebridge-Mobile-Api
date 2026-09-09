@@ -25,6 +25,13 @@ class StartSessionRequest extends BaseApiRequest
             'shopify_locale' => ['sometimes', 'nullable', 'string', 'max:10'],
             'shopify_customer_id' => ['sometimes', 'nullable', 'string', 'max:255'],
             'metadata' => ['sometimes', 'array'],
+            'theme_settings' => ['sometimes', 'nullable', 'array'],
+            'theme_settings.persona_name' => ['sometimes', 'nullable', 'string', 'max:80'],
+            'theme_settings.avatar_url' => ['sometimes', 'nullable', 'string', 'max:500'],
+            'theme_settings.brand_color' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'theme_settings.widget_position' => ['sometimes', 'nullable', 'string', 'max:30'],
+            'theme_settings.greeting_message' => ['sometimes', 'nullable', 'string', 'max:1000'],
+            'theme_settings.free_shipping_threshold' => ['sometimes', 'nullable', 'numeric', 'min:0'],
         ];
     }
 }

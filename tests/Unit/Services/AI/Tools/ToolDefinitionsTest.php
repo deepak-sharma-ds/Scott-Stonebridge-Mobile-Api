@@ -9,11 +9,11 @@ use Tests\TestCase;
 
 class ToolDefinitionsTest extends TestCase
 {
-    public function test_returns_ten_function_tools(): void
+    public function test_returns_all_function_tools(): void
     {
         $tools = (new ToolDefinitions)->all();
 
-        $this->assertCount(10, $tools);
+        $this->assertCount(12, $tools);
         foreach ($tools as $tool) {
             $this->assertSame('function', $tool['type']);
             $this->assertArrayHasKey('function', $tool);
@@ -34,12 +34,26 @@ class ToolDefinitionsTest extends TestCase
             ToolDefinitions::TOOL_GET_CART,
             ToolDefinitions::TOOL_UPDATE_CART,
             ToolDefinitions::TOOL_SEARCH_POLICIES,
+            ToolDefinitions::TOOL_SEARCH_KNOWLEDGE,
             ToolDefinitions::TOOL_GET_ORDER_STATUS,
             ToolDefinitions::TOOL_GET_MOST_RECENT_ORDER_STATUS,
+            ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS,
             ToolDefinitions::TOOL_START_CHECKOUT,
             ToolDefinitions::TOOL_SUGGEST_QUICK_REPLIES,
             ToolDefinitions::TOOL_SUGGEST_UPSELL,
         ], $names);
+    }
+
+    public function test_proactive_tool_descriptions_are_imperative(): void
+    {
+        $tools = (new ToolDefinitions)->all();
+        $byName = [];
+        foreach ($tools as $tool) {
+            $byName[$tool['function']['name']] = $tool['function']['description'];
+        }
+
+        $this->assertStringContainsString('IMMEDIATELY', $byName[ToolDefinitions::TOOL_SUGGEST_UPSELL]);
+        $this->assertStringContainsString('ALWAYS', $byName[ToolDefinitions::TOOL_SUGGEST_QUICK_REPLIES]);
     }
 
     public function test_dispatch_buckets_have_no_overlap(): void

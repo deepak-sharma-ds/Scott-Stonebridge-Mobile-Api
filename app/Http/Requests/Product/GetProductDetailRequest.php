@@ -3,13 +3,14 @@
 namespace App\Http\Requests\Product;
 
 use App\Http\Requests\BaseApiRequest;
+use Illuminate\Contracts\Validation\ValidationRule;
 
 class GetProductDetailRequest extends BaseApiRequest
 {
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
@@ -35,9 +36,9 @@ class GetProductDetailRequest extends BaseApiRequest
     protected function prepareForValidation(): void
     {
         parent::prepareForValidation();
-        
+
         // Get handle from route parameter if not in request
-        if (!$this->has('handle') && $this->route('handle')) {
+        if (! $this->has('handle') && $this->route('handle')) {
             $this->merge([
                 'handle' => $this->route('handle'),
             ]);

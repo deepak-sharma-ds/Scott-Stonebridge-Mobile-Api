@@ -2,14 +2,13 @@
 
 namespace Tests\Feature\Api\V1;
 
-use Tests\TestCase;
-use Tests\Mocks\MockShopifyClient;
 use Tests\Helpers\ShopifyResponseFactory;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Mocks\MockShopifyClient;
+use Tests\TestCase;
 
 /**
  * Integration tests for Cart API endpoints
- * 
+ *
  * Tests Requirements: 2.1, 2.2, 2.3, 2.5, 2.6
  */
 class CartEndpointsTest extends TestCase
@@ -19,8 +18,8 @@ class CartEndpointsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        
-        $this->mockClient = new MockShopifyClient();
+
+        $this->mockClient = new MockShopifyClient;
         $this->app->instance('App\Contracts\Shopify\StorefrontApiClientInterface', $this->mockClient);
     }
 
@@ -33,9 +32,9 @@ class CartEndpointsTest extends TestCase
             [
                 'data' => [
                     'cartCreate' => [
-                        'cart' => $cart
-                    ]
-                ]
+                        'cart' => $cart,
+                    ],
+                ],
             ]
         );
 
@@ -57,9 +56,9 @@ class CartEndpointsTest extends TestCase
                     'currency',
                     'total_items',
                     'unique_items',
-                ]
+                ],
             ],
-            'meta'
+            'meta',
         ]);
 
         $response->assertJson([
@@ -72,14 +71,14 @@ class CartEndpointsTest extends TestCase
         // Arrange
         $cartId = 'gid://shopify/Cart/test-cart-123';
         $cart = ShopifyResponseFactory::cart(['id' => $cartId]);
-        
+
         $this->mockClient->mockResponse(
             'storefront/cart/get_cart.graphql',
             ShopifyResponseFactory::successResponse('cart', $cart)
         );
 
         // Act
-        $response = $this->getJson('/api/v1/cart/' . urlencode($cartId));
+        $response = $this->getJson('/api/v1/cart/'.urlencode($cartId));
 
         // Assert - Requirement 2.2: Maintain identical API endpoint paths
         $response->assertStatus(200);
@@ -88,8 +87,8 @@ class CartEndpointsTest extends TestCase
             'data' => [
                 'cart' => [
                     'id' => $cartId,
-                ]
-            ]
+                ],
+            ],
         ]);
     }
 
@@ -102,12 +101,12 @@ class CartEndpointsTest extends TestCase
             'merchandise' => [
                 'id' => 'gid://shopify/ProductVariant/123',
                 'title' => 'Test Product - Medium',
-            ]
+            ],
         ]);
-        
+
         $cart = ShopifyResponseFactory::cart([
             'id' => $cartId,
-            'lineItems' => [$lineItem]
+            'lineItems' => [$lineItem],
         ]);
 
         $this->mockClient->mockResponse(
@@ -115,14 +114,14 @@ class CartEndpointsTest extends TestCase
             [
                 'data' => [
                     'cartLinesAdd' => [
-                        'cart' => $cart
-                    ]
-                ]
+                        'cart' => $cart,
+                    ],
+                ],
             ]
         );
 
         // Act
-        $response = $this->postJson('/api/v1/cart/' . urlencode($cartId) . '/items', [
+        $response = $this->postJson('/api/v1/cart/'.urlencode($cartId).'/items', [
             'variant_id' => 'gid://shopify/ProductVariant/123',
             'quantity' => 2,
         ]);
@@ -134,8 +133,8 @@ class CartEndpointsTest extends TestCase
             'data' => [
                 'cart' => [
                     'id' => $cartId,
-                ]
-            ]
+                ],
+            ],
         ]);
 
         $this->assertIsArray($response->json('data.cart.line_items'));
@@ -146,7 +145,7 @@ class CartEndpointsTest extends TestCase
         // Arrange
         $cartId = 'gid://shopify/Cart/test-cart-123';
         $lineId = 'gid://shopify/CartLine/456';
-        
+
         $cart = ShopifyResponseFactory::cart(['id' => $cartId]);
 
         $this->mockClient->mockResponse(
@@ -154,14 +153,14 @@ class CartEndpointsTest extends TestCase
             [
                 'data' => [
                     'cartLinesUpdate' => [
-                        'cart' => $cart
-                    ]
-                ]
+                        'cart' => $cart,
+                    ],
+                ],
             ]
         );
 
         // Act
-        $response = $this->patchJson('/api/v1/cart/' . urlencode($cartId) . '/items/' . urlencode($lineId), [
+        $response = $this->patchJson('/api/v1/cart/'.urlencode($cartId).'/items/'.urlencode($lineId), [
             'quantity' => 3,
         ]);
 
@@ -177,7 +176,7 @@ class CartEndpointsTest extends TestCase
         // Arrange
         $cartId = 'gid://shopify/Cart/test-cart-123';
         $lineId = 'gid://shopify/CartLine/456';
-        
+
         $cart = ShopifyResponseFactory::cart(['id' => $cartId, 'lineItems' => []]);
 
         $this->mockClient->mockResponse(
@@ -185,14 +184,14 @@ class CartEndpointsTest extends TestCase
             [
                 'data' => [
                     'cartLinesRemove' => [
-                        'cart' => $cart
-                    ]
-                ]
+                        'cart' => $cart,
+                    ],
+                ],
             ]
         );
 
         // Act
-        $response = $this->deleteJson('/api/v1/cart/' . urlencode($cartId) . '/items/' . urlencode($lineId));
+        $response = $this->deleteJson('/api/v1/cart/'.urlencode($cartId).'/items/'.urlencode($lineId));
 
         // Assert
         $response->assertStatus(200);
@@ -207,7 +206,7 @@ class CartEndpointsTest extends TestCase
         $cartId = 'gid://shopify/Cart/test-cart-123';
 
         // Act - Missing required fields
-        $response = $this->postJson('/api/v1/cart/' . urlencode($cartId) . '/items', []);
+        $response = $this->postJson('/api/v1/cart/'.urlencode($cartId).'/items', []);
 
         // Assert - Requirement 2.3: Maintain identical request validation rules
         $response->assertStatus(422);
@@ -223,17 +222,17 @@ class CartEndpointsTest extends TestCase
             ShopifyResponseFactory::cartLineItem(['quantity' => 2]),
             ShopifyResponseFactory::cartLineItem(['quantity' => 3]),
         ];
-        
+
         $cart = ShopifyResponseFactory::cart(['lineItems' => $lineItems]);
-        
+
         $this->mockClient->mockResponse(
             'storefront/cart/create_cart.graphql',
             [
                 'data' => [
                     'cartCreate' => [
-                        'cart' => $cart
-                    ]
-                ]
+                        'cart' => $cart,
+                    ],
+                ],
             ]
         );
 
@@ -251,14 +250,14 @@ class CartEndpointsTest extends TestCase
     {
         // Arrange
         $cartId = 'gid://shopify/Cart/nonexistent';
-        
+
         $this->mockClient->mockResponse(
             'storefront/cart/get_cart.graphql',
             ShopifyResponseFactory::successResponse('cart', null)
         );
 
         // Act
-        $response = $this->getJson('/api/v1/cart/' . urlencode($cartId));
+        $response = $this->getJson('/api/v1/cart/'.urlencode($cartId));
 
         // Assert - Requirement 2.5: Minimize changes to Mobile_App integration contracts
         $response->assertStatus(404);

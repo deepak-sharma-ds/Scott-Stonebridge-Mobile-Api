@@ -5,8 +5,8 @@ namespace App\Services\Shopify;
 use App\Contracts\Services\OrderServiceInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\Order\OrderDTO;
-use App\Services\Base\BaseService;
 use App\Exceptions\ShopifyNotFoundException;
+use App\Services\Base\BaseService;
 use Illuminate\Support\Collection;
 
 class OrderService extends BaseService implements OrderServiceInterface
@@ -20,10 +20,10 @@ class OrderService extends BaseService implements OrderServiceInterface
     /**
      * Get customer orders
      *
-     * @param string $accessToken Customer access token
-     * @param int $limit Number of orders to fetch
-     * @param string|null $cursor Pagination cursor
-     * @param string|null $fulfillmentStatus Filter by fulfillment status
+     * @param  string  $accessToken  Customer access token
+     * @param  int  $limit  Number of orders to fetch
+     * @param  string|null  $cursor  Pagination cursor
+     * @param  string|null  $fulfillmentStatus  Filter by fulfillment status
      * @return Collection Collection of OrderDTO instances
      */
     public function getOrders(string $accessToken, int $limit, ?string $cursor, ?string $fulfillmentStatus = null): Collection
@@ -47,7 +47,7 @@ class OrderService extends BaseService implements OrderServiceInterface
             }
 
             $orders = $this->extractOrderNodes($response)
-                ->map(fn($order) => OrderDTO::fromShopifyResponse($order));
+                ->map(fn ($order) => OrderDTO::fromShopifyResponse($order));
 
             // Apply fulfillment status filter
             if ($fulfillmentStatus !== null) {
@@ -73,15 +73,11 @@ class OrderService extends BaseService implements OrderServiceInterface
 
     /**
      * Filter orders by fulfillment status
-     * 
+     *
      * Rules:
      * - "FULFILLED" or "fulfilled" → Show only fulfilled orders
      * - "UNFULFILLED" or empty → Show all except fulfilled orders
      * - null → Show all orders (no filter)
-     *
-     * @param Collection $orders
-     * @param string $status
-     * @return Collection
      */
     protected function filterByFulfillmentStatus(Collection $orders, string $status): Collection
     {
@@ -108,9 +104,8 @@ class OrderService extends BaseService implements OrderServiceInterface
     /**
      * Get order details by ID
      *
-     * @param string $accessToken Customer access token
-     * @param string $orderId Order identifier
-     * @return OrderDTO
+     * @param  string  $accessToken  Customer access token
+     * @param  string  $orderId  Order identifier
      */
     public function getOrderDetails(string $accessToken, string $orderId): OrderDTO
     {
@@ -134,7 +129,7 @@ class OrderService extends BaseService implements OrderServiceInterface
 
             $orderData = $this->extractOrderNodes($response)->first();
 
-            if (!$orderData) {
+            if (! $orderData) {
                 throw new ShopifyNotFoundException("Order not found: {$orderId}");
             }
 
@@ -160,9 +155,9 @@ class OrderService extends BaseService implements OrderServiceInterface
     {
         $orders = data_get($response, 'data.customer.orders', []);
 
-        if (!empty($orders['edges'])) {
+        if (! empty($orders['edges'])) {
             return collect($orders['edges'])
-                ->map(fn($edge) => $edge['node'] ?? null)
+                ->map(fn ($edge) => $edge['node'] ?? null)
                 ->filter();
         }
 

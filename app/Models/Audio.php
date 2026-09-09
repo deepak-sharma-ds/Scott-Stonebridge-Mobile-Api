@@ -17,7 +17,7 @@ class Audio extends Model
         'is_hls_ready',
         'duration_seconds',
         'order_index',
-        'status'
+        'status',
     ];
 
     public function package()

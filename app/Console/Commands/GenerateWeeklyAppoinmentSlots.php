@@ -40,7 +40,7 @@ class GenerateWeeklyAppoinmentSlots extends Command
             // $startOfWeek = Carbon::now()->startOfWeek(); // Monday
             // $endOfWeek   = Carbon::now()->endOfWeek();   // Sunday
             $startOfWeek = Carbon::now()->startOfMonth();
-            $endOfWeek   = Carbon::now()->endOfMonth();
+            $endOfWeek = Carbon::now()->endOfMonth();
 
             // Fetch UK bank holidays
             $year = $startOfWeek->year;
@@ -50,11 +50,11 @@ class GenerateWeeklyAppoinmentSlots extends Command
                 $data = $response->json();
                 $events = $data['england-and-wales']['events'] ?? [];
                 $holidays = collect($events)
-                    ->filter(fn($event) => Carbon::parse($event['date'])->year === $year)
-                    ->map(fn($event) => $event['date'])
+                    ->filter(fn ($event) => Carbon::parse($event['date'])->year === $year)
+                    ->map(fn ($event) => $event['date'])
                     ->toArray();
             }
-            $log->info('UK Bank Holidays for ' . $year . ': ' . implode(', ', $holidays));
+            $log->info('UK Bank Holidays for '.$year.': '.implode(', ', $holidays));
 
             // Loop through each day of the week
             for ($date = $startOfWeek; $date->lte($endOfWeek); $date->addDay()) {
@@ -64,6 +64,7 @@ class GenerateWeeklyAppoinmentSlots extends Command
                 // Skip if day is a holiday
                 if (in_array($dateString, $holidays)) {
                     $log->info("Skipping {$dayName} ({$dateString}) due to UK bank holiday");
+
                     continue;
                 }
 
@@ -95,8 +96,8 @@ class GenerateWeeklyAppoinmentSlots extends Command
             $log->info('✅ Weekly availability slots created successfully!');
             $this->info('✅ Weekly availability slots created successfully!');
         } catch (\Throwable $th) {
-            $log->error('Error generating weekly appointment slots: ' . $th->getMessage());
-            $this->error('❌ Error: ' . $th->getMessage());
+            $log->error('Error generating weekly appointment slots: '.$th->getMessage());
+            $this->error('❌ Error: '.$th->getMessage());
         }
     }
 }

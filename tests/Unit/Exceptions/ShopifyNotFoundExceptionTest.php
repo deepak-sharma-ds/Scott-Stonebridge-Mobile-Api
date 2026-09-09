@@ -9,21 +9,21 @@ class ShopifyNotFoundExceptionTest extends TestCase
 {
     public function test_it_has_correct_http_status_code(): void
     {
-        $exception = new ShopifyNotFoundException();
+        $exception = new ShopifyNotFoundException;
 
         $this->assertEquals(404, $exception->getHttpStatusCode());
     }
 
     public function test_it_has_correct_error_code(): void
     {
-        $exception = new ShopifyNotFoundException();
+        $exception = new ShopifyNotFoundException;
 
         $this->assertEquals('NOT_FOUND', $exception->getErrorCode());
     }
 
     public function test_it_has_default_message(): void
     {
-        $exception = new ShopifyNotFoundException();
+        $exception = new ShopifyNotFoundException;
 
         $this->assertEquals('Resource not found', $exception->getMessage());
     }

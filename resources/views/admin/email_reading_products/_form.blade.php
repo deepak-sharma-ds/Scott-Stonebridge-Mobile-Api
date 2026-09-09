@@ -53,7 +53,7 @@
         </div>
         <div class="mb-3">
             <label for="email_view" class="form-label">Email View <small style="color:var(--text-muted);">(blank =
-                    default)</small></label>
+                    default; only needed for a fully custom developer-built view)</small></label>
             <input type="text" name="email_view" id="email_view" class="form-control"
                 value="{{ old('email_view', $p->email_view ?? '') }}"
                 placeholder="{{ config('email_reading.default_view') }}">
@@ -65,6 +65,35 @@
             <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $p->is_active ?? true))>
             <span class="form-label" style="margin:0;">Active</span>
         </label>
+    </div>
+
+    {{-- Dynamic email template --}}
+    <div class="card p-4" style="border:1px solid var(--card-border);margin-bottom:1rem;">
+        <h3 style="margin:0 0 0.75rem;font-size:1rem;">Email Template</h3>
+        <div class="mb-3">
+            <label for="header_image" class="form-label">Header Banner Image <small
+                    style="color:var(--text-muted);">(shown at the top of the email; falls back to the site logo
+                    if left blank{{ $p?->header_image ? '; leave blank to keep the current one' : '' }})</small></label>
+            @if ($p?->header_image)
+                <div style="margin-bottom:0.5rem;">
+                    <img src="{{ asset('storage/reading-header-images/'.$p->header_image) }}" alt=""
+                        style="max-height:60px;border-radius:6px;">
+                </div>
+            @endif
+            <input type="file" name="header_image" id="header_image" class="form-control" accept="image/*">
+        </div>
+        <div class="mb-3">
+            <label for="email_content" class="form-label">Email Content <small
+                    style="color:var(--text-muted);">(shown above the reading; @{{ $productTitle }} /
+                    @{{ $customerName }} available; leave blank to use the default copy)</small></label>
+            <textarea name="email_content" id="email_content" class="form-control" rows="3" data-rich-text>{{ old('email_content', $p->email_content ?? '') }}</textarea>
+        </div>
+        <div class="mb-3">
+            <label for="email_footer" class="form-label">Email Footer <small
+                    style="color:var(--text-muted);">(shown below the reading; @{{ $productTitle }} /
+                    @{{ $customerName }} available; leave blank to use the default copy)</small></label>
+            <textarea name="email_footer" id="email_footer" class="form-control" rows="5" data-rich-text>{{ old('email_footer', $p->email_footer ?? '') }}</textarea>
+        </div>
     </div>
 
     {{-- Questions schema repeater --}}
@@ -210,3 +239,7 @@
         };
     }
 </script>
+
+@section('custom_js_scripts')
+    @include('admin.components.rich-text-editor-scripts')
+@endsection

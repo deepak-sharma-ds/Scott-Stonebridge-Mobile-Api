@@ -5,21 +5,18 @@ namespace App\Services\Shopify;
 use App\Contracts\Services\WishlistServiceInterface;
 use App\Contracts\Shopify\AdminApiClientInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
-use App\DTOs\Product\ProductDTO;
 use App\DTOs\Wishlist\WishlistDTO;
-use App\DTOs\Wishlist\WishlistItemDTO;
-use App\Services\Base\BaseService;
 use App\Exceptions\ShopifyApiException;
 use App\Exceptions\ShopifyAuthException;
 use App\Exceptions\ShopifyNotFoundException;
-use Illuminate\Support\Facades\Cache;
+use App\Services\Base\BaseService;
 
 /**
  * Wishlist Service
- * 
+ *
  * Handles wishlist management using Shopify customer metafields.
  * Provides CRUD operations for customer wishlist items.
- * 
+ *
  * Requirements: 9.3, 9.6, 9.7, 9.8, 9.9, 9.10
  */
 class WishlistService extends BaseService implements WishlistServiceInterface
@@ -33,12 +30,12 @@ class WishlistService extends BaseService implements WishlistServiceInterface
 
     /**
      * Get customer wishlist
-     * 
+     *
      * Retrieves the customer's wishlist from metafields and enriches
      * with full product details.
-     * 
-     * @param string $accessToken Customer access token
-     * @return WishlistDTO
+     *
+     * @param  string  $accessToken  Customer access token
+     *
      * @throws ShopifyAuthException
      */
     public function getWishlist(string $accessToken): WishlistDTO
@@ -65,7 +62,7 @@ class WishlistService extends BaseService implements WishlistServiceInterface
 
             // Fetch full product details for each wishlist item
             $items = [];
-            if (!empty($productIds) && is_array($productIds)) {
+            if (! empty($productIds) && is_array($productIds)) {
                 $items = $this->fetchWishlistProducts($productIds);
             }
 
@@ -85,19 +82,19 @@ class WishlistService extends BaseService implements WishlistServiceInterface
             throw $e;
         } catch (\Exception $e) {
             $this->logErrorWithException('Failed to fetch wishlist', $e);
-            throw new ShopifyApiException('Failed to fetch wishlist: ' . $e->getMessage());
+            throw new ShopifyApiException('Failed to fetch wishlist: '.$e->getMessage());
         }
     }
 
     /**
      * Add item to wishlist
-     * 
+     *
      * Adds a product to the customer's wishlist metafield.
      * Prevents duplicate products from being added.
-     * 
-     * @param string $accessToken Customer access token
-     * @param string $productId Shopify product ID
-     * @return WishlistDTO
+     *
+     * @param  string  $accessToken  Customer access token
+     * @param  string  $productId  Shopify product ID
+     *
      * @throws ShopifyAuthException
      * @throws ShopifyNotFoundException
      * @throws ShopifyApiException
@@ -116,6 +113,7 @@ class WishlistService extends BaseService implements WishlistServiceInterface
                     'product_id' => $productId,
                     'already_exists' => true,
                 ]);
+
                 return $currentWishlist;
             }
 
@@ -138,23 +136,23 @@ class WishlistService extends BaseService implements WishlistServiceInterface
             ]);
 
             return $updatedWishlist;
-        } catch (ShopifyAuthException | ShopifyNotFoundException | ShopifyApiException $e) {
+        } catch (ShopifyAuthException|ShopifyNotFoundException|ShopifyApiException $e) {
             $this->logErrorWithException('Failed to add item to wishlist', $e, ['product_id' => $productId]);
             throw $e;
         } catch (\Exception $e) {
             $this->logErrorWithException('Failed to add item to wishlist', $e, ['product_id' => $productId]);
-            throw new ShopifyApiException('Failed to add item to wishlist: ' . $e->getMessage());
+            throw new ShopifyApiException('Failed to add item to wishlist: '.$e->getMessage());
         }
     }
 
     /**
      * Remove item from wishlist
-     * 
+     *
      * Removes a product from the customer's wishlist metafield.
-     * 
-     * @param string $accessToken Customer access token
-     * @param string $productId Shopify product ID
-     * @return WishlistDTO
+     *
+     * @param  string  $accessToken  Customer access token
+     * @param  string  $productId  Shopify product ID
+     *
      * @throws ShopifyAuthException
      * @throws ShopifyApiException
      */
@@ -169,7 +167,7 @@ class WishlistService extends BaseService implements WishlistServiceInterface
             // Remove product from list
             $productIds = array_filter(
                 $currentWishlist->getProductIds(),
-                fn($id) => $id !== $productId
+                fn ($id) => $id !== $productId
             );
 
             // Update wishlist metafield
@@ -184,19 +182,19 @@ class WishlistService extends BaseService implements WishlistServiceInterface
             ]);
 
             return $updatedWishlist;
-        } catch (ShopifyAuthException | ShopifyApiException $e) {
+        } catch (ShopifyAuthException|ShopifyApiException $e) {
             $this->logErrorWithException('Failed to remove item from wishlist', $e, ['product_id' => $productId]);
             throw $e;
         } catch (\Exception $e) {
             $this->logErrorWithException('Failed to remove item from wishlist', $e, ['product_id' => $productId]);
-            throw new ShopifyApiException('Failed to remove item from wishlist: ' . $e->getMessage());
+            throw new ShopifyApiException('Failed to remove item from wishlist: '.$e->getMessage());
         }
     }
 
     /**
      * Fetch full product details for wishlist items
-     * 
-     * @param array $productIds Array of Shopify product IDs
+     *
+     * @param  array  $productIds  Array of Shopify product IDs
      * @return array Array of wishlist item data
      */
     protected function fetchWishlistProducts(array $productIds): array
@@ -207,7 +205,7 @@ class WishlistService extends BaseService implements WishlistServiceInterface
             try {
                 // Extract handle from product ID if needed
                 $handle = $this->extractHandleFromId($productId);
-                
+
                 // Fetch product details
                 $response = $this->storefrontClient->queryWithCurrency(
                     'storefront/product/get_product_details',
@@ -217,9 +215,9 @@ class WishlistService extends BaseService implements WishlistServiceInterface
                     ]
                 );
 
-                if (!empty($response['data']['productByHandle'])) {
+                if (! empty($response['data']['productByHandle'])) {
                     $product = $response['data']['productByHandle'];
-                    
+
                     $items[] = [
                         'product_id' => $product['id'],
                         'product' => $product,
@@ -237,9 +235,10 @@ class WishlistService extends BaseService implements WishlistServiceInterface
 
     /**
      * Update wishlist metafield
-     * 
-     * @param string $customerId Shopify customer ID
-     * @param array $productIds Array of product IDs
+     *
+     * @param  string  $customerId  Shopify customer ID
+     * @param  array  $productIds  Array of product IDs
+     *
      * @throws ShopifyApiException
      */
     protected function updateWishlistMetafield(string $customerId, array $productIds): void
@@ -254,23 +253,24 @@ class WishlistService extends BaseService implements WishlistServiceInterface
             $variables
         );
 
-        if (!empty($response['data']['customerUpdate']['userErrors'])) {
+        if (! empty($response['data']['customerUpdate']['userErrors'])) {
             $errors = $response['data']['customerUpdate']['userErrors'];
-            throw new ShopifyApiException('Failed to update wishlist: ' . json_encode($errors));
+            throw new ShopifyApiException('Failed to update wishlist: '.json_encode($errors));
         }
     }
 
     /**
      * Verify that a product exists
-     * 
-     * @param string $productId Shopify product ID
+     *
+     * @param  string  $productId  Shopify product ID
+     *
      * @throws ShopifyNotFoundException
      */
     protected function verifyProductExists(string $productId): void
     {
         try {
             $handle = $this->extractHandleFromId($productId);
-            
+
             $response = $this->storefrontClient->query(
                 'storefront/product/get_product_details',
                 ['handle' => $handle]
@@ -288,22 +288,23 @@ class WishlistService extends BaseService implements WishlistServiceInterface
 
     /**
      * Extract product handle from Shopify ID
-     * 
+     *
      * Shopify IDs are in format: gid://shopify/Product/123456789
      * This method extracts the numeric ID or handle.
-     * 
-     * @param string $productId Shopify product ID or handle
+     *
+     * @param  string  $productId  Shopify product ID or handle
      * @return string Product handle or ID
      */
     protected function extractHandleFromId(string $productId): string
     {
         // If it's already a handle (no gid://), return as is
-        if (!str_starts_with($productId, 'gid://')) {
+        if (! str_starts_with($productId, 'gid://')) {
             return $productId;
         }
 
         // Extract numeric ID from GID
         $parts = explode('/', $productId);
+
         return end($parts);
     }
 }

@@ -32,6 +32,8 @@ class ProductRecommendationDTO extends BaseDTO
         /** @var list<array{name:string,values:list<string>}> */
         public readonly array $options = [],
         public readonly bool $hasVariants = false,
+        /** @var list<string> */
+        public readonly array $tags = [],
     ) {
         $this->validate();
     }
@@ -100,7 +102,20 @@ class ProductRecommendationDTO extends BaseDTO
             variants: $variants,
             options: $optionGroups,
             hasVariants: $hasVariants,
+            tags: self::extractTags($node),
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $node
+     * @return list<string>
+     */
+    private static function extractTags(array $node): array
+    {
+        return array_values(array_filter(array_map(
+            static fn ($tag): string => (string) $tag,
+            (array) ($node['tags'] ?? []),
+        ), static fn (string $tag): bool => $tag !== ''));
     }
 
     /**
@@ -252,6 +267,7 @@ class ProductRecommendationDTO extends BaseDTO
             'options' => $this->options,
             'variants' => $this->variants,
             'has_variants' => $this->hasVariants,
+            'tags' => $this->tags,
         ];
     }
 }

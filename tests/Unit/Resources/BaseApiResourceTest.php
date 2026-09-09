@@ -8,7 +8,7 @@ use Tests\TestCase;
 
 /**
  * Test BaseApiResource transformation methods
- * 
+ *
  * Validates: Requirements 5.5, 17.6, 17.7
  */
 class BaseApiResourceTest extends TestCase
@@ -20,44 +20,45 @@ class BaseApiResourceTest extends TestCase
         parent::setUp();
 
         // Create a concrete implementation for testing
-        $this->resource = new class(['test' => 'data']) extends BaseApiResource {
+        $this->resource = new class(['test' => 'data']) extends BaseApiResource
+        {
             public function toArray(Request $request): array
             {
                 return ['test' => $this->resource['test']];
             }
 
             // Expose protected methods for testing
-            public function testFlattenEdges($data)
+            public function test_flatten_edges($data)
             {
                 return $this->flattenEdges($data);
             }
 
-            public function testParseConnection($connection, $key = 'items')
+            public function test_parse_connection($connection, $key = 'items')
             {
                 return $this->parseConnection($connection, $key);
             }
 
-            public function testRemoveInternalFields($data, $fieldsToRemove = [])
+            public function test_remove_internal_fields($data, $fieldsToRemove = [])
             {
                 return $this->removeInternalFields($data, $fieldsToRemove);
             }
 
-            public function testExtractPaginationMeta($connection)
+            public function test_extract_pagination_meta($connection)
             {
                 return $this->extractPaginationMeta($connection);
             }
 
-            public function testTransformMoney($moneyData)
+            public function test_transform_money($moneyData)
             {
                 return $this->transformMoney($moneyData);
             }
 
-            public function testTransformImage($imageData)
+            public function test_transform_image($imageData)
             {
                 return $this->transformImage($imageData);
             }
 
-            public function testTransformImages($imagesData)
+            public function test_transform_images($imagesData)
             {
                 return $this->transformImages($imagesData);
             }
@@ -71,7 +72,7 @@ class BaseApiResourceTest extends TestCase
             'edges' => [
                 ['node' => ['id' => '1', 'name' => 'Product 1']],
                 ['node' => ['id' => '2', 'name' => 'Product 2']],
-            ]
+            ],
         ];
 
         $result = $this->resource->testFlattenEdges($data);
@@ -92,14 +93,14 @@ class BaseApiResourceTest extends TestCase
                 'edges' => [
                     ['node' => ['url' => 'image1.jpg', 'altText' => 'Image 1']],
                     ['node' => ['url' => 'image2.jpg', 'altText' => 'Image 2']],
-                ]
+                ],
             ],
             'variants' => [
                 'edges' => [
                     ['node' => ['id' => 'variant-1', 'title' => 'Small']],
                     ['node' => ['id' => 'variant-2', 'title' => 'Large']],
-                ]
-            ]
+                ],
+            ],
         ];
 
         $result = $this->resource->testFlattenEdges($data);
@@ -114,7 +115,7 @@ class BaseApiResourceTest extends TestCase
             'variants' => [
                 ['id' => 'variant-1', 'title' => 'Small'],
                 ['id' => 'variant-2', 'title' => 'Large'],
-            ]
+            ],
         ], $result);
     }
 
@@ -145,7 +146,7 @@ class BaseApiResourceTest extends TestCase
             'pageInfo' => [
                 'endCursor' => 'cursor123',
                 'hasNextPage' => true,
-            ]
+            ],
         ];
 
         $result = $this->resource->testParseConnection($connection);
@@ -168,7 +169,7 @@ class BaseApiResourceTest extends TestCase
             'pageInfo' => [
                 'endCursor' => null,
                 'hasNextPage' => false,
-            ]
+            ],
         ];
 
         $result = $this->resource->testParseConnection($connection, 'products');
@@ -369,7 +370,7 @@ class BaseApiResourceTest extends TestCase
             'edges' => [
                 ['node' => ['url' => 'image1.jpg', 'altText' => 'Image 1']],
                 ['node' => ['url' => 'image2.jpg', 'altText' => 'Image 2']],
-            ]
+            ],
         ];
 
         $result = $this->resource->testTransformImages($imagesData);

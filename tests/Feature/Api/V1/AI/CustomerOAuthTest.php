@@ -190,4 +190,25 @@ class CustomerOAuthTest extends TestCase
         $response->assertOk();
         $response->assertExactJson(['authenticated' => false]);
     }
+
+    public function test_logout_invalidates_session(): void
+    {
+        $convo = AiConversation::factory()->create(['shop_domain' => self::SHOP]);
+        $session = AiCustomerSession::create([
+            'session_id' => $convo->session_id,
+            'customer_access_token' => 'shpca_active',
+            'expires_at' => now()->addHour(),
+        ]);
+
+        $response = $this->postJson('/api/v1/ai/oauth/customer/logout', [
+            'session_id' => $convo->session_id,
+        ]);
+
+        $response->assertOk();
+        $response->assertExactJson(['success' => true, 'authenticated' => false]);
+
+        $session->refresh();
+        $this->assertTrue($session->isExpired());
+        $this->assertSame('', $session->customer_access_token);
+    }
 }

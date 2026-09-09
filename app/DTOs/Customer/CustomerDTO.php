@@ -7,10 +7,10 @@ use InvalidArgumentException;
 
 /**
  * Customer Data Transfer Object
- * 
+ *
  * Represents a Shopify customer with typed properties and validation.
  * Customers contain personal information, addresses, and marketing preferences.
- * 
+ *
  * Requirements: 16.4, 16.6, 16.7
  */
 class CustomerDTO extends BaseDTO
@@ -32,7 +32,7 @@ class CustomerDTO extends BaseDTO
 
     /**
      * Validate the customer data.
-     * 
+     *
      * @throws InvalidArgumentException
      */
     protected function validate(): void
@@ -44,19 +44,18 @@ class CustomerDTO extends BaseDTO
 
     /**
      * Create a CustomerDTO from Shopify API response data.
-     * 
+     *
      * Transforms raw Shopify GraphQL customer response into a typed DTO instance.
      * Handles nested addresses and customer metadata.
-     * 
-     * @param array $data Raw customer data from Shopify GraphQL response
-     * @return self
+     *
+     * @param  array  $data  Raw customer data from Shopify GraphQL response
      */
     public static function fromShopifyResponse(array $data): self
     {
         // Handle both edge/node structure and flat array structure for addresses
         $addresses = $data['addresses']['edges'] ?? $data['addresses'] ?? [];
         $defaultAddressId = $data['defaultAddress']['id'] ?? null;
-        
+
         return new self(
             id: $data['id'],
             email: $data['email'],
@@ -64,7 +63,7 @@ class CustomerDTO extends BaseDTO
             lastName: $data['lastName'] ?? null,
             phone: $data['phone'] ?? null,
             addresses: array_map(
-                fn($addr) => AddressDTO::fromShopifyResponse(array_merge(
+                fn ($addr) => AddressDTO::fromShopifyResponse(array_merge(
                     $addr['node'] ?? $addr,
                     ['isDefault' => (($addr['node']['id'] ?? $addr['id'] ?? null) === $defaultAddressId)]
                 )),
@@ -79,24 +78,21 @@ class CustomerDTO extends BaseDTO
 
     /**
      * Get the customer's full name.
-     * 
+     *
      * Combines first and last name, or returns email if names are not available.
-     * 
-     * @return string
      */
     public function getFullName(): string
     {
         $parts = array_filter([$this->firstName, $this->lastName]);
-        return !empty($parts) ? implode(' ', $parts) : $this->email;
+
+        return ! empty($parts) ? implode(' ', $parts) : $this->email;
     }
 
     /**
      * Check if the customer has any addresses.
-     * 
-     * @return bool
      */
     public function hasAddresses(): bool
     {
-        return !empty($this->addresses);
+        return ! empty($this->addresses);
     }
 }

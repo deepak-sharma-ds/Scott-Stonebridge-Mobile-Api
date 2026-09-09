@@ -9,7 +9,7 @@ The Laravel Boost guidelines are specifically curated by Laravel maintainers for
 
 This application is a Laravel application and its main Laravel ecosystems package & versions are below. You are an expert with them all. Ensure you abide by these specific packages & versions.
 
-- php - 8.5
+- php - 8.3
 - laravel/framework (LARAVEL) - v11
 - laravel/prompts (PROMPTS) - v0
 - laravel/sanctum (SANCTUM) - v4
@@ -156,12 +156,12 @@ This project has domain-specific skills available in `**/skills/**`. You MUST ac
 
 ## Laravel 11 Structure
 
-- In Laravel 11, middleware are no longer registered in `app\Http/Kernel.php`.
+- In Laravel 11, middleware are no longer registered in `app/Http/Kernel.php`.
 - Middleware are configured declaratively in `bootstrap/app.php` using `Application::configure()->withMiddleware()`.
 - `bootstrap/app.php` is the file to register middleware, exceptions, and routing files.
 - `bootstrap/providers.php` contains application specific service providers.
 - No app\Console\Kernel.php - use `bootstrap/app.php` or `routes/console.php` for console configuration.
-- Commands auto-register - files in `app\Console/Commands/` are automatically available and do not require manual registration.
+- Commands auto-register - files in `app/Console/Commands/` are automatically available and do not require manual registration.
 
 ## Database
 

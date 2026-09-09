@@ -7,6 +7,7 @@ use App\Facades\GraphQLLoader;
 class ShopifyManager
 {
     protected $storefront;
+
     protected $admin;
 
     public function __construct(StorefrontService $storefront, AdminService $admin)
@@ -28,8 +29,8 @@ class ShopifyManager
     /**
      * Dynamically load GraphQL file + send request
      *
-     * @param string $type "storefront" | "admin"
-     * @param string $path "products/get_products" (without .graphql)
+     * @param  string  $type  "storefront" | "admin"
+     * @param  string  $path  "products/get_products" (without .graphql)
      */
     public function query(string $type, string $path, array $vars = [])
     {
@@ -45,7 +46,7 @@ class ShopifyManager
         $response = $service->request($query, $vars);
 
         // Handle Shopify errors (storefront + admin)
-        if (!empty($response['errors'])) {
+        if (! empty($response['errors'])) {
             $error = $response['errors'];
 
             // Shopify sometimes returns array, sometimes string key list
@@ -57,7 +58,7 @@ class ShopifyManager
         }
 
         // Validate response structure
-        if (!isset($response['data'])) {
+        if (! isset($response['data'])) {
             throw new \Exception("Invalid Shopify API response: missing 'data' field");
         }
 

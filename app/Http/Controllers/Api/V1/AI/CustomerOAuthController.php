@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Controllers\Api\V1\AI;
 
 use App\Models\AiCustomerSession;
+use App\Services\AI\ChatbotConfigRepository;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -21,12 +22,16 @@ use Illuminate\Support\Str;
  * `/start` in a popup, we redirect to Shopify's hosted authorization page,
  * Shopify redirects back to `/callback`, we exchange the auth code for an
  * access token and persist it bound to the chat session.
+ *
+ * @deprecated Deprecated in favor of Unified Storefront & Admin Bridge.
  */
 class CustomerOAuthController
 {
     private const STATE_PREFIX = 'ai:oauth:state:';
 
-    private const DISCOVERY_CACHE_TTL = 3600;
+    public function __construct(
+        private readonly ChatbotConfigRepository $chatbotConfig,
+    ) {}
 
     public function start(Request $request): RedirectResponse
     {
@@ -251,6 +256,35 @@ class CustomerOAuthController
         ]);
     }
 
+    public function logout(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'session_id' => ['required', 'uuid'],
+        ]);
+
+        $session = AiCustomerSession::query()
+            ->where('session_id', $validated['session_id'])
+            ->first();
+
+        if ($session !== null) {
+            $session->forceFill([
+                'customer_access_token' => '',
+                'refresh_token' => null,
+                'refresh_token_expires_at' => null,
+                'expires_at' => now()->subSecond(),
+            ])->save();
+
+            Log::channel('ai')->info('oauth.customer_logout', [
+                'session_id' => $validated['session_id'],
+            ]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'authenticated' => false,
+        ]);
+    }
+
     /**
      * @return array{authorization_endpoint: string, token_endpoint: string}
      */
@@ -258,7 +292,7 @@ class CustomerOAuthController
     {
         $cacheKey = "ai:oauth:oidc:{$shopDomain}";
 
-        return Cache::remember($cacheKey, self::DISCOVERY_CACHE_TTL, function () use ($shopDomain): array {
+        return Cache::remember($cacheKey, $this->chatbotConfig->mcpDiscoveryCacheTtlSeconds(), function () use ($shopDomain): array {
             $url = "https://{$shopDomain}/.well-known/openid-configuration";
             $response = Http::timeout(10)->acceptJson()->get($url);
             abort_unless($response->successful(), 502, 'OIDC discovery failed.');

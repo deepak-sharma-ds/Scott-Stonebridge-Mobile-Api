@@ -12,6 +12,6 @@ class GoogleToken extends Model
         'expires_at',
         'token_type',
         'scope',
-        'created_at_timestamp'
+        'created_at_timestamp',
     ];
 }

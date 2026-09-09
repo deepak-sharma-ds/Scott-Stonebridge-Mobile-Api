@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Contracts\Services\OrderServiceInterface;
+use App\Exceptions\ShopifyNotFoundException;
 use App\Http\Controllers\Base\BaseApiController;
 use App\Http\Resources\Order\OrderResource;
 use Illuminate\Http\JsonResponse;
@@ -10,11 +11,11 @@ use Illuminate\Http\Request;
 
 /**
  * Order Controller (v1)
- * 
+ *
  * Handles order-related API endpoints.
  * Requires authentication via customer access token.
  * Extends BaseApiController for standardized responses.
- * 
+ *
  * Requirements: 2.1, 2.2, 5.4, 11.6
  */
 class OrderController extends BaseApiController
@@ -25,9 +26,6 @@ class OrderController extends BaseApiController
 
     /**
      * Get customer orders
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function index(Request $request): JsonResponse
     {
@@ -50,7 +48,7 @@ class OrderController extends BaseApiController
                     'orders' => OrderResource::collection($orders),
                 ]
             );
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             return $this->unauthorized($e->getMessage());
         } catch (\Exception $e) {
             return $this->error(
@@ -64,9 +62,6 @@ class OrderController extends BaseApiController
 
     /**
      * Get order detail
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function show(Request $request): JsonResponse
     {
@@ -93,7 +88,7 @@ class OrderController extends BaseApiController
                     'order' => new OrderResource($order),
                 ]
             );
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             return $this->notFound($e->getMessage());
         } catch (\Exception $e) {
             return $this->error(

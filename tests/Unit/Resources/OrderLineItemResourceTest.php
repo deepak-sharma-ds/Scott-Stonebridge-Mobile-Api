@@ -9,7 +9,7 @@ use Tests\TestCase;
 
 /**
  * OrderLineItemResource Unit Tests
- * 
+ *
  * Tests transformation logic from OrderLineItemDTO to API response format.
  * Validates field mapping, pricing information, and edge cases.
  */
@@ -232,7 +232,7 @@ class OrderLineItemResourceTest extends TestCase
         $this->assertArrayHasKey('variant_title', $result);
         $this->assertArrayHasKey('product_title', $result);
         $this->assertArrayHasKey('product_handle', $result);
-        
+
         // Verify camelCase fields are NOT present
         $this->assertArrayNotHasKey('variantId', $result);
         $this->assertArrayNotHasKey('variantTitle', $result);
@@ -264,11 +264,11 @@ class OrderLineItemResourceTest extends TestCase
         $this->assertArrayHasKey('currency', $result);
         $this->assertEquals('45.99', $result['price']);
         $this->assertEquals('USD', $result['currency']);
-        
+
         // Verify the price field is not an array
         $this->assertIsString($result['price']);
         $this->assertIsString($result['currency']);
-        
+
         // Verify discountedTotalPrice is not exposed
         $this->assertArrayNotHasKey('discountedTotalPrice', $result);
         $this->assertArrayNotHasKey('discounted_total_price', $result);

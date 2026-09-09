@@ -10,5 +10,6 @@ class PlaySession extends Model
     use SoftDeletes;
 
     protected $fillable = ['audio_id', 'session_token', 'user_id', 'ip', 'user_agent', 'used', 'expires_at'];
+
     protected $dates = ['expires_at'];
 }

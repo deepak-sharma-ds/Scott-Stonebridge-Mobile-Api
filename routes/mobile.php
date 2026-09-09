@@ -1,19 +1,18 @@
 <?php
 
 use App\Http\Controllers\Apis\AboutPageController;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\Apis\ProductController;
-use App\Http\Controllers\Apis\HomeController;
 use App\Http\Controllers\Apis\AuthController;
+use App\Http\Controllers\Apis\BlogController;
 use App\Http\Controllers\Apis\CartController;
+use App\Http\Controllers\Apis\ContactUsController;
+use App\Http\Controllers\Apis\HomeController;
 use App\Http\Controllers\Apis\OrdertController;
+use App\Http\Controllers\Apis\PageController;
+use App\Http\Controllers\Apis\PolicyPageController;
+use App\Http\Controllers\Apis\ProductController;
 use App\Http\Controllers\Apis\ProfileController;
 use App\Http\Controllers\Apis\WishlistController;
-use App\Http\Controllers\Apis\ContactUsController;
-use App\Http\Controllers\Apis\PageController;
-use App\Http\Controllers\Apis\BlogController;
-use App\Http\Controllers\Apis\PolicyPageController;
+use Illuminate\Support\Facades\Route;
 
 /**
  * Shopify APIs for Mobile App Development
@@ -39,7 +38,6 @@ Route::middleware(['disable.session'])->group(function () {
         Route::post('resolve', [BlogController::class, 'resolveUrl']);         // dynamic internal redirect handler
     });
 
-
     Route::prefix('auth')->group(function () {
         Route::post('register', [AuthController::class, 'register']);
         Route::post('login', [AuthController::class, 'login']);
@@ -60,7 +58,7 @@ Route::middleware(['disable.session'])->group(function () {
         Route::post('/products/details', [ProductController::class, 'getProductDetails']);
         Route::post('/featured/product', [ProductController::class, 'getFeaturedProducts']);
 
-        Route::prefix('cart',)->group(function () {
+        Route::prefix('cart')->group(function () {
             Route::post('/create', [CartController::class, 'createCart'])->name('cart.create');
             Route::post('/add', [CartController::class, 'addToCart'])->name('cart.add');
             Route::post('/update', [CartController::class, 'updateToCart'])->name('cart.update');
@@ -69,14 +67,14 @@ Route::middleware(['disable.session'])->group(function () {
             Route::post('/buyer/identify', [CartController::class, 'cartBuyerIdentityUpdate'])->name('cart.buyer.identify');
         });
 
-        Route::prefix('orders',)->group(function () {
+        Route::prefix('orders')->group(function () {
             // Shows all orders
             Route::post('/', [OrdertController::class, 'index'])->name('order.index');
             // Shows all details of selected order
             Route::post('/details', [OrdertController::class, 'getOrderDetails'])->name('order.details');
         });
 
-        Route::prefix('profile',)->group(function () {
+        Route::prefix('profile')->group(function () {
             // Get customer profile + addresses
             Route::get('/', [ProfileController::class, 'index'])->name('profile.index');
 

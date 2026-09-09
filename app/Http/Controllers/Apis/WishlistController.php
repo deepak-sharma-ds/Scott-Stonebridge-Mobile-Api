@@ -2,9 +2,9 @@
 
 namespace App\Http\Controllers\Apis;
 
+use App\Facades\Shopify;
 use App\Http\Controllers\Controller;
 use App\Services\APIShopifyService;
-use App\Facades\Shopify;
 use App\Traits\ShopifyResponseFormatter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
@@ -14,6 +14,7 @@ class WishlistController extends Controller
     use ShopifyResponseFormatter;
 
     protected $shopify;
+
     protected $customerAccessToken;
 
     public function __construct(APIShopifyService $shopify, Request $request)
@@ -44,14 +45,13 @@ class WishlistController extends Controller
             $wishlistValue = data_get($response, 'data.customer.metafield.value');
 
             // Final decoded wishlist (always return array)
-            $wishlist = json_decode($wishlistValue ?: "[]", true);
+            $wishlist = json_decode($wishlistValue ?: '[]', true);
 
             return $this->success('Wishlist fetched successfully', $wishlist);
         } catch (\Throwable $e) {
             return $this->fail('Failed to fetch wishlist', $e->getMessage());
         }
     }
-
 
     /**
      * Add a product to the customer's wishlist (Admin API)
@@ -68,9 +68,9 @@ class WishlistController extends Controller
         try {
             // Shopify Customer GID (from middleware / decoded token)
             $customerId = $request['shopify_customer_data']['id'] ?? null;
-            $productId  = $request->product_id;
+            $productId = $request->product_id;
 
-            if (!$customerId) {
+            if (! $customerId) {
                 return $this->fail('Customer not authenticated');
             }
 
@@ -107,7 +107,7 @@ class WishlistController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'customer_id' => 'required|string',
-            'product_id'  => 'required|string',
+            'product_id' => 'required|string',
         ]);
         if ($validator->fails()) {
             return $this->fail('Validation error.', $validator->errors());
@@ -115,7 +115,7 @@ class WishlistController extends Controller
 
         try {
             $customerId = $request->customer_id;
-            $productId  = $request->product_id;
+            $productId = $request->product_id;
 
             // ---------------------------------------------------------
             // 1. Fetch Current Wishlist (Admin API)
@@ -126,7 +126,7 @@ class WishlistController extends Controller
             // 2. Remove item
             // ---------------------------------------------------------
             $updatedWishlist = array_values(
-                array_filter($currentWishlist, fn($id) => $id !== $productId)
+                array_filter($currentWishlist, fn ($id) => $id !== $productId)
             );
 
             // ---------------------------------------------------------
@@ -164,7 +164,6 @@ class WishlistController extends Controller
         }
     }
 
-
     /**
      * Update wishlist metafield via Admin API (New Standard)
      */
@@ -173,7 +172,7 @@ class WishlistController extends Controller
         try {
             $vars = [
                 'customerId' => $customerId,
-                'value'      => json_encode($wishlistArray),
+                'value' => json_encode($wishlistArray),
             ];
 
             $response = Shopify::query(
@@ -186,16 +185,16 @@ class WishlistController extends Controller
             $metafields = data_get($response, 'data.customerUpdate.customer.metafields.edges', []);
 
             // Convert edges → node (flatten)
-            $clean = array_map(fn($edge) => $edge['node'], $metafields);
+            $clean = array_map(fn ($edge) => $edge['node'], $metafields);
 
             return [
-                'updated'    => true,
+                'updated' => true,
                 'metafields' => $clean,
             ];
         } catch (\Throwable $e) {
             return [
                 'updated' => false,
-                'error'   => $e->getMessage(),
+                'error' => $e->getMessage(),
             ];
         }
     }

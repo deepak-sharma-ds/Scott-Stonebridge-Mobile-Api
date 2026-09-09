@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\BookingService;
 use App\Mail\BookingConfirmationMail;
+use App\Models\CustomerEntitlement;
+use App\Models\Package;
+use App\Services\BookingService;
 use App\Services\ShopifyService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
-use App\Models\Package;
-use App\Models\CustomerEntitlement;
 
 class ShopifyController extends Controller
 {
@@ -61,9 +61,9 @@ class ShopifyController extends Controller
 
             $properties = [];
 
-            if (!empty($data['line_items'])) {
+            if (! empty($data['line_items'])) {
                 foreach ($data['line_items'] as $item) {
-                    if (!empty($item['properties'])) {
+                    if (! empty($item['properties'])) {
                         foreach ($item['properties'] as $prop) {
                             $properties[$prop['name']] = $prop['value'];
                         }
@@ -84,7 +84,7 @@ class ShopifyController extends Controller
                 'order_id' => $data['id'] ?? null,
 
                 'name' => $properties['name']
-                    ?? ($data['customer']['first_name'] . ' ' . $data['customer']['last_name'] ?? null),
+                    ?? ($data['customer']['first_name'].' '.$data['customer']['last_name'] ?? null),
 
                 'email' => $properties['email']
                     ?? $data['email']
@@ -105,7 +105,7 @@ class ShopifyController extends Controller
             if (empty($bookingData['time_slot_id'])) {
                 return response()->json([
                     'status' => 200,
-                    'message' => 'Ignored product ID'
+                    'message' => 'Ignored product ID',
                 ], 200);
             }
 
@@ -121,17 +121,18 @@ class ShopifyController extends Controller
 
             if ($validator->fails()) {
                 $log->error('Validation failed for webhook booking:', $validator->errors()->toArray());
+
                 return response()->json([
                     'status' => 422,
                     'message' => 'Validation failed',
-                    'error' => $validator->errors()
+                    'error' => $validator->errors(),
                 ], 422);
             }
 
             // Book the meeting
             $result = $bookingService->bookMeeting($bookingData);
 
-            if (!empty($result['success'])) {
+            if (! empty($result['success'])) {
                 $booking = $result['booking']; // ScheduledMeeting model
 
                 // Optional: send email confirmation
@@ -144,12 +145,13 @@ class ShopifyController extends Controller
                     'status' => 200,
                     'message' => 'Booking successful',
                     'data' => [
-                        'booking_data' => $booking
-                    ]
+                        'booking_data' => $booking,
+                    ],
                 ], 200);
             }
 
             $log->error('Booking failed:', $result);
+
             return response()->json([
                 'status' => 500,
                 'message' => $result['message'] ?? null,
@@ -157,6 +159,7 @@ class ShopifyController extends Controller
             ], 500);
         } catch (\Throwable $th) {
             $log->error('Exception in handleAppointmentBookingWebhook:', ['error' => $th->getMessage()]);
+
             return response()->json([
                 'status' => 500,
                 'message' => 'Exception occurred',
@@ -184,15 +187,15 @@ class ShopifyController extends Controller
             //     return response('Invalid signature', 401);
             // }
 
-
             $payload = $request->all();
 
             // -------------------------------
             // 1. Validate customer
             // -------------------------------
             $customer = data_get($payload, 'customer');
-            if (!$customer) {
+            if (! $customer) {
                 $log->warning('No customer object in order payload.');
+
                 return response()->json([
                     'status' => 400,
                     'message' => 'Customer data missing',
@@ -200,12 +203,13 @@ class ShopifyController extends Controller
             }
 
             $customerId = data_get($customer, 'id');
-            $email      = data_get($customer, 'email');
+            $email = data_get($customer, 'email');
 
-            if (!$customerId || !$email) {
+            if (! $customerId || ! $email) {
                 $log->warning('Customer ID or email missing.', [
-                    'customer' => $customer
+                    'customer' => $customer,
                 ]);
+
                 return response()->json([
                     'status' => 400,
                     'message' => 'Invalid customer data',
@@ -218,8 +222,9 @@ class ShopifyController extends Controller
             $lineItems = data_get($payload, 'line_items', []);
             if (empty($lineItems)) {
                 $log->warning('No line items found in order.', [
-                    'order_id' => data_get($payload, 'id')
+                    'order_id' => data_get($payload, 'id'),
                 ]);
+
                 return response()->json([
                     'status' => 400,
                     'message' => 'No line items',
@@ -235,33 +240,35 @@ class ShopifyController extends Controller
 
                 if (empty($properties)) {
                     $log->info('No line item properties found.', [
-                        'line_item_id' => data_get($item, 'id')
+                        'line_item_id' => data_get($item, 'id'),
                     ]);
+
                     continue;
                 }
 
                 foreach ($properties as $property) {
-                    $name  = data_get($property, 'name');
+                    $name = data_get($property, 'name');
                     $value = data_get($property, 'value');
 
                     $log->info('Processing line item property.', [
-                        'name'  => $name,
+                        'name' => $name,
                         'value' => $value,
                     ]);
 
                     // -------------------------------
                     // 3. Identify meditation product
                     // -------------------------------
-                    if ($name === 'meditation-audio' && !empty($value)) {
+                    if ($name === 'meditation-audio' && ! empty($value)) {
 
                         // Example: value = communication-meditation
                         $package = Package::where('shopify_tag', $value)->first();
 
-                        if (!$package) {
+                        if (! $package) {
                             $log->warning('No package found for meditation audio.', [
                                 'value' => $value,
-                                'order_id' => data_get($payload, 'id')
+                                'order_id' => data_get($payload, 'id'),
                             ]);
+
                             continue;
                         }
 
@@ -271,10 +278,10 @@ class ShopifyController extends Controller
                         CustomerEntitlement::updateOrCreate(
                             [
                                 'shopify_customer_id' => $customerId,
-                                'package_tag'         => $package->shopify_tag,
+                                'package_tag' => $package->shopify_tag,
                             ],
                             [
-                                'email'       => $email,
+                                'email' => $email,
                                 // 'order_id'    => data_get($payload, 'id'),
                                 // 'line_item_id' => data_get($item, 'id'),
                                 // 'created_at'  => now(),
@@ -283,16 +290,16 @@ class ShopifyController extends Controller
 
                         $log->info('Meditation access granted.', [
                             'customer_id' => $customerId,
-                            'email'       => $email,
-                            'package'     => $package->shopify_tag,
-                            'order_id'    => data_get($payload, 'id'),
+                            'email' => $email,
+                            'package' => $package->shopify_tag,
+                            'order_id' => data_get($payload, 'id'),
                         ]);
                     }
                 }
             }
 
             return response()->json([
-                'status'  => 200,
+                'status' => 200,
                 'message' => 'Meditation access processed successfully',
             ], 200);
         } catch (\Throwable $th) {
@@ -302,9 +309,9 @@ class ShopifyController extends Controller
             ]);
 
             return response()->json([
-                'status'  => 500,
+                'status' => 500,
                 'message' => 'Exception occurred',
-                'error'   => $th->getMessage(),
+                'error' => $th->getMessage(),
             ], 500);
         }
     }

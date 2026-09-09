@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('api_logs', function (Blueprint $table) {
             $table->id();
-            $table->string('actor_type')->nullable()->comment('customer'|'admin'|'system'); // 'customer'|'admin'|'system'
+            $table->string('actor_type')->nullable()->comment('customer' | 'admin' | 'system'); // 'customer'|'admin'|'system'
             $table->string('actor_id')->nullable()->comment('Shopify customer id or app user id');   // Shopify customer id or app user id
             $table->string('action')->comment('search, wishlist_add, product_view, login');                 // e.g. search, wishlist_add, product_view, login
             $table->json('meta')->nullable()->comment('{ query: "...", product_id: "...", ip: "..."}');         // { query: "...", product_id: "...", ip: "..."}

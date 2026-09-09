@@ -2,16 +2,16 @@
 
 namespace Tests\Examples;
 
+use App\DTOs\Cart\CartDTO;
+use App\DTOs\Customer\CustomerDTO;
+use App\DTOs\Product\ProductDTO;
 use Tests\Helpers\ShopifyResponseFactory;
 use Tests\Mocks\MockShopifyClient;
 use Tests\TestCase;
-use App\DTOs\Product\ProductDTO;
-use App\DTOs\Cart\CartDTO;
-use App\DTOs\Customer\CustomerDTO;
 
 /**
  * Example test demonstrating how to use MockShopifyClient and ShopifyResponseFactory
- * 
+ *
  * This test class shows practical examples of using the testing infrastructure
  * to create isolated, fast, and reliable tests without making real API calls.
  */
@@ -22,7 +22,7 @@ class TestingInfrastructureExampleTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->mockClient = new MockShopifyClient();
+        $this->mockClient = new MockShopifyClient;
     }
 
     public function test_example_mocking_product_query(): void

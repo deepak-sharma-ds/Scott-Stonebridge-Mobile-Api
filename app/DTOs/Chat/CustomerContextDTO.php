@@ -18,6 +18,8 @@ class CustomerContextDTO extends BaseDTO
         public readonly bool $loggedIn,
         public readonly ?string $email,
         public readonly ?string $locale,
+        public readonly ?string $firstName = null,
+        public readonly ?int $ordersCount = null,
     ) {
         $this->validate();
     }
@@ -35,15 +37,17 @@ class CustomerContextDTO extends BaseDTO
     public static function fromArray(array $data): self
     {
         return new self(
-            customerId: isset($data['customer_id']) ? (string) $data['customer_id'] : (isset($data['customerId']) ? (string) $data['customerId'] : null),
+            customerId: isset($data['customer_id']) ? (string) $data['customer_id'] : (isset($data['customerId']) ? (string) $data['customerId'] : (isset($data['id']) ? (string) $data['id'] : null)),
             loggedIn: (bool) ($data['logged_in'] ?? $data['loggedIn'] ?? false),
             email: isset($data['email']) ? (string) $data['email'] : null,
             locale: isset($data['locale']) ? (string) $data['locale'] : null,
+            firstName: isset($data['firstName']) ? (string) $data['firstName'] : (isset($data['first_name']) ? (string) $data['first_name'] : null),
+            ordersCount: isset($data['ordersCount']) ? (int) $data['ordersCount'] : (isset($data['orders_count']) ? (int) $data['orders_count'] : null),
         );
     }
 
     public function isGuest(): bool
     {
-        return ! $this->loggedIn || $this->customerId === null;
+        return ! $this->loggedIn || ($this->customerId === null && $this->email === null);
     }
 }

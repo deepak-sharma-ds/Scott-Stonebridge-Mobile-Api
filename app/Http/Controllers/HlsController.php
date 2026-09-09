@@ -2,14 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\Controller;
 use App\Models\Audio;
 use App\Models\CustomerEntitlement;
 use App\Models\PlaySession;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
-use Symfony\Component\HttpFoundation\StreamedResponse;
-use Illuminate\Support\Str;
 
 class HlsController extends Controller
 {
@@ -22,7 +19,9 @@ class HlsController extends Controller
             ->where('expires_at', '>', now())
             ->first();
 
-        if (!$session) abort(403, 'Invalid or expired session');
+        if (! $session) {
+            abort(403, 'Invalid or expired session');
+        }
         // Optional: check IP/user-agent
         // if ($session->ip && $session->ip !== $request->ip()) abort(403,'IP mismatch');
 
@@ -39,10 +38,14 @@ class HlsController extends Controller
         $session = $this->validateSession($audioId, $token, $request);
 
         $audio = Audio::findOrFail($audioId);
-        if (!$audio->is_hls_ready || !$audio->hls_path) abort(404, 'HLS not ready');
+        if (! $audio->is_hls_ready || ! $audio->hls_path) {
+            abort(404, 'HLS not ready');
+        }
 
-        $playlistPath = $audio->hls_path . '/playlist.m3u8';
-        if (!Storage::disk('private')->exists($playlistPath)) abort(404);
+        $playlistPath = $audio->hls_path.'/playlist.m3u8';
+        if (! Storage::disk('private')->exists($playlistPath)) {
+            abort(404);
+        }
 
         $playlist = Storage::disk('private')->get($playlistPath);
 
@@ -63,10 +66,13 @@ class HlsController extends Controller
         $this->validateSession($audioId, $token, $request);
 
         $audio = Audio::findOrFail($audioId);
-        $path = $audio->hls_path . '/' . $segment;
-        if (!Storage::disk('private')->exists($path)) abort(404);
+        $path = $audio->hls_path.'/'.$segment;
+        if (! Storage::disk('private')->exists($path)) {
+            abort(404);
+        }
 
         $stream = Storage::disk('private')->readStream($path);
+
         return response()->stream(function () use ($stream) {
             fpassthru($stream);
         }, 200, [
@@ -81,8 +87,10 @@ class HlsController extends Controller
         $this->validateSession($audioId, $token, $request);
 
         $audio = Audio::findOrFail($audioId);
-        $keyPath = $audio->hls_path . '/enc.key';
-        if (!Storage::disk('private')->exists($keyPath)) abort(404);
+        $keyPath = $audio->hls_path.'/enc.key';
+        if (! Storage::disk('private')->exists($keyPath)) {
+            abort(404);
+        }
 
         $key = Storage::disk('private')->get($keyPath);
 
@@ -102,8 +110,8 @@ class HlsController extends Controller
             $audio = Audio::findOrFail($audioId);
 
             // Validate signature
-            $expected = hash_hmac('sha256', $audioId . '-' . $customerId, config('app.key', env('APP_KEY')));
-            if (!hash_equals($expected, $signature)) {
+            $expected = hash_hmac('sha256', $audioId.'-'.$customerId, config('app.key', env('APP_KEY')));
+            if (! hash_equals($expected, $signature)) {
                 abort(403, 'Invalid download signature');
             }
 
@@ -112,22 +120,24 @@ class HlsController extends Controller
                 ->where('package_tag', $audio->package->shopify_tag ?? null)
                 ->first();
 
-            if (!$ent) abort(403);
+            if (! $ent) {
+                abort(403);
+            }
 
             // Check if downloads allowed
-            if (!$ent->is_download_allowed) {
+            if (! $ent->is_download_allowed) {
                 abort(403, 'Download not allowed for this customer.');
             }
 
             // Path to original MP3 (not HLS)
             $path = $audio->file_path;
-            if (!Storage::disk('private')->exists($path)) {
+            if (! Storage::disk('private')->exists($path)) {
                 abort(404, 'File not found');
             }
 
             return Storage::disk('private')->download(
                 $path,
-                $audio->title . '.mp3',
+                $audio->title.'.mp3',
                 ['Content-Type' => 'audio/mpeg']
             );
         } catch (\Throwable $th) {

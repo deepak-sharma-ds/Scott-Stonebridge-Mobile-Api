@@ -7,10 +7,10 @@ use InvalidArgumentException;
 
 /**
  * Order Line Item Data Transfer Object
- * 
+ *
  * Represents a single line item in a Shopify order with typed properties.
  * Each line item contains product variant information, quantity, and pricing.
- * 
+ *
  * Requirements: 16.3, 16.6, 16.7
  */
 class OrderLineItemDTO extends BaseDTO
@@ -35,7 +35,7 @@ class OrderLineItemDTO extends BaseDTO
 
     /**
      * Validate the order line item data.
-     * 
+     *
      * @throws InvalidArgumentException
      */
     protected function validate(): void
@@ -46,18 +46,17 @@ class OrderLineItemDTO extends BaseDTO
 
     /**
      * Create an OrderLineItemDTO from Shopify API response data.
-     * 
+     *
      * Transforms raw Shopify GraphQL order line item response into a typed DTO instance.
      * Handles nested variant and product information.
-     * 
-     * @param array $data Raw line item data from Shopify GraphQL response
-     * @return self
+     *
+     * @param  array  $data  Raw line item data from Shopify GraphQL response
      */
     public static function fromShopifyResponse(array $data): self
     {
         $variant = $data['variant'] ?? [];
         $product = $variant['product'] ?? [];
-        
+
         return new self(
             title: $data['title'],
             quantity: $data['quantity'],

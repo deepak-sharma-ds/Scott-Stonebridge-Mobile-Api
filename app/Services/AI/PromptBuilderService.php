@@ -54,30 +54,42 @@ class PromptBuilderService extends BaseService implements PromptBuilderServiceIn
         string $userMessage,
         array $resolvedContext = [],
         array $recommendations = [],
+        ?array $customerSummary = null,
     ): array {
         $tail = (int) config('chatbot.tokens.history_tail', 10);
         $template = (string) config('chatbot.prompts.system_template', 'ai.prompts.system');
 
         $upsells = $this->maybeFetchUpsells($intent, $context);
+        $upsellBlock = $this->injectUpsellContext($intent, $context, $upsells);
+        $localeBlock = $this->injectLocaleRule($context->locale);
+        $customerBlock = $this->injectCustomerContext($customerSummary);
+        $knowledgeResult = $this->fetchKnowledgeResult($intent, $context, $userMessage);
+        $knowledgeSnippets = $knowledgeResult['snippets'];
+        $knowledgeDegraded = $knowledgeResult['degraded'];
 
-        $systemBody = View::make($template, [
-            'shop' => $context->shopDomain ?? config('shopify.store_domain'),
-            'intent' => $intent->name,
-            'page_type' => $context->pageType,
-            'currency' => $context->currency,
-            'locale' => $context->locale,
-            'resolved_context' => $resolvedContext,
-            'products' => $recommendations,
-            // Phase 2 blocks — Blade renders each conditionally.
-            'upsell_block' => $this->injectUpsellContext($intent, $context, $upsells),
-            'knowledge_block' => $this->injectStoreKnowledge($intent, $context, $userMessage),
-            'locale_block' => $this->injectLocaleRule($context->locale),
-        ])->render();
+        $render = function (string $knowledgeSnippets) use ($template, $context, $intent, $resolvedContext, $recommendations, $upsellBlock, $localeBlock, $customerBlock, $knowledgeDegraded): string {
+            return View::make($template, [
+                'shop' => $context->shopDomain ?? config('shopify.store_domain'),
+                'intent' => $intent->name,
+                'page_type' => $context->pageType,
+                'currency' => $context->currency ?? $context->cart?->currency ?? 'GBP',
+                'locale' => $context->locale,
+                'resolved_context' => $resolvedContext,
+                'products' => $recommendations,
+                // Phase 2 blocks — Blade renders each conditionally.
+                'upsell_block' => $upsellBlock,
+                'knowledge_block' => $this->wrapKnowledgeSnippets($knowledgeSnippets, $knowledgeDegraded),
+                'locale_block' => $localeBlock,
+                'customer_block' => $customerBlock,
+            ])->render();
+        };
+
+        $systemBody = $render($knowledgeSnippets);
 
         // Hard-enforce the prompt budget — soft-warning let oversized prompts
         // through to OpenAI (saw 1071/800 in live smoke), inflating cost and
         // confusing the model when truncation happened upstream.
-        $systemBody = $this->enforceSystemPromptBudget($systemBody);
+        $systemBody = $this->enforceSystemPromptBudget($systemBody, $knowledgeSnippets, $render);
 
         $messages = [
             ['role' => 'system', 'content' => $systemBody],
@@ -148,9 +160,26 @@ class PromptBuilderService extends BaseService implements PromptBuilderServiceIn
      */
     public function injectStoreKnowledge(IntentDTO $intent, ChatContextDTO $context, string $userMessage = ''): string
     {
+        $result = $this->fetchKnowledgeResult($intent, $context, $userMessage);
+
+        return $this->wrapKnowledgeSnippets($result['snippets'], $result['degraded']);
+    }
+
+    /**
+     * Raw, newline-joined knowledge rows from StoreKnowledgeService, ranked
+     * highest-relevance first — unwrapped so enforceSystemPromptBudget() can
+     * drop the lowest-ranked (trailing) rows without touching the grounding
+     * instructions in wrapKnowledgeSnippets(). Also reports whether semantic
+     * search degraded to keyword-only this call, so a failed embedding call
+     * doesn't silently masquerade as "no information exists".
+     *
+     * @return array{snippets: string, degraded: bool}
+     */
+    private function fetchKnowledgeResult(IntentDTO $intent, ChatContextDTO $context, string $userMessage): array
+    {
         $shopDomain = (string) ($context->shopDomain ?? config('shopify.store_domain'));
         if ($shopDomain === '') {
-            return '';
+            return ['snippets' => '', 'degraded' => false];
         }
 
         // Only forward the user message when present so legacy callers
@@ -159,18 +188,67 @@ class PromptBuilderService extends BaseService implements PromptBuilderServiceIn
         $snippets = $userMessage !== ''
             ? $this->knowledge->getKnowledgeForPrompt($shopDomain, [$intent->name], $userMessage)
             : $this->knowledge->getKnowledgeForPrompt($shopDomain, [$intent->name]);
-        if ($snippets === '') {
+
+        return ['snippets' => $snippets, 'degraded' => $this->knowledge->wasLastRetrievalDegraded()];
+    }
+
+    private function wrapKnowledgeSnippets(string $snippets, bool $degraded = false): string
+    {
+        if ($snippets === '' && ! $degraded) {
             return '';
         }
 
-        return implode("\n", [
-            'STORE KNOWLEDGE:',
-            $snippets,
-            '',
-            'Use this to answer questions about store policies, pages, and content.',
-            'Do not answer policy or store questions from memory — use only the above.',
-            'If information is not present above, say you do not have that detail.',
-        ]);
+        $lines = ['STORE KNOWLEDGE:'];
+        $lines[] = $snippets !== '' ? $snippets : '(no rows retrieved this turn)';
+        $lines[] = '';
+        $lines[] = 'Use this to answer questions about store policies, pages, and content.';
+        $lines[] = 'Do not answer policy or store questions from memory — use only the above.';
+        $lines[] = 'If information is not present above, say you do not have that detail.';
+
+        if ($degraded) {
+            $lines[] = '';
+            $lines[] = 'NOTE: Semantic search was unavailable this turn, so the above may be incomplete.';
+            $lines[] = 'If it does not answer the question, say your search may be incomplete and offer to check again — do not state that no information exists.';
+        }
+
+        return implode("\n", $lines);
+    }
+
+    /**
+     * E1 — CUSTOMER CONTEXT block for a signed-in customer. Privacy-safe:
+     * only order numbers, totals, and dates (no name / email / line items).
+     * Empty string when there is no summary so the Blade section is skipped.
+     *
+     * @param  array<string, mixed>|null  $summary  {order_count, recent_orders:[{number,total,currency,date}]}
+     */
+    public function injectCustomerContext(?array $summary): string
+    {
+        $recent = $summary['recent_orders'] ?? null;
+        if (! is_array($recent) || $recent === []) {
+            return '';
+        }
+
+        $lines = ['CUSTOMER CONTEXT:'];
+        $lines[] = 'This customer is signed in. Recent orders (newest first):';
+        foreach ($recent as $order) {
+            if (! is_array($order) || empty($order['number'])) {
+                continue;
+            }
+            $total = isset($order['total']) ? trim(($order['currency'] ?? '').' '.$order['total']) : null;
+            $date = $order['date'] ?? null;
+            $lines[] = trim(sprintf(
+                '- Order #%s%s%s',
+                $order['number'],
+                $total !== null && $total !== '' ? " — {$total}" : '',
+                $date !== null ? " (placed {$date})" : '',
+            ));
+        }
+
+        $lines[] = '';
+        $lines[] = 'Use this to greet them warmly and offer relevant help (order status, reorders, complements to past purchases).';
+        $lines[] = 'Never invent orders or details beyond what is listed here, and do not read the list back verbatim unless asked.';
+
+        return implode("\n", $lines);
     }
 
     /**
@@ -228,33 +306,68 @@ class PromptBuilderService extends BaseService implements PromptBuilderServiceIn
 
     /**
      * Return the system prompt body trimmed to fit the configured token
-     * budget. When the rendered prompt overflows, truncate from the tail
-     * (knowledge / upsell blocks sit at the bottom of the system template)
-     * and append a marker so the model knows context was cut. Reserve a
-     * small headroom for the marker itself.
+     * budget. STORE KNOWLEDGE rows are ranked highest-relevance first, so an
+     * oversized prompt is shrunk by dropping the lowest-ranked (trailing)
+     * rows one at a time and re-rendering — never by cutting the rendered
+     * prompt string itself, which previously risked slicing HARD RULES,
+     * CUSTOMER CONTEXT, or the LANGUAGE RULE off mid-sentence since they sit
+     * after STORE KNOWLEDGE in the template. Falls back to a blind tail-cut
+     * only if the prompt is still oversized with zero knowledge rows left —
+     * i.e. the non-knowledge portion of the prompt alone exceeds the budget.
+     *
+     * @param  \Closure(string): string  $render  Re-renders the full system
+     *                                            prompt for a given knowledge-snippets string.
      */
-    private function enforceSystemPromptBudget(string $systemBody): string
+    private function enforceSystemPromptBudget(string $systemBody, string $knowledgeSnippets, \Closure $render): string
     {
         $maxTokens = (int) config('sales.prompt_guard.system_prompt_max_tokens', 800);
         if ($maxTokens <= 0) {
             return $systemBody;
         }
 
-        $estimated = (int) ceil(mb_strlen($systemBody) / self::CHARS_PER_TOKEN);
+        $estimated = $this->estimatedTokens($systemBody);
         if ($estimated <= $maxTokens) {
             return $systemBody;
         }
 
+        $lines = $knowledgeSnippets === '' ? [] : explode("\n", $knowledgeSnippets);
+        $droppedRows = 0;
+        while ($lines !== [] && $this->estimatedTokens($systemBody) > $maxTokens) {
+            array_pop($lines);
+            $droppedRows++;
+            $systemBody = $render(implode("\n", $lines));
+        }
+
+        if ($this->estimatedTokens($systemBody) <= $maxTokens) {
+            if ($droppedRows > 0) {
+                $this->logWarning('Dropped lowest-ranked store knowledge rows to fit system prompt budget', [
+                    'dropped_rows' => $droppedRows,
+                    'max_tokens' => $maxTokens,
+                ], 'ai');
+            }
+
+            return $systemBody;
+        }
+
+        // The non-knowledge portion of the prompt alone exceeds the budget —
+        // knowledge is already fully dropped, so fall back to a blind cut as
+        // a last resort rather than sending an unbounded prompt to OpenAI.
         $marker = "\n\n[CONTEXT TRUNCATED TO FIT TOKEN BUDGET]";
         $maxChars = $maxTokens * self::CHARS_PER_TOKEN - mb_strlen($marker);
         $trimmed = mb_substr($systemBody, 0, max(0, $maxChars)).$marker;
 
-        $this->logWarning('System prompt truncated to token budget', [
-            'estimated_tokens' => $estimated,
+        $this->logWarning('System prompt truncated to token budget after dropping all store knowledge', [
+            'estimated_tokens' => $this->estimatedTokens($systemBody),
             'max_tokens' => $maxTokens,
+            'dropped_rows' => $droppedRows,
             'truncated_chars' => mb_strlen($systemBody) - mb_strlen($trimmed),
         ], 'ai');
 
         return $trimmed;
+    }
+
+    private function estimatedTokens(string $text): int
+    {
+        return (int) ceil(mb_strlen($text) / self::CHARS_PER_TOKEN);
     }
 }

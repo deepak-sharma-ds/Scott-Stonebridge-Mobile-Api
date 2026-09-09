@@ -24,6 +24,7 @@ class ProductMapperTest extends TestCase
                         ['id' => 'gid://shopify/ProductVariant/11', 'price' => '24.99'],
                     ],
                     'featured_image' => ['url' => 'https://cdn.shopify.com/foo.jpg'],
+                    'tags' => ['tarot', 'divination'],
                 ],
                 [
                     // Missing handle → skipped.
@@ -44,6 +45,7 @@ class ProductMapperTest extends TestCase
         $this->assertSame('https://cdn.shopify.com/foo.jpg', $card['image']);
         $this->assertSame(2499, $card['price_minor_units']);
         $this->assertSame('GBP', $card['currency']);
+        $this->assertSame(['tarot', 'divination'], $card['tags']);
     }
 
     public function test_search_result_tolerates_alternate_envelope_keys(): void

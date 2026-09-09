@@ -7,10 +7,10 @@ use InvalidArgumentException;
 
 /**
  * Contact Data Transfer Object
- * 
+ *
  * Represents contact form submission data with validation.
  * Used for customer inquiry submissions in the mobile API.
- * 
+ *
  * Requirements: 11.9, 11.11, 11.12
  */
 class ContactDTO extends BaseDTO
@@ -27,7 +27,7 @@ class ContactDTO extends BaseDTO
 
     /**
      * Validate the contact form data.
-     * 
+     *
      * @throws InvalidArgumentException
      */
     protected function validate(): void
@@ -36,7 +36,7 @@ class ContactDTO extends BaseDTO
         $this->validateRequired($this->email, 'Email');
         $this->validateEmail($this->email, 'Email');
         $this->validateRequired($this->message, 'Message');
-        
+
         if (strlen($this->message) < 10) {
             throw new InvalidArgumentException('Message must be at least 10 characters');
         }
@@ -44,12 +44,11 @@ class ContactDTO extends BaseDTO
 
     /**
      * Create a ContactDTO from request data.
-     * 
+     *
      * Transforms validated request data into a typed DTO instance.
      * Used for creating DTOs from form submissions.
-     * 
-     * @param array $data Request data from contact form
-     * @return self
+     *
+     * @param  array  $data  Request data from contact form
      */
     public static function fromRequest(array $data): self
     {
@@ -64,12 +63,11 @@ class ContactDTO extends BaseDTO
 
     /**
      * Create a ContactDTO from Shopify API response data.
-     * 
+     *
      * This method is included for consistency with other DTOs,
      * but contact forms typically don't come from Shopify responses.
-     * 
-     * @param array $data Raw contact data
-     * @return self
+     *
+     * @param  array  $data  Raw contact data
      */
     public static function fromShopifyResponse(array $data): self
     {

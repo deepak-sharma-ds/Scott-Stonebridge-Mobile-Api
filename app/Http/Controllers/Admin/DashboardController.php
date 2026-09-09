@@ -5,20 +5,14 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Order;
 use Illuminate\Http\Request;
-use Carbon\Carbon;
-use Illuminate\Support\Facades\DB;
-use App\Models\OrderAction;
-use Illuminate\Support\Facades\Response;
-
 
 class DashboardController extends Controller
 {
-
-
     public function index(Request $request)
     {
         try {
             return view('admin.analytics.dashboard');
+
             // Get distinct statuses for the filter dropdown
             return view('admin.dashboard');
         } catch (\Exception $e) {
@@ -26,7 +20,6 @@ class DashboardController extends Controller
                 ->with('error', 'Something went wrong while fetching the order.');
         }
     }
-
 
     public function view($id)
     {
@@ -36,9 +29,10 @@ class DashboardController extends Controller
 
             return view('admin.orders.view', compact('order', 'orderData'));
         } catch (\Exception $e) {
-            \Log::error('Error while viewing order: ' . $e->getMessage(), [
+            \Log::error('Error while viewing order: '.$e->getMessage(), [
                 'order_id' => $id,
             ]);
+
             return redirect()->route('dashboard')
                 ->with('error', 'Something went wrong while fetching the order.');
         }
@@ -52,15 +46,14 @@ class DashboardController extends Controller
             ]);
 
             $orderNumbers = $request->order_ids;
-            $orders = \App\Models\Order::whereIn('order_number', $orderNumbers)->get();
-         
+            $orders = Order::whereIn('order_number', $orderNumbers)->get();
 
             $flavours = [];
             foreach ($orders as $order) {
                 $orderData = json_decode($order->order_data, true);
                 $orderName = $orderData['name'] ?? $order->order_number;
 
-                if (!empty($orderData['line_items'])) {
+                if (! empty($orderData['line_items'])) {
                     foreach ($orderData['line_items'] as $item) {
                         $lineQty = (int) ($item['current_quantity'] ?? 1);
                         $productId = $item['product_id'] ?? null;
@@ -71,7 +64,7 @@ class DashboardController extends Controller
                             $flavourKey = strtolower(trim($flavourRaw));
                             $finalQty = $lineQty * 12;
 
-                            if (!isset($flavours[$flavourKey])) {
+                            if (! isset($flavours[$flavourKey])) {
                                 $flavours[$flavourKey] = [
                                     'flavour_name' => $flavourRaw,
                                     'quantity' => 0,
@@ -81,25 +74,26 @@ class DashboardController extends Controller
 
                             $flavours[$flavourKey]['quantity'] += $finalQty;
                             $flavours[$flavourKey]['order_numbers'][$orderName] = $orderName;
+
                             continue;
                         }
 
                         // ✅ Case 2: product_id = 7362832269346 (blank properties fallback)
                         if ($productId == 7362832269346 && empty($item['properties'])) {
                             $defaultFlavours = [
-                                "Orange",
-                                "White Chocolate and Peanut",
-                                "Biscoff",
-                                "Nutella",
-                                "Double Chocolate",
-                                "Chocolate and Peanut",
+                                'Orange',
+                                'White Chocolate and Peanut',
+                                'Biscoff',
+                                'Nutella',
+                                'Double Chocolate',
+                                'Chocolate and Peanut',
                             ];
 
                             foreach ($defaultFlavours as $flavourRaw) {
                                 $flavourKey = strtolower(trim($flavourRaw));
                                 $finalQty = 2 * $lineQty;
 
-                                if (!isset($flavours[$flavourKey])) {
+                                if (! isset($flavours[$flavourKey])) {
                                     $flavours[$flavourKey] = [
                                         'flavour_name' => $flavourRaw,
                                         'quantity' => 0,
@@ -110,18 +104,19 @@ class DashboardController extends Controller
                                 $flavours[$flavourKey]['quantity'] += $finalQty;
                                 $flavours[$flavourKey]['order_numbers'][$orderName] = $orderName;
                             }
+
                             continue;
                         }
 
                         // ✅ Case 3: Normal logic for all other products
-                        if (!empty($item['properties'])) {
+                        if (! empty($item['properties'])) {
                             foreach ($item['properties'] as $prop) {
                                 // 🚫 Skip bundle selection meta
-                                if (!empty($prop['name']) && str_starts_with(strtolower($prop['name']), '_bundle_selection')) {
+                                if (! empty($prop['name']) && str_starts_with(strtolower($prop['name']), '_bundle_selection')) {
                                     continue;
                                 }
 
-                                if (!empty($prop['value'])) {
+                                if (! empty($prop['value'])) {
                                     $value = trim($prop['value']);
                                     $flavourRaw = '';
                                     $qty = 0;
@@ -156,7 +151,7 @@ class DashboardController extends Controller
                                     $flavourKey = strtolower($flavourRaw);
                                     $finalQty = $qty * $lineQty;
 
-                                    if (!isset($flavours[$flavourKey])) {
+                                    if (! isset($flavours[$flavourKey])) {
                                         $flavours[$flavourKey] = [
                                             'flavour_name' => $flavourRaw,
                                             'quantity' => 0,
@@ -189,7 +184,7 @@ class DashboardController extends Controller
                 ];
             }
 
-            $filename = "orders_" . now()->format('Y-m-d_H-i-s') . ".csv";
+            $filename = 'orders_'.now()->format('Y-m-d_H-i-s').'.csv';
             $handle = fopen('php://output', 'w');
             ob_start();
             fputcsv($handle, ['serial_no', 'flavour_name', 'quantity', 'order_numbers']);
@@ -204,7 +199,8 @@ class DashboardController extends Controller
                 ->header('Content-Type', 'text/csv')
                 ->header('Content-Disposition', "attachment; filename={$filename}");
         } catch (\Exception $e) {
-            \Log::error("CSV Export failed: " . $e->getMessage());
+            \Log::error('CSV Export failed: '.$e->getMessage());
+
             return back()->with('error', 'unknown error');
         }
     }

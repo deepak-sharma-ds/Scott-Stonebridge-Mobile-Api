@@ -3,13 +3,13 @@
 namespace App\Services;
 
 use App\Repositories\Analytics\LocalAnalyticsRepository;
-use App\Models\AnalyticsSnapshot;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 
 class AnalyticsService
 {
     protected $localRepo;
+
     protected $shopify;
 
     public function __construct(LocalAnalyticsRepository $localRepo, APIShopifyService $shopify)
@@ -58,6 +58,7 @@ class AnalyticsService
     {
         // Prefer Shopify best-selling; then supplement with local logs (views/wishlist)
         $cacheKey = "analytics:top_products:{$limit}";
+
         return Cache::remember($cacheKey, now()->addMinutes(10), function () use ($limit) {
             $shopifyTop = $this->shopify->getTopProducts($limit); // assume returns array with id/title/sales
             $localWishlist = $this->localRepo->wishlistTrends(null, $limit);
@@ -74,15 +75,19 @@ class AnalyticsService
         $from = $this->parsePeriod($period);
         $localSearches = $this->localRepo->topSearches($from, $limit);
         $wishlist = $this->localRepo->wishlistTrends($from, $limit);
+
         return compact('localSearches', 'wishlist');
     }
 
     protected function parsePeriod($period)
     {
-        if ($period instanceof \DateTimeInterface) return $period;
-        if (preg_match('/^(\d+)d$/', $period, $m)) {
-            return Carbon::now()->subDays((int)$m[1]);
+        if ($period instanceof \DateTimeInterface) {
+            return $period;
         }
+        if (preg_match('/^(\d+)d$/', $period, $m)) {
+            return Carbon::now()->subDays((int) $m[1]);
+        }
+
         return Carbon::now()->subDays(30);
     }
 }

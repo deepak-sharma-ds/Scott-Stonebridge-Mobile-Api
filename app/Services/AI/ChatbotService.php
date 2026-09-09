@@ -55,6 +55,12 @@ class ChatbotService extends BaseService implements ChatbotServiceInterface
     public function startSession(array $payload): AiConversation
     {
         $shopDomain = (string) ($payload['shop_domain'] ?? config('shopify.store_domain'));
+
+        $themeSettings = $payload['theme_settings'] ?? $payload['widget_settings'] ?? $payload['metadata']['theme_settings'] ?? null;
+        if (is_array($themeSettings) && ! empty($themeSettings)) {
+            $this->syncThemeSettings($shopDomain, $themeSettings, (string) ($payload['shopify_locale'] ?? $payload['locale'] ?? 'en'));
+        }
+
         $shopSetting = $this->resolveShopSetting($shopDomain);
 
         $locale = $this->resolveLocale($payload, $shopSetting);
@@ -403,6 +409,60 @@ class ChatbotService extends BaseService implements ChatbotServiceInterface
                 'session_id' => $sessionId,
                 'error' => $e->getMessage(),
             ], 'ai');
+        }
+    }
+
+    /**
+     * Synchronize storefront theme app embed settings to shop_settings table.
+     *
+     * @param  array<string, mixed>  $settings
+     */
+    public function syncThemeSettings(string $shopDomain, array $settings, string $locale = 'en'): ?ShopSetting
+    {
+        if ($shopDomain === '') {
+            return null;
+        }
+
+        try {
+            $shopSetting = ShopSetting::query()->firstOrNew(['shop_domain' => $shopDomain]);
+
+            if (isset($settings['persona_name']) && is_string($settings['persona_name']) && trim($settings['persona_name']) !== '') {
+                $shopSetting->persona_name = trim($settings['persona_name']);
+            }
+            if (isset($settings['avatar_url']) && is_string($settings['avatar_url']) && trim($settings['avatar_url']) !== '') {
+                $shopSetting->avatar_url = trim($settings['avatar_url']);
+            }
+            if (isset($settings['brand_color']) && is_string($settings['brand_color']) && trim($settings['brand_color']) !== '') {
+                $shopSetting->brand_color = trim($settings['brand_color']);
+            }
+            if (isset($settings['widget_position']) && is_string($settings['widget_position']) && trim($settings['widget_position']) !== '') {
+                $pos = strtolower(trim($settings['widget_position']));
+                $shopSetting->widget_position = match ($pos) {
+                    'bottom-left', 'bottom left', 'left' => 'left',
+                    'bottom-center', 'bottom center', 'center' => 'center',
+                    default => 'right',
+                };
+            }
+            if (isset($settings['free_shipping_threshold']) && is_numeric($settings['free_shipping_threshold'])) {
+                $shopSetting->free_shipping_threshold = (float) $settings['free_shipping_threshold'];
+            }
+            if (isset($settings['greeting_message']) && is_string($settings['greeting_message']) && trim($settings['greeting_message']) !== '') {
+                $normalizedLocale = $this->normaliseLocale($locale) ?? 'en';
+                $welcome = $shopSetting->welcome_messages_json ?? [];
+                $welcome[$normalizedLocale] = trim($settings['greeting_message']);
+                $shopSetting->welcome_messages_json = $welcome;
+            }
+
+            $shopSetting->save();
+
+            return $shopSetting;
+        } catch (Throwable $e) {
+            $this->logWarning('Theme settings sync failed', [
+                'shop' => $shopDomain,
+                'error' => $e->getMessage(),
+            ], 'ai');
+
+            return null;
         }
     }
 }

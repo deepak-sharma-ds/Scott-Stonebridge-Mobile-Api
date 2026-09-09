@@ -2,25 +2,27 @@
 
 namespace App\Jobs;
 
-use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Queue\Queueable;
 use App\Models\Audio;
+use Exception;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
+use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\Storage;
-use Exception;
 use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
 
 class ConvertAudioToHls implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public int $audioId;
+
     public string $sourceDisk;
+
     public string $sourcePath;
 
-    public function __construct(int $audioId, string $sourceDisk = 'private', string $sourcePath)
+    public function __construct(int $audioId, string $sourceDisk, string $sourcePath)
     {
         $this->audioId = $audioId;
         $this->sourceDisk = $sourceDisk;
@@ -30,22 +32,24 @@ class ConvertAudioToHls implements ShouldQueue
     public function handle(): void
     {
         $audio = Audio::find($this->audioId);
-        if (!$audio) {
+        if (! $audio) {
             logger()->warning("Audio ID {$this->audioId} not found.");
+
             return;
         }
 
         // -------------------------------------------------------
         // 0️⃣ Validate source file exists
         // -------------------------------------------------------
-        if (!Storage::disk($this->sourceDisk)->exists($this->sourcePath)) {
+        if (! Storage::disk($this->sourceDisk)->exists($this->sourcePath)) {
             logger()->warning("Source file missing for audio {$this->audioId}: {$this->sourcePath}");
+
             return;
         }
 
         // Get absolute source path
         $sourceAbs = Storage::disk($this->sourceDisk)->path($this->sourcePath);
-        $audioId   = $audio->id;
+        $audioId = $audio->id;
 
         $outputRelative = "hls/{$audioId}";
         $outputDir = storage_path("app/private/{$outputRelative}");
@@ -60,9 +64,9 @@ class ConvertAudioToHls implements ShouldQueue
         if (is_dir($outputDir)) {
             // Remove any old files and subfolders (recursive cleanup)
             collect(scandir($outputDir))
-                ->reject(fn($f) => in_array($f, ['.', '..']))
+                ->reject(fn ($f) => in_array($f, ['.', '..']))
                 ->each(function ($f) use ($outputDir) {
-                    $path = $outputDir . DIRECTORY_SEPARATOR . $f;
+                    $path = $outputDir.DIRECTORY_SEPARATOR.$f;
                     if (is_dir($path)) {
                         File::deleteDirectory($path);
                     } else {
@@ -75,7 +79,6 @@ class ConvertAudioToHls implements ShouldQueue
 
         // Ensure writable permissions (for Linux)
         @chmod($outputDir, 0777);
-
 
         // Ensure writable on Linux
         @chmod($outputDir, 0777);
@@ -96,6 +99,7 @@ class ConvertAudioToHls implements ShouldQueue
                 'audio' => $audioId,
                 'err' => $e->getMessage(),
             ]);
+
             return;
         }
 
@@ -115,29 +119,29 @@ class ConvertAudioToHls implements ShouldQueue
         $ffmpeg = config('env.FFMPEG_PATH');
 
         // Normalize all paths for FFmpeg
-        $sourceAbsFfmpeg    = str_replace('\\', '/', $sourceAbs);
-        $keyInfoPathFfmpeg  = str_replace('\\', '/', $keyInfoPath);
+        $sourceAbsFfmpeg = str_replace('\\', '/', $sourceAbs);
+        $keyInfoPathFfmpeg = str_replace('\\', '/', $keyInfoPath);
         $outputDirForFfmpeg = str_replace('\\', '/', $outputDir);
 
         $segmentPattern = "{$outputDirForFfmpeg}/segment_%05d.ts";
-        $playlistPath   = "{$outputDirForFfmpeg}/playlist.m3u8";
+        $playlistPath = "{$outputDirForFfmpeg}/playlist.m3u8";
 
         // -------------------------------------------------------
         // 4️⃣ Build the FFmpeg command
         // -------------------------------------------------------
         $cmd = "\"{$ffmpeg}\" -y -i \"{$sourceAbsFfmpeg}\" -vn -acodec aac -b:a 128k "
-            . "-hls_time 6 -hls_playlist_type vod "
-            . "-hls_key_info_file \"{$keyInfoPathFfmpeg}\" "
-            . "-hls_segment_filename \"{$segmentPattern}\" \"{$playlistPath}\"";
+            .'-hls_time 6 -hls_playlist_type vod '
+            ."-hls_key_info_file \"{$keyInfoPathFfmpeg}\" "
+            ."-hls_segment_filename \"{$segmentPattern}\" \"{$playlistPath}\"";
 
         logger()->info("Starting FFmpeg conversion for audio #{$audioId}", ['cmd' => $cmd]);
 
-        exec($cmd . ' 2>&1', $output, $returnVar);
+        exec($cmd.' 2>&1', $output, $returnVar);
 
         // -------------------------------------------------------
         // 5️⃣ Handle FFmpeg result
         // -------------------------------------------------------
-        if ($returnVar !== 0 || !file_exists($playlistPath)) {
+        if ($returnVar !== 0 || ! file_exists($playlistPath)) {
             logger()->error('FFMPEG conversion failed', [
                 'audio' => $audioId,
                 'cmd' => $cmd,
@@ -149,8 +153,8 @@ class ConvertAudioToHls implements ShouldQueue
             // Cleanup partial output
             if (is_dir($outputDir)) {
                 collect(scandir($outputDir))
-                    ->reject(fn($f) => in_array($f, ['.', '..']))
-                    ->each(fn($f) => @unlink($outputDir . DIRECTORY_SEPARATOR . $f));
+                    ->reject(fn ($f) => in_array($f, ['.', '..']))
+                    ->each(fn ($f) => @unlink($outputDir.DIRECTORY_SEPARATOR.$f));
                 @rmdir($outputDir);
             }
 

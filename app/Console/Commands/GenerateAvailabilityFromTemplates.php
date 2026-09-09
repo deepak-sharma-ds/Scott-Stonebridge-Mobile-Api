@@ -7,7 +7,6 @@ use App\Models\Configuration;
 use App\Services\AvailabilityGenerator;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
-use Illuminate\Support\Facades\Log;
 
 class GenerateAvailabilityFromTemplates extends Command
 {
@@ -39,7 +38,8 @@ class GenerateAvailabilityFromTemplates extends Command
     public function handle()
     {
         if (! (int) Configuration::getConfig('Availability.auto_generate')) {
-            $this->info("Auto-generation of availability is disabled. Exiting!");
+            $this->info('Auto-generation of availability is disabled. Exiting!');
+
             return 0;
         }
 
@@ -53,8 +53,9 @@ class GenerateAvailabilityFromTemplates extends Command
 
         if ($userId) {
             $this->info("Generating availability for user: {$userId} for {$start->toDateString()} - {$end->toDateString()}");
-            $stats = $this->generator->generateForRange($start, $end, (int)$userId);
+            $stats = $this->generator->generateForRange($start, $end, (int) $userId);
             $this->info("Created: {$stats['created']}");
+
             return 0;
         }
 
@@ -62,7 +63,7 @@ class GenerateAvailabilityFromTemplates extends Command
         $users = AvailabilityTemplate::select('user_id')->distinct()->pluck('user_id');
         foreach ($users as $u) {
             $this->info("User {$u}:");
-            $stats = $this->generator->generateForRange($start, $end, (int)$u);
+            $stats = $this->generator->generateForRange($start, $end, (int) $u);
             $this->info("  Created: {$stats['created']}, Skipped holidays: {$stats['skipped_holiday']}");
         }
 

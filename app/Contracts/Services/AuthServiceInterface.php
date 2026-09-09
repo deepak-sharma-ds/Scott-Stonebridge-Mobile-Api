@@ -9,8 +9,8 @@ interface AuthServiceInterface
     /**
      * Authenticate customer with email and password
      *
-     * @param string $email Customer email
-     * @param string $password Customer password
+     * @param  string  $email  Customer email
+     * @param  string  $password  Customer password
      * @return array ['customer' => CustomerDTO, 'access_token' => string]
      */
     public function login(string $email, string $password): array;
@@ -18,7 +18,7 @@ interface AuthServiceInterface
     /**
      * Register a new customer
      *
-     * @param array $data Customer registration data
+     * @param  array  $data  Customer registration data
      * @return array ['customer' => CustomerDTO, 'access_token' => string]
      */
     public function register(array $data): array;
@@ -26,33 +26,29 @@ interface AuthServiceInterface
     /**
      * Initiate password reset
      *
-     * @param string $email Customer email
-     * @return bool
+     * @param  string  $email  Customer email
      */
     public function forgotPassword(string $email): bool;
 
     /**
      * Reset customer password
      *
-     * @param string $resetToken Password reset token
-     * @param string $password New password
-     * @return bool
+     * @param  string  $resetToken  Password reset token
+     * @param  string  $password  New password
      */
     public function resetPassword(string $resetToken, string $password): bool;
 
     /**
      * Logout customer (invalidate token if needed)
      *
-     * @param string $accessToken Customer access token
-     * @return bool
+     * @param  string  $accessToken  Customer access token
      */
     public function logout(string $accessToken): bool;
 
     /**
      * Suspend customer account
      *
-     * @param array $shopifyCustomerData Shopify customer data
-     * @return bool
+     * @param  array  $shopifyCustomerData  Shopify customer data
      */
     public function suspend(array $shopifyCustomerData): bool;
 }

@@ -2,15 +2,15 @@
 
 namespace Tests\Feature\Api\V1;
 
-use Tests\TestCase;
-use Tests\Mocks\MockShopifyClient;
-use Tests\Helpers\ShopifyResponseFactory;
-use App\Services\Shopify\ProductService;
+use App\Models\EmailReadingProduct;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Helpers\ShopifyResponseFactory;
+use Tests\Mocks\MockShopifyClient;
+use Tests\TestCase;
 
 /**
  * Integration tests for Product API endpoints
- * 
+ *
  * Tests Requirements: 2.1, 2.2, 2.3, 2.5, 2.6
  */
 class ProductEndpointsTest extends TestCase
@@ -22,8 +22,8 @@ class ProductEndpointsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        
-        $this->mockClient = new MockShopifyClient();
+
+        $this->mockClient = new MockShopifyClient;
         $this->app->instance('App\Contracts\Shopify\StorefrontApiClientInterface', $this->mockClient);
     }
 
@@ -39,8 +39,8 @@ class ProductEndpointsTest extends TestCase
             'storefront/products/get_products.graphql',
             [
                 'data' => [
-                    'products' => ShopifyResponseFactory::paginatedResponse($products, true, 'cursor_123')
-                ]
+                    'products' => ShopifyResponseFactory::paginatedResponse($products, true, 'cursor_123'),
+                ],
             ]
         );
 
@@ -54,9 +54,9 @@ class ProductEndpointsTest extends TestCase
             'message',
             'data' => [
                 'products',
-                'pagination' => ['next_cursor', 'has_more']
+                'pagination' => ['next_cursor', 'has_more'],
             ],
-            'meta' => ['correlation_id', 'timestamp', 'version']
+            'meta' => ['correlation_id', 'timestamp', 'version'],
         ]);
 
         // Requirement 9.1: Success response format
@@ -98,9 +98,9 @@ class ProductEndpointsTest extends TestCase
                     'description',
                     'variants',
                     'images',
-                ]
+                ],
             ],
-            'meta'
+            'meta',
         ]);
 
         $response->assertJson([
@@ -109,15 +109,15 @@ class ProductEndpointsTest extends TestCase
                 'product' => [
                     'title' => 'Test Product',
                     'handle' => 'test-product',
-                ]
-            ]
+                ],
+            ],
         ]);
     }
 
     public function test_product_detail_includes_email_reading_config_when_matched(): void
     {
         // Arrange - product whose numeric ID maps to an email reading product
-        \App\Models\EmailReadingProduct::create([
+        EmailReadingProduct::create([
             'shopify_product_id' => 7939025469614,
             'name' => 'Future Two Question Email Reading',
             'slug' => 'future-two-question-email-reading',
@@ -185,8 +185,8 @@ class ProductEndpointsTest extends TestCase
             'storefront/products/search_products.graphql',
             [
                 'data' => [
-                    'products' => ShopifyResponseFactory::paginatedResponse($products, false, null)
-                ]
+                    'products' => ShopifyResponseFactory::paginatedResponse($products, false, null),
+                ],
             ]
         );
 
@@ -241,8 +241,8 @@ class ProductEndpointsTest extends TestCase
             'storefront/products/get_products.graphql',
             [
                 'data' => [
-                    'products' => ShopifyResponseFactory::paginatedResponse($products, false, null)
-                ]
+                    'products' => ShopifyResponseFactory::paginatedResponse($products, false, null),
+                ],
             ]
         );
 
@@ -271,7 +271,7 @@ class ProductEndpointsTest extends TestCase
         // Assert - Requirement 9.3: Do not expose raw GraphQL response structures
         $response->assertStatus(200);
         $productData = $response->json('data.product');
-        
+
         $this->assertArrayNotHasKey('__typename', $productData);
         $this->assertArrayNotHasKey('edges', $productData);
         $this->assertArrayNotHasKey('nodes', $productData);

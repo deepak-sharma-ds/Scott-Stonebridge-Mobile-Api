@@ -15,6 +15,7 @@ interface PromptBuilderServiceInterface
      *
      * @param  array<string, mixed>  $resolvedContext  Output of ShopifyContextService::resolve()
      * @param  list<array<string, mixed>>  $recommendations  Product cards to inject (may be empty)
+     * @param  array<string, mixed>|null  $customerSummary  Lightweight signed-in order summary (E1); null when absent
      * @return list<array{role: string, content: string}>
      */
     public function build(
@@ -24,5 +25,6 @@ interface PromptBuilderServiceInterface
         string $userMessage,
         array $resolvedContext = [],
         array $recommendations = [],
+        ?array $customerSummary = null,
     ): array;
 }

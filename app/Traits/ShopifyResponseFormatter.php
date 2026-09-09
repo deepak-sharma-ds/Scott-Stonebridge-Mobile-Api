@@ -4,10 +4,10 @@ namespace App\Traits;
 
 /**
  * @deprecated This trait has been refactored into ApiResponse trait.
- * 
+ *
  * Please migrate to App\Traits\ApiResponse for new code.
  * This trait is maintained for backward compatibility with existing controllers.
- * 
+ *
  * Migration guide:
  * - Replace `use App\Traits\ShopifyResponseFormatter;` with `use App\Traits\ApiResponse;`
  * - Replace `success()` with `successResponse()`
@@ -15,7 +15,6 @@ namespace App\Traits;
  * - Replace `parseEdges()` with `parseEdges()` (same signature)
  * - Replace `parseConnection()` with `parseConnection()` (enhanced with pagination key)
  * - Replace `refineNestedEdges()` with `flattenEdges()`
- * 
  * @see App\Traits\ApiResponse
  */
 trait ShopifyResponseFormatter
@@ -33,12 +32,13 @@ trait ShopifyResponseFormatter
             'has_more' => data_get($data, "$key.pageInfo.hasNextPage"),
         ];
     }
+
     protected static function parseConnection($connection, $key = 'items')
     {
         if (
-            !$connection ||
-            !isset($connection['edges']) ||
-            !is_array($connection['edges'])
+            ! $connection ||
+            ! isset($connection['edges']) ||
+            ! is_array($connection['edges'])
         ) {
             return [
                 $key => [],
@@ -47,7 +47,7 @@ trait ShopifyResponseFormatter
             ];
         }
 
-        $items = array_map(fn($edge) => $edge['node'] ?? null, $connection['edges']);
+        $items = array_map(fn ($edge) => $edge['node'] ?? null, $connection['edges']);
         $items = array_filter($items);
         $items = array_values($items);
 
@@ -57,7 +57,6 @@ trait ShopifyResponseFormatter
             'has_more' => data_get($connection, 'pageInfo.hasNextPage', false),
         ];
     }
-
 
     /**
      * Recursively remove Shopify edges/node wrappers and flatten data.
@@ -77,7 +76,7 @@ trait ShopifyResponseFormatter
         }
 
         // If not an array → return as-is
-        if (!is_array($data)) {
+        if (! is_array($data)) {
             return $data;
         }
 
@@ -103,8 +102,6 @@ trait ShopifyResponseFormatter
         return $clean;
     }
 
-
-
     /**
      * Standard success response
      */
@@ -113,7 +110,7 @@ trait ShopifyResponseFormatter
         return response()->json([
             'status' => 200,
             'message' => $msg,
-            'data' => $data
+            'data' => $data,
         ], 200);
     }
 
@@ -125,7 +122,7 @@ trait ShopifyResponseFormatter
         return response()->json([
             'status' => $code,
             'message' => $msg,
-            'error' => $error
+            'error' => $error,
         ], $code);
     }
 }

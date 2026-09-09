@@ -9,21 +9,21 @@ class ShopifyRateLimitExceptionTest extends TestCase
 {
     public function test_it_has_correct_http_status_code(): void
     {
-        $exception = new ShopifyRateLimitException();
+        $exception = new ShopifyRateLimitException;
 
         $this->assertEquals(429, $exception->getHttpStatusCode());
     }
 
     public function test_it_has_correct_error_code(): void
     {
-        $exception = new ShopifyRateLimitException();
+        $exception = new ShopifyRateLimitException;
 
         $this->assertEquals('RATE_LIMIT', $exception->getErrorCode());
     }
 
     public function test_it_has_default_message(): void
     {
-        $exception = new ShopifyRateLimitException();
+        $exception = new ShopifyRateLimitException;
 
         $this->assertEquals('Rate limit exceeded', $exception->getMessage());
     }
@@ -37,7 +37,7 @@ class ShopifyRateLimitExceptionTest extends TestCase
 
     public function test_it_can_have_null_retry_after(): void
     {
-        $exception = new ShopifyRateLimitException();
+        $exception = new ShopifyRateLimitException;
 
         $this->assertNull($exception->getRetryAfter());
     }
@@ -53,7 +53,7 @@ class ShopifyRateLimitExceptionTest extends TestCase
 
     public function test_it_excludes_retry_after_from_array_when_null(): void
     {
-        $exception = new ShopifyRateLimitException();
+        $exception = new ShopifyRateLimitException;
         $array = $exception->toArray();
 
         $this->assertArrayNotHasKey('retry_after', $array['meta']);

@@ -13,16 +13,17 @@ use App\Exceptions\AI\AIServiceUnavailableException;
 use App\Exceptions\AI\AuthRequiredException;
 use App\Exceptions\AI\McpToolException;
 use App\Models\AiCustomerSession;
+use App\Services\AI\ChatbotConfigRepository;
 use App\Services\AI\ChatSessionContext;
 use App\Services\AI\MCP\CustomerAccountGraphClient;
 use App\Services\AI\MCP\CustomerMcpClient;
-use App\Services\AI\MCP\Mappers\CartMapper;
 use App\Services\AI\MCP\Mappers\CustomerGraphOrderMapper;
 use App\Services\AI\MCP\Mappers\OrderMapper;
 use App\Services\AI\MCP\Mappers\PolicyMapper;
 use App\Services\AI\MCP\Mappers\ProductMapper;
 use App\Services\AI\MCP\StorefrontMcpClient;
 use App\Services\AI\Streaming\ChunkEmitter;
+use App\Services\Shopify\AdminService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -38,23 +39,13 @@ class ToolExecutor
 {
     private const RATE_LIMIT_KEY = 'ai:rate:%s:mcp';
 
-    private const RATE_LIMIT_TTL = 60;
-
-    private const RATE_LIMIT_MAX = 60;
-
-    /**
-     * Cache key for the per-session Shopify Storefront Cart GID. Shopify
-     * carts expire roughly 10 days after last touch, so we keep ours 7 days
-     * so a returning visitor in the same chat session can still mutate the
-     * cart they built earlier without the model having to memorise the GID.
-     */
-    private const SESSION_CART_KEY = 'ai:session:%s:cart_id';
-
-    private const SESSION_CART_TTL = 604800;
-
     private ?StorefrontApiClientInterface $storefrontApi;
 
     private ?CustomerAccountGraphClient $customerGraph;
+
+    private ?ChatbotConfigRepository $chatbotConfig;
+
+    private ?AdminService $adminApi;
 
     public function __construct(
         private readonly StorefrontMcpClient $storefront,
@@ -63,9 +54,22 @@ class ToolExecutor
         private readonly UpsellServiceInterface $upsell,
         ?StorefrontApiClientInterface $storefrontApi = null,
         ?CustomerAccountGraphClient $customerGraph = null,
+        ?ChatbotConfigRepository $chatbotConfig = null,
+        ?AdminService $adminApi = null,
     ) {
         $this->storefrontApi = $storefrontApi;
         $this->customerGraph = $customerGraph;
+        $this->chatbotConfig = $chatbotConfig;
+        $this->adminApi = $adminApi;
+    }
+
+    /**
+     * Lazily resolved so older 4/5/6-arg constructions (tests, existing
+     * container bindings) keep working without modification.
+     */
+    private function chatbotConfig(): ChatbotConfigRepository
+    {
+        return $this->chatbotConfig ??= app(ChatbotConfigRepository::class);
     }
 
     /**
@@ -85,6 +89,14 @@ class ToolExecutor
     private function storefrontApi(): StorefrontApiClientInterface
     {
         return $this->storefrontApi ??= app(StorefrontApiClientInterface::class);
+    }
+
+    /**
+     * Lazily resolve the Admin API client from the container.
+     */
+    private function adminApi(): AdminService
+    {
+        return $this->adminApi ??= app(AdminService::class);
     }
 
     /**
@@ -131,27 +143,7 @@ class ToolExecutor
      */
     private function executeStorefrontMcp(string $toolName, array $args, ChatSessionContext $ctx): ToolResult
     {
-        // Hydrate the cart_id from the session cache when the inbound request
-        // didn't carry one. Without this the model has to remember the GID
-        // across turns and Shopify mints a fresh empty cart on every miss.
-        if ($ctx->cartId === null) {
-            $cached = $this->recallSessionCartId($ctx->sessionId);
-            if ($cached !== null) {
-                $ctx = $ctx->withCartId($cached);
-            }
-        }
-
         $args = $this->normaliseStorefrontArgs($toolName, $args);
-
-        // Inject the known cart_id when the model omitted it on update_cart /
-        // get_cart so we keep mutating the SAME cart instead of spawning a new
-        // empty one on every turn.
-        if ($ctx->cartId !== null
-            && in_array($toolName, [ToolDefinitions::TOOL_UPDATE_CART, ToolDefinitions::TOOL_GET_CART], true)
-            && empty($args['cart_id'])
-        ) {
-            $args['cart_id'] = $ctx->cartId;
-        }
 
         // Product detail: Shopify MCP `get_product_details` only returns ONE
         // variant (`selectedOrFirstAvailableVariant`). Pull the full product —
@@ -182,27 +174,15 @@ class ToolExecutor
             return $this->handleCatalogSearch($args, $ctx);
         }
 
-        // Quantity changes (`update_items`) and removals (`remove_line_ids`)
-        // key off the Shopify CartLine GID, not the variant id. The model (and
-        // the widget) frequently sends a ProductVariant id — translate it to
-        // the matching cart-line id by reading the live cart first.
-        if ($toolName === ToolDefinitions::TOOL_UPDATE_CART) {
-            $args = $this->resolveCartLineRefs($args, $ctx);
-        }
-
-        $isCartTool = in_array($toolName, [ToolDefinitions::TOOL_GET_CART, ToolDefinitions::TOOL_UPDATE_CART], true);
         $result = $this->withCache(
             $toolName,
             $args,
             $ctx->shopDomain,
-            fn (): array => $isCartTool
-                ? $this->callCartToolWithRecovery($toolName, $args, $ctx)
-                : $this->storefront->callTool($toolName, $args, $ctx->shopDomain),
+            fn (): array => $this->storefront->callTool($toolName, $args, $ctx->shopDomain),
         );
 
         return match ($toolName) {
             ToolDefinitions::TOOL_GET_PRODUCT_DETAILS => $this->handleProductDetail($result),
-            ToolDefinitions::TOOL_GET_CART, ToolDefinitions::TOOL_UPDATE_CART => $this->handleCart($result, $ctx),
             ToolDefinitions::TOOL_SEARCH_POLICIES => $this->handlePolicy($result, (string) ($args['query'] ?? ''), $ctx),
             default => ToolResult::error("Unhandled storefront tool: {$toolName}"),
         };
@@ -220,24 +200,27 @@ class ToolExecutor
         $query = trim((string) ($args['query'] ?? ''));
         $limit = (int) ($args['limit'] ?? 0);
         $limit = $limit >= 1 && $limit <= 12 ? $limit : 10;
+        $country = $ctx->country;
 
-        $cacheKey = 'ai:catalog:'.md5($ctx->shopDomain.'|'.strtolower($query).'|'.$limit);
+        $cacheKey = 'ai:catalog:'.md5($ctx->shopDomain.'|'.strtolower($query).'|'.$limit.'|'.$country);
         $ttl = (int) (config('chatbot.mcp.cache_ttl_seconds.search_catalog') ?? 120);
 
         try {
-            $nodes = Cache::remember($cacheKey, $ttl, function () use ($query, $limit): array {
+            $nodes = Cache::remember($cacheKey, $ttl, function () use ($query, $limit, $country): array {
                 $handle = $this->mapQueryToCollection($query);
 
                 if ($handle !== null) {
                     $resp = $this->storefrontApi()->query('storefront/collection/collection_products', [
                         'handle' => $handle,
                         'limit' => $limit,
+                        'country' => $country,
                     ]);
                     $edges = $resp['data']['collectionByHandle']['products']['edges'] ?? [];
                 } else {
                     $resp = $this->storefrontApi()->query('storefront/products/get_all_products', [
                         'limit' => $limit,
                         'query' => $query !== '' ? $query : '*',
+                        'country' => $country,
                     ]);
                     $edges = $resp['data']['products']['edges'] ?? [];
                 }
@@ -306,53 +289,52 @@ class ToolExecutor
     }
 
     /**
+     * Unified Customer Order Handler:
+     * 1. If Storefront API customer access token is present (e.g. mobile app Bearer token), query Storefront GraphQL / OrderService.
+     * 2. If customer is authenticated on storefront (context.customer.loggedIn == true), query Shopify Admin GraphQL.
+     * 3. If guest / unauthenticated, emit login prompt directing to https://scottstonebridge.com/account/login.
+     *
      * @param  array<string, mixed>  $args
      */
     private function executeCustomerMcp(string $toolName, array $args, ChatSessionContext $ctx): ToolResult
     {
-        $token = $ctx->customerAccessToken ?? $this->resolveCustomerToken($ctx->sessionId, $ctx->shopDomain);
-        if ($token === null) {
-            return $this->emitAuthRequired($ctx);
+        // 1. Mobile App / Storefront customer access token (Bearer token or session token)
+        $token = $ctx->customerAccessToken ?? $this->resolveCustomerToken($ctx->sessionId, $ctx->shopDomain, $ctx->isGuest);
+        if ($token !== null && $token !== '') {
+            if ($toolName === ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS) {
+                return $this->executeCustomerOrderListViaGraph($args, $ctx, $token);
+            }
+
+            try {
+                $result = $this->customer->callTool($toolName, $args, $ctx->shopDomain, $token);
+            } catch (AuthRequiredException $e) {
+                return $this->executeCustomerOrderViaGraph($toolName, $args, $ctx, $token);
+            }
+
+            $dto = OrderMapper::fromOrderStatus($result);
+            if ($dto === null) {
+                $this->emitter->emit('text', ['content' => "I couldn't find an order matching that request."]);
+
+                return ToolResult::error('Order not found.');
+            }
+
+            $payload = ['order_tracking' => $dto->toArray()];
+            $this->emitter->emit('order_tracking', $payload);
+
+            return ToolResult::success(
+                "Order {$dto->orderNumber} status: {$dto->status}.",
+                ['type' => 'order_tracking'] + $payload,
+            );
         }
 
-        // Order history is list-shaped and has no Shopify MCP tool — query the
-        // Customer Account GraphQL API directly (same `customer-account-api:full`
-        // scope the single-order path already relies on).
-        if ($toolName === ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS) {
-            return $this->executeCustomerOrderListViaGraph($args, $ctx, $token);
+        // 2. Customer is already signed in on storefront (context.customer.loggedIn = true) —
+        // fetch orders directly via Shopify Admin GraphQL API without forcing an OAuth popup!
+        if ($ctx->customer !== null && ! $ctx->isGuest && ($ctx->customer->email !== null || $ctx->customer->customerId !== null)) {
+            return $this->executeCustomerOrderViaAdmin($toolName, $args, $ctx);
         }
 
-        try {
-            $result = $this->customer->callTool($toolName, $args, $ctx->shopDomain, $token);
-        } catch (AuthRequiredException $e) {
-            // MCP rejected a valid token. Fall back to the Customer Account
-            // GraphQL API, which uses the SAME `customer-account-api:full`
-            // scope but the GraphQL surface (always enabled on stock Headless
-            // apps). Bypassing MCP keeps the order flow working even when
-            // Shopify hasn't provisioned MCP for this app.
-            Log::channel('ai')->info('tool.customer_mcp_rejected_falling_back_to_graphql', [
-                'session_id' => $ctx->sessionId,
-                'shop_domain' => $ctx->shopDomain,
-                'tool' => $toolName,
-            ]);
-
-            return $this->executeCustomerOrderViaGraph($toolName, $args, $ctx, $token);
-        }
-
-        $dto = OrderMapper::fromOrderStatus($result);
-        if ($dto === null) {
-            $this->emitter->emit('text', ['content' => "I couldn't find an order matching that request."]);
-
-            return ToolResult::error('Order not found.');
-        }
-
-        $payload = ['order_tracking' => $dto->toArray()];
-        $this->emitter->emit('order_tracking', $payload);
-
-        return ToolResult::success(
-            "Order {$dto->orderNumber} status: {$dto->status}.",
-            ['type' => 'order_tracking'] + $payload,
-        );
+        // 3. Guest visitor: Direct to login page in same tab
+        return $this->emitAuthRequired($ctx);
     }
 
     /**
@@ -372,23 +354,30 @@ class ToolExecutor
                 $this->customerOrderVariables($toolName, $args),
             );
         } catch (AuthRequiredException $e) {
-            // Token rejected by GraphQL too — genuine auth state mismatch.
-            // Emit a soft text instead of re-opening the popup (which would
-            // re-trigger the loop) and let the user retry from the chat UI.
+            // Token rejected by GraphQL — invalid / revoked / logged out.
+            // Invalidate the session in DB and prompt auth_required (or fall back to Admin if storefront customer).
             Log::channel('ai')->warning('tool.customer_graph_rejected_valid_token', [
                 'session_id' => $ctx->sessionId,
                 'shop_domain' => $ctx->shopDomain,
                 'tool' => $toolName,
             ]);
 
-            $this->emitter->emit('text', [
-                'content' => "You're signed in, but I can't reach the live order service right now. "
-                    .'Please check your order history in your account, or try again in a few minutes.',
-            ]);
+            $row = AiCustomerSession::query()->where('session_id', $ctx->sessionId)->first();
+            if ($row !== null) {
+                $this->invalidateCustomerSession($row, 'graphql_auth_required');
+            }
 
-            return ToolResult::error('Customer Account GraphQL rejected a valid token.');
+            if ($ctx->customer !== null && ! $ctx->isGuest && ($ctx->customer->customerId !== null || $ctx->customer->email !== null)) {
+                return $this->executeCustomerOrderViaAdmin($toolName, $args, $ctx);
+            }
+
+            return $this->emitAuthRequired($ctx);
         } catch (Throwable $e) {
             $this->logToolError($toolName, $ctx, $e);
+
+            if ($ctx->customer !== null && ! $ctx->isGuest && ($ctx->customer->customerId !== null || $ctx->customer->email !== null)) {
+                return $this->executeCustomerOrderViaAdmin($toolName, $args, $ctx);
+            }
 
             $this->emitter->emit('text', [
                 'content' => "I couldn't reach the order service just now. Please try again in a moment.",
@@ -402,6 +391,10 @@ class ToolExecutor
             : CustomerGraphOrderMapper::fromMostRecent($data);
 
         if ($dto === null) {
+            if ($ctx->customer !== null && ! $ctx->isGuest && ($ctx->customer->customerId !== null || $ctx->customer->email !== null)) {
+                return $this->executeCustomerOrderViaAdmin($toolName, $args, $ctx);
+            }
+
             $this->emitter->emit('text', ['content' => "I couldn't find an order matching that request."]);
 
             return ToolResult::error('Order not found via GraphQL fallback.');
@@ -445,14 +438,22 @@ class ToolExecutor
                 'tool' => ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS,
             ]);
 
-            $this->emitter->emit('text', [
-                'content' => "You're signed in, but I can't reach your order history right now. "
-                    .'Please try again in a few minutes.',
-            ]);
+            $row = AiCustomerSession::query()->where('session_id', $ctx->sessionId)->first();
+            if ($row !== null) {
+                $this->invalidateCustomerSession($row, 'graphql_auth_required');
+            }
 
-            return ToolResult::error('Customer Account GraphQL rejected a valid token.');
+            if ($ctx->customer !== null && ! $ctx->isGuest && ($ctx->customer->customerId !== null || $ctx->customer->email !== null)) {
+                return $this->executeCustomerOrderViaAdmin(ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS, $args, $ctx);
+            }
+
+            return $this->emitAuthRequired($ctx);
         } catch (Throwable $e) {
             $this->logToolError(ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS, $ctx, $e);
+
+            if ($ctx->customer !== null && ! $ctx->isGuest && ($ctx->customer->customerId !== null || $ctx->customer->email !== null)) {
+                return $this->executeCustomerOrderViaAdmin(ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS, $args, $ctx);
+            }
 
             $this->emitter->emit('text', [
                 'content' => "I couldn't load your orders just now. Please try again in a moment.",
@@ -468,6 +469,10 @@ class ToolExecutor
         );
 
         if ($orders === []) {
+            if ($ctx->customer !== null && ! $ctx->isGuest && ($ctx->customer->customerId !== null || $ctx->customer->email !== null)) {
+                return $this->executeCustomerOrderViaAdmin(ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS, $args, $ctx);
+            }
+
             $this->emitter->emit('text', ['content' => "You don't have any orders yet."]);
 
             return ToolResult::success('No orders found for this customer.', ['type' => 'order_list', 'orders' => []]);
@@ -595,14 +600,234 @@ class ToolExecutor
     }
 
     /**
+     * Fetch orders for a signed-in storefront customer via Shopify Admin GraphQL.
+     * Used when the customer is authenticated on the storefront (context.customer.loggedIn = true)
+     * but does not have a separate Customer Account OAuth session token.
+     *
+     * @param  array<string, mixed>  $args
+     */
+    private function executeCustomerOrderViaAdmin(string $toolName, array $args, ChatSessionContext $ctx): ToolResult
+    {
+        $customer = $ctx->customer;
+        $customerId = $customer?->customerId;
+        $email = $customer?->email;
+
+        if ($customerId === null && $email === null) {
+            return $this->emitAuthRequired($ctx);
+        }
+
+        $limit = (int) ($args['limit'] ?? 10);
+        $limit = $limit >= 1 && $limit <= 20 ? $limit : 10;
+        $cursor = isset($args['cursor']) && is_string($args['cursor']) && $args['cursor'] !== ''
+            ? $args['cursor']
+            : null;
+
+        try {
+            $customerGid = null;
+            $bareId = null;
+
+            if ($customerId !== null && $customerId !== '') {
+                $bareId = preg_replace('~^gid://shopify/Customer/~', '', $customerId);
+                if (is_numeric($bareId)) {
+                    $customerGid = "gid://shopify/Customer/{$bareId}";
+                }
+            }
+
+            if ($toolName === ToolDefinitions::TOOL_GET_ORDER_STATUS) {
+                $orderId = (string) ($args['order_id'] ?? $args['order_number'] ?? $args['name'] ?? '');
+                $orderId = ltrim($orderId, '#');
+                $searchQuery = $orderId !== '' ? "name:#{$orderId}" : '';
+                if ($email !== null && $email !== '') {
+                    $searchQuery .= ($searchQuery !== '' ? ' AND ' : '')."email:{$email}";
+                } elseif ($bareId !== null && $bareId !== '') {
+                    $searchQuery .= ($searchQuery !== '' ? ' AND ' : '')."customer_id:{$bareId}";
+                }
+
+                $data = $this->adminApi()->request($this->adminOrdersSearchQuery(), [
+                    'query' => $searchQuery,
+                    'first' => 1,
+                ]);
+            } elseif ($toolName === ToolDefinitions::TOOL_GET_MOST_RECENT_ORDER_STATUS) {
+                $searchQuery = ($email !== null && $email !== '') ? "email:{$email}" : "customer_id:{$bareId}";
+                $data = $this->adminApi()->request($this->adminOrdersSearchQuery(), [
+                    'query' => $searchQuery,
+                    'first' => 1,
+                ]);
+            } else {
+                // list_customer_orders
+                // Search orders by customer email (universal across all Shopify orders)
+                $searchQuery = ($email !== null && $email !== '') ? "email:{$email}" : "customer_id:{$bareId}";
+                $vars = [
+                    'query' => $searchQuery,
+                    'first' => $limit,
+                ];
+
+                if ($cursor !== null) {
+                    $vars['after'] = $cursor;
+                }
+
+                $data = $this->adminApi()->request($this->adminOrdersSearchQuery(), $vars);
+
+                // If cursor query returned errors or no orders, retry once without cursor
+                if ($cursor !== null && empty($data['data']['orders']['edges'])) {
+                    Log::channel('ai')->warning('tool.admin_order_cursor_failed_retrying_without_cursor', [
+                        'session_id' => $ctx->sessionId,
+                        'cursor' => $cursor,
+                        'errors' => $data['errors'] ?? null,
+                    ]);
+                    unset($vars['after']);
+                    $data = $this->adminApi()->request($this->adminOrdersSearchQuery(), $vars);
+                }
+
+                // If email search returned 0 orders and bareId is available, try customer GID query as fallback
+                if (empty($data['data']['orders']['edges']) && $bareId !== null && is_numeric($bareId)) {
+                    $customerGid = "gid://shopify/Customer/{$bareId}";
+                    $custData = $this->adminApi()->request($this->adminCustomerOrdersQuery(), [
+                        'customerId' => $customerGid,
+                        'first' => $limit,
+                    ]);
+                    if (! empty($custData['data']['customer']['orders']['edges'])) {
+                        $data = $custData;
+                    }
+                }
+            }
+        } catch (Throwable $e) {
+            $this->logToolError($toolName, $ctx, $e);
+
+            $this->emitter->emit('text', [
+                'content' => "I couldn't reach the order service just now. Please try again in a moment.",
+            ]);
+
+            return ToolResult::error("Admin order lookup failed: {$e->getMessage()}");
+        }
+
+        $ordersData = $data['data'] ?? [];
+
+        if ($toolName === ToolDefinitions::TOOL_LIST_CUSTOMER_ORDERS) {
+            $connection = $ordersData['customer']['orders'] ?? $ordersData['orders'] ?? [];
+            $list = CustomerGraphOrderMapper::listFromConnection(['customer' => ['orders' => $connection]]);
+            $orders = array_map(
+                static fn (CustomerOrderSummaryDTO $order): array => $order->toArray(),
+                $list['orders'],
+            );
+
+            if ($orders === []) {
+                $this->emitter->emit('text', ['content' => "You don't have any orders yet."]);
+
+                return ToolResult::success('No orders found for this customer.', ['type' => 'order_list', 'orders' => []]);
+            }
+
+            $payload = ['orders' => $orders, 'page_info' => $list['page_info']];
+            $this->emitter->emit('order_list', $payload);
+
+            $count = count($orders);
+
+            return ToolResult::success(
+                "Listed {$count} order(s) for the customer.",
+                ['type' => 'order_list'] + $payload,
+            );
+        }
+
+        // Single order tracking
+        $node = $ordersData['customer']['orders']['edges'][0]['node'] ?? $ordersData['orders']['edges'][0]['node'] ?? null;
+        if (! is_array($node)) {
+            $this->emitter->emit('text', ['content' => "I couldn't find an order matching that request."]);
+
+            return ToolResult::error('Order not found.');
+        }
+
+        $dto = CustomerGraphOrderMapper::fromOrderNode($node);
+        if ($dto === null) {
+            $this->emitter->emit('text', ['content' => "I couldn't find an order matching that request."]);
+
+            return ToolResult::error('Order not found.');
+        }
+
+        $payload = ['order_tracking' => $dto->toArray()];
+        $this->emitter->emit('order_tracking', $payload);
+
+        return ToolResult::success(
+            "Order {$dto->orderNumber} status: {$dto->status}.",
+            ['type' => 'order_tracking'] + $payload,
+        );
+    }
+
+    private function adminCustomerOrdersQuery(): string
+    {
+        return <<<'GRAPHQL'
+        query AdminCustomerOrders($customerId: ID!, $first: Int!, $after: String) {
+          customer(id: $customerId) {
+            id
+            orders(first: $first, after: $after, sortKey: PROCESSED_AT, reverse: true) {
+              pageInfo { hasNextPage endCursor }
+              edges {
+                cursor
+                node {
+                  id
+                  legacyResourceId
+                  name
+                  processedAt
+                  displayFulfillmentStatus
+                  displayFinancialStatus
+                  totalPriceSet {
+                    shopMoney { amount currencyCode }
+                    presentmentMoney { amount currencyCode }
+                  }
+                  fulfillments {
+                    estimatedDeliveryAt
+                    trackingInfo { number url company }
+                  }
+                  shippingAddress { city }
+                }
+              }
+            }
+          }
+        }
+        GRAPHQL;
+    }
+
+    private function adminOrdersSearchQuery(): string
+    {
+        return <<<'GRAPHQL'
+        query AdminOrdersSearch($query: String!, $first: Int!, $after: String) {
+          orders(first: $first, after: $after, query: $query, sortKey: PROCESSED_AT, reverse: true) {
+            pageInfo { hasNextPage endCursor }
+            edges {
+              cursor
+              node {
+                id
+                legacyResourceId
+                name
+                processedAt
+                displayFulfillmentStatus
+                displayFinancialStatus
+                totalPriceSet {
+                  shopMoney { amount currencyCode }
+                  presentmentMoney { amount currencyCode }
+                }
+                fulfillments {
+                  estimatedDeliveryAt
+                  trackingInfo { number url company }
+                }
+                shippingAddress { city }
+              }
+            }
+          }
+        }
+        GRAPHQL;
+    }
+
+    /**
      * @param  array<string, mixed>  $args
      */
     private function executeInternal(string $toolName, array $args, ChatSessionContext $ctx): ToolResult
     {
         return match ($toolName) {
+            ToolDefinitions::TOOL_GET_CART => $this->handleGetCart($ctx),
+            ToolDefinitions::TOOL_UPDATE_CART => $this->handleUpdateCart($args, $ctx),
             ToolDefinitions::TOOL_SUGGEST_QUICK_REPLIES => $this->handleQuickReplies($args),
-            ToolDefinitions::TOOL_SUGGEST_UPSELL => $this->handleUpsell($args, $ctx),
-            ToolDefinitions::TOOL_START_CHECKOUT => $this->handleStartCheckout($args, $ctx),
+            ToolDefinitions::TOOL_SUGGEST_UPSELL => $this->handleUpsell($ctx),
+            ToolDefinitions::TOOL_START_CHECKOUT => $this->handleStartCheckout(),
             ToolDefinitions::TOOL_SEARCH_KNOWLEDGE => $this->handleSearchKnowledge($args, $ctx),
             default => ToolResult::error("Unknown internal tool: {$toolName}"),
         };
@@ -660,48 +885,19 @@ class ToolExecutor
     }
 
     /**
-     * Synthesises a `checkout_link` chunk by reading the live cart and
-     * surfacing its `checkout_url`. Shopify has no `start_checkout` MCP tool
-     * — the cart already carries the hosted checkout URL.
-     *
-     * @param  array<string, mixed>  $args
+     * Emits a `checkout_action` intent — the frontend navigates the browser
+     * to the theme's own `/checkout` for whatever cart currently exists.
+     * No Shopify call: the storefront's cart IS the checkout target, so
+     * there is nothing to look up (ADR 0010).
      */
-    private function handleStartCheckout(array $args, ChatSessionContext $ctx): ToolResult
+    private function handleStartCheckout(): ToolResult
     {
-        $cartId = (string) ($args['cart_id'] ?? $ctx->cartId ?? '');
-        if ($cartId === '') {
-            return ToolResult::error('start_checkout requires cart_id.');
-        }
-
-        try {
-            $cartResult = $this->storefront->callTool(
-                ToolDefinitions::TOOL_GET_CART,
-                ['cart_id' => $cartId],
-                $ctx->shopDomain,
-            );
-        } catch (Throwable $e) {
-            $this->logToolError('start_checkout.get_cart', $ctx, $e);
-
-            return ToolResult::error('Could not read cart for checkout.');
-        }
-
-        $cart = CartMapper::fromCart($cartResult);
-        if ($cart === null || $cart->checkoutUrl === null || $cart->checkoutUrl === '') {
-            return ToolResult::error('Cart has no checkout URL.');
-        }
-
-        $payload = [
-            'checkout_url' => $cart->checkoutUrl,
-            'total_amount' => $cart->subtotalMinorUnits !== null ? $cart->subtotalMinorUnits / 100 : null,
-            'currency' => $cart->currency,
-            'item_count' => $cart->itemCount,
-        ];
-
-        $this->emitter->emit('checkout_link', $payload);
+        $payload = ['path' => '/checkout'];
+        $this->emitter->emit('checkout_action', $payload);
 
         return ToolResult::success(
-            'Checkout link ready — UI will open it in a new tab.',
-            ['type' => 'checkout_link'] + $payload,
+            'Checkout requested — the storefront will navigate to /checkout.',
+            ['type' => 'checkout_action'] + $payload,
         );
     }
 
@@ -726,41 +922,29 @@ class ToolExecutor
     }
 
     /**
-     * @param  array<string, mixed>  $args
+     * Reads cart line items straight from the storefront-supplied snapshot
+     * (ADR 0010) instead of an extra Shopify `get_cart` call — the same
+     * data the widget already sent this turn as `context.cart`.
      */
-    private function handleUpsell(array $args, ChatSessionContext $ctx): ToolResult
+    private function handleUpsell(ChatSessionContext $ctx): ToolResult
     {
-        $cartId = (string) ($args['cart_id'] ?? $ctx->cartId ?? '');
-        if ($cartId === '') {
-            return ToolResult::error('suggest_upsell requires cart_id.');
-        }
-
-        try {
-            $cartResult = $this->storefront->callTool(
-                ToolDefinitions::TOOL_GET_CART,
-                ['cart_id' => $cartId],
-                $ctx->shopDomain,
-            );
-        } catch (Throwable $e) {
-            $this->logToolError('suggest_upsell.get_cart', $ctx, $e);
-
-            return ToolResult::error('Could not read cart for upsell.');
-        }
-
-        $cart = CartMapper::fromCart($cartResult);
-        if ($cart === null) {
+        $cart = $ctx->cartSnapshot;
+        if ($cart === null || $cart->isEmpty()) {
             return ToolResult::error('Empty cart — nothing to upsell against.');
         }
 
-        $cartItems = array_map(
-            static fn (array $line): array => [
-                'product_id' => $line['product_id'] ?? '',
-                'quantity' => (int) ($line['quantity'] ?? 0),
-            ],
+        $cartItems = array_values(array_filter(array_map(
+            static fn ($line): ?array => is_array($line) && ! empty($line['product_id'])
+                ? ['product_id' => (string) $line['product_id'], 'quantity' => (int) ($line['quantity'] ?? 0)]
+                : null,
             $cart->items,
-        );
+        )));
 
-        $suggestions = $this->upsell->getUpsells($cartItems, $ctx->shopDomain, $cart->currency);
+        if ($cartItems === []) {
+            return ToolResult::error('Empty cart — nothing to upsell against.');
+        }
+
+        $suggestions = $this->upsell->getUpsells($cartItems, $ctx->shopDomain, $cart->currency ?? $ctx->currency);
 
         $payload = [
             'upsells' => array_map(static fn ($dto) => $dto->toArray(), $suggestions),
@@ -867,396 +1051,271 @@ class ToolExecutor
     private function resolveProductDetailVars(array $args, ChatSessionContext $ctx): ?array
     {
         $handle = trim((string) ($args['handle'] ?? ''));
+        $res = null;
+
         if ($handle !== '') {
-            return ['handle' => $handle];
-        }
+            $res = ['handle' => $handle];
+        } else {
+            $pid = trim((string) ($args['product_id'] ?? ''));
+            if ($pid === '') {
+                return null;
+            }
 
-        $pid = trim((string) ($args['product_id'] ?? ''));
-        if ($pid === '') {
-            return null;
-        }
-
-        if (str_starts_with($pid, 'gid://shopify/Product/')) {
-            return ['id' => $pid];
-        }
-        if (ctype_digit($pid)) {
-            return ['id' => $this->toGid('Product', $pid)];
-        }
-        // A bare handle/slug: lowercase alphanumerics + dashes, no spaces.
-        if (preg_match('/^[a-z0-9][a-z0-9\-]*$/', $pid) === 1) {
-            return ['handle' => $pid];
-        }
-
-        // Free text / title — resolve to a GID via the Storefront search.
-        $resolved = $this->resolveProductIdFromQuery($pid, $ctx);
-
-        return $resolved !== null ? ['id' => $resolved] : null;
-    }
-
-    /**
-     * @param  array<string, mixed>  $mcpResult
-     */
-    private function handleCart(array $mcpResult, ChatSessionContext $ctx): ToolResult
-    {
-        $dto = CartMapper::fromCart($mcpResult);
-        if ($dto === null) {
-            return ToolResult::error('Cart not found.');
-        }
-
-        // Persist the Storefront cart GID for this chat session so the next
-        // turn can mutate the same cart even when the widget forgot to send
-        // it back. Without this, every remove / quantity-change call risks
-        // landing on a brand new empty cart and Shopify rejecting the line ref.
-        $this->rememberSessionCartId($ctx->sessionId, $dto->id);
-
-        $cart = $dto->toArray();
-        // Shopify's MCP cart omits line imagery — backfill from the Storefront
-        // API so the widget's cart view can render product thumbnails.
-        $cart['items'] = $this->attachCartLineImages($cart['items'], $ctx);
-        $payload = ['cart' => $cart];
-        $this->emitter->emit('cart_state', $payload);
-
-        // Echo the cart_id AND a line-id ↔ title map so the model removes /
-        // changes quantity using the correct CartLine GID (not the variant id).
-        $lineHints = [];
-        foreach ($cart['items'] as $line) {
-            if (! empty($line['id'])) {
-                $lineHints[] = "{$line['title']} → line {$line['id']} (qty {$line['quantity']})";
+            if (str_starts_with($pid, 'gid://shopify/Product/')) {
+                $res = ['id' => $pid];
+            } elseif (ctype_digit($pid)) {
+                $res = ['id' => $this->toGid('Product', $pid)];
+            } elseif (preg_match('/^[a-z0-9][a-z0-9\-]*$/', $pid) === 1) {
+                $res = ['handle' => $pid];
+            } else {
+                $resolved = $this->resolveProductIdFromQuery($pid, $ctx);
+                $res = $resolved !== null ? ['id' => $resolved] : null;
             }
         }
-        $hint = $lineHints === [] ? '' : ' Lines: '.implode('; ', $lineHints).'. Use the line id for update_items/remove_line_ids.';
 
-        return ToolResult::success(
-            "Cart {$dto->id} now has {$dto->itemCount} item(s). Use this cart_id in any follow-up cart / checkout tool call.".$hint,
-            ['type' => 'cart_state'] + $payload,
-        );
+        if ($res !== null) {
+            $res['country'] = $ctx->country;
+        }
+
+        return $res;
     }
 
     /**
-     * Translate variant / bare ids the model passed in `update_items[].id` or
-     * `remove_line_ids` into the real Shopify CartLine GIDs by reading the live
-     * cart. Leaves values already shaped like a CartLine GID untouched.
+     * Answers "what's in my cart?" straight from the storefront-supplied
+     * snapshot (ADR 0010) — no Shopify call. Text-only: the frontend already
+     * knows its own live cart, so there's nothing to re-render for it here.
+     */
+    private function handleGetCart(ChatSessionContext $ctx): ToolResult
+    {
+        $cart = $ctx->cartSnapshot;
+        if ($cart === null || $cart->isEmpty()) {
+            return ToolResult::success('Cart is currently empty.');
+        }
+
+        $lines = [];
+        foreach ($cart->items as $line) {
+            if (! is_array($line)) {
+                continue;
+            }
+            $title = (string) ($line['title'] ?? $line['product_title'] ?? 'Item');
+            $qty = (int) ($line['quantity'] ?? 0);
+            $variantId = (string) ($line['variant_id'] ?? $line['id'] ?? '');
+            $handle = (string) ($line['handle'] ?? '');
+            $price = isset($line['price']) ? (string) $line['price'] : '';
+
+            $meta = [];
+            if ($variantId !== '') {
+                $meta[] = "variant_id: {$variantId}";
+            }
+            if ($handle !== '') {
+                $meta[] = "handle: {$handle}";
+            }
+            if ($price !== '') {
+                $meta[] = "price: {$price}";
+            }
+
+            $metaStr = $meta !== [] ? ' ('.implode(', ', $meta).')' : '';
+            $lines[] = "- {$title}{$metaStr} x{$qty}";
+        }
+
+        $summary = $lines === []
+            ? "Cart has {$cart->itemCount} item(s)."
+            : "Current Cart (Total: {$cart->currency} {$cart->totalPrice}):\n".implode("\n", $lines);
+
+        return ToolResult::success($summary);
+    }
+
+    /**
+     * Emits a `cart_action` intent per requested item for the frontend to
+     * execute against the theme's native Ajax Cart API (`/cart/add.js`,
+     * `/cart/change.js`, `/cart/clear.js`) — the storefront's own cart cookie
+     * is the only cart, so nothing is mutated here (ADR 0010). Each `variant_id`
+     * is resolved against the cart snapshot or $ctx->shownVariantIds — guarding
+     * against a hallucinated or stale id reaching a real customer's cart.
      *
      * @param  array<string, mixed>  $args
-     * @return array<string, mixed>
      */
-    private function resolveCartLineRefs(array $args, ChatSessionContext $ctx): array
+    private function handleUpdateCart(array $args, ChatSessionContext $ctx): ToolResult
     {
-        $hasUpdate = isset($args['update_items']) && is_array($args['update_items']);
-        $hasRemove = isset($args['remove_line_ids']) && is_array($args['remove_line_ids']);
-        if (! $hasUpdate && ! $hasRemove) {
-            return $args;
+        $requested = is_array($args['items'] ?? null) ? $args['items'] : [];
+        if ($requested === []) {
+            return ToolResult::error('update_cart requires at least one item.');
         }
 
-        $cartId = (string) ($args['cart_id'] ?? $ctx->cartId ?? '');
-        if (! str_starts_with($cartId, 'gid://shopify/Cart/')) {
-            return $args;
+        $accepted = [];
+        $rejected = [];
+        foreach ($requested as $row) {
+            if (! is_array($row)) {
+                continue;
+            }
+            $action = is_string($row['action'] ?? null) ? strtolower($row['action']) : '';
+            $rawVariantId = is_string($row['variant_id'] ?? null) ? trim($row['variant_id']) : '';
+            $quantity = isset($row['quantity']) ? (int) $row['quantity'] : ($action === 'remove' ? 0 : 1);
+
+            if ($action === 'clear') {
+                if ($ctx->cartSnapshot !== null && ! $ctx->cartSnapshot->isEmpty()) {
+                    foreach ($ctx->cartSnapshot->items as $line) {
+                        if (! is_array($line)) {
+                            continue;
+                        }
+                        $vid = (string) ($line['variant_id'] ?? $line['id'] ?? '');
+                        if ($vid !== '') {
+                            $accepted[] = ['action' => 'remove', 'variant_id' => $vid, 'quantity' => 0];
+                        }
+                    }
+                }
+
+                continue;
+            }
+
+            if (! in_array($action, ['add', 'update', 'remove'], true) || $rawVariantId === '') {
+                $rejected[] = $rawVariantId !== '' ? $rawVariantId : '(missing variant_id)';
+
+                continue;
+            }
+
+            // Normalise update with quantity 0 to remove
+            if ($action === 'update' && $quantity === 0) {
+                $action = 'remove';
+            }
+
+            // Resolve variant against cartSnapshot and shownVariantIds
+            $resolvedVariantId = $this->resolveCartVariantId($rawVariantId, $ctx);
+            if ($resolvedVariantId === null) {
+                $rejected[] = $rawVariantId;
+
+                continue;
+            }
+
+            $accepted[] = ['action' => $action, 'variant_id' => $resolvedVariantId, 'quantity' => max(0, $quantity)];
         }
 
-        // ALWAYS re-read the live cart — even when the ref already LOOKS like a
-        // CartLine GID. Shopify re-keys cart lines on every mutation, so a line
-        // id the model echoed from an earlier cart_state is frequently STALE
-        // after an intervening add/remove. Forwarding a stale line id makes
-        // update_cart fail with "Invalid global id" (surfaced to the user as
-        // "I had trouble updating the quantity"). Validating every ref against
-        // the current cart is the only reliable option.
-        try {
-            $cart = $this->storefront->callTool(ToolDefinitions::TOOL_GET_CART, ['cart_id' => $cartId], $ctx->shopDomain);
-        } catch (Throwable $e) {
-            $this->logToolError('update_cart.resolve_lines', $ctx, $e);
-
-            return $args;
+        if ($accepted === []) {
+            return ToolResult::error(
+                'None of the requested variant_ids were actually shown to the customer this conversation or present in their cart — do not guess an id; call get_cart, search_catalog, or get_product_details first.',
+            );
         }
 
-        $dto = CartMapper::fromCart($cart);
-        if ($dto === null || $dto->items === []) {
-            return $args;
+        $payload = ['items' => $accepted];
+        $this->emitter->emit('cart_action', $payload);
+
+        $summary = 'Requested: '.implode(', ', array_map(
+            static fn (array $i): string => "{$i['action']} {$i['variant_id']}".($i['action'] !== 'remove' ? " x{$i['quantity']}" : ''),
+            $accepted,
+        )).'. The storefront will apply this to the customer\'s real cart — reply as if it already succeeded.';
+        if ($rejected !== []) {
+            $summary .= ' Skipped unshown/unverified variant_id(s): '.implode(', ', $rejected).'.';
         }
 
-        $map = $this->buildVariantToLineMap($cart);
+        return ToolResult::success($summary, ['type' => 'cart_action'] + $payload);
+    }
 
-        // Set of CartLine GIDs that exist in the cart RIGHT NOW, plus the lone
-        // line id when the cart holds exactly one item (lets us re-point a
-        // stale/ambiguous ref — the user can only mean that single line).
-        $validLineIds = [];
-        foreach ($dto->items as $line) {
-            $lineId = (string) ($line['id'] ?? '');
-            if ($lineId !== '') {
-                $validLineIds[$lineId] = true;
+    private function resolveCartVariantId(string $identifier, ChatSessionContext $ctx): ?string
+    {
+        $bare = (string) (str_contains($identifier, '/') ? basename($identifier) : $identifier);
+
+        // 1. Direct check in shownVariantIds
+        if (isset($ctx->shownVariantIds[$identifier])) {
+            return $identifier;
+        }
+        if (isset($ctx->shownVariantIds[$bare])) {
+            return $bare;
+        }
+        foreach (array_keys($ctx->shownVariantIds) as $shownId) {
+            $shownBare = (string) (str_contains((string) $shownId, '/') ? basename((string) $shownId) : $shownId);
+            if ($shownBare === $bare) {
+                return (string) $shownId;
             }
         }
-        $onlyLineId = count($dto->items) === 1 ? ((string) ($dto->items[0]['id'] ?? '') ?: null) : null;
 
-        if ($hasRemove) {
-            $args['remove_line_ids'] = array_values(array_filter(array_map(
-                fn ($ref): string => $this->resolveLineRef((string) $ref, $map, $validLineIds, $onlyLineId),
-                $args['remove_line_ids'],
-            ), static fn (string $ref): bool => self::isCartLineGid($ref)));
-        }
-        if ($hasUpdate) {
-            foreach ($args['update_items'] as $idx => $row) {
-                if (is_array($row) && isset($row['id'])) {
-                    $args['update_items'][$idx]['id'] = $this->resolveLineRef((string) $row['id'], $map, $validLineIds, $onlyLineId);
+        // 2. Check in cart snapshot
+        if ($ctx->cartSnapshot !== null) {
+            foreach ($ctx->cartSnapshot->items as $line) {
+                if (! is_array($line)) {
+                    continue;
+                }
+                $lineVid = (string) ($line['variant_id'] ?? $line['id'] ?? '');
+                $lineBare = (string) (str_contains($lineVid, '/') ? basename($lineVid) : $lineVid);
+                $linePid = (string) ($line['product_id'] ?? '');
+                $lineHandle = strtolower((string) ($line['handle'] ?? ''));
+                $lineTitle = strtolower((string) ($line['title'] ?? $line['product_title'] ?? ''));
+
+                if ($lineVid === $identifier || $lineBare === $bare) {
+                    return $lineVid !== '' ? $lineVid : $identifier;
+                }
+                if ($linePid !== '' && ($linePid === $identifier || $linePid === $bare)) {
+                    return $lineVid !== '' ? $lineVid : $identifier;
+                }
+                if ($lineHandle !== '' && $lineHandle === strtolower($identifier)) {
+                    return $lineVid !== '' ? $lineVid : $identifier;
+                }
+                if ($lineTitle !== '' && ($lineTitle === strtolower($identifier) || str_contains($lineTitle, strtolower($identifier)))) {
+                    return $lineVid !== '' ? $lineVid : $identifier;
                 }
             }
-            // Drop rows that still didn't resolve to a CURRENT line — sending
-            // one guarantees a Shopify rejection the model can't recover from.
-            $args['update_items'] = array_values(array_filter(
-                $args['update_items'],
-                static fn ($row): bool => is_array($row) && self::isCartLineGid((string) ($row['id'] ?? '')),
-            ));
         }
 
-        return $args;
-    }
+        // 3. Fallback: Validate variant directly against Shopify Storefront API
+        if (str_starts_with($identifier, 'gid://shopify/ProductVariant/') || (is_numeric($bare) && strlen($bare) >= 6)) {
+            $gid = str_starts_with($identifier, 'gid://') ? $identifier : "gid://shopify/ProductVariant/{$bare}";
+            $cacheKey = "ai:variant_valid:{$ctx->shopDomain}:{$ctx->country}:{$gid}";
+            $validatedId = Cache::remember($cacheKey, 3600, function () use ($gid, $ctx): ?string {
+                try {
+                    $resp = $this->storefrontApi()->query('storefront/products/get_variant_by_id', [
+                        'id' => $gid,
+                        'country' => $ctx->country,
+                    ]);
+                    $node = $resp['data']['node'] ?? null;
+                    if (is_array($node) && ! empty($node['id'])) {
+                        return (string) $node['id'];
+                    }
+                } catch (Throwable) {
+                    // Ignore and fall through
+                }
 
-    /**
-     * Resolve a single line ref (CartLine GID, variant GID, or bare numeric)
-     * to a CartLine GID that EXISTS in the current cart. Returns '' when it
-     * cannot be resolved so the caller drops it.
-     *
-     * @param  array<string, string>  $map  variant id → current line id
-     * @param  array<string, bool>  $validLineIds  current line ids
-     */
-    private function resolveLineRef(string $ref, array $map, array $validLineIds, ?string $onlyLineId): string
-    {
-        // Already a line that exists in the cart right now.
-        if (self::isCartLineGid($ref) && isset($validLineIds[$ref])) {
-            return $ref;
-        }
+                return null;
+            });
 
-        // Variant GID / bare numeric → current line.
-        $mapped = self::mapToLineId($ref, $map);
-        if (self::isCartLineGid($mapped) && isset($validLineIds[$mapped])) {
-            return $mapped;
-        }
-
-        // Stale line id or unresolved, but the cart holds a single line — the
-        // user can only mean that one, so re-point the op onto it.
-        if ($onlyLineId !== null) {
-            return $onlyLineId;
-        }
-
-        return '';
-    }
-
-    /**
-     * Map both variant GIDs and bare variant numerics → CartLine GID.
-     *
-     * @param  array<string, mixed>  $cartResult
-     * @return array<string, string>
-     */
-    private function buildVariantToLineMap(array $cartResult): array
-    {
-        $dto = CartMapper::fromCart($cartResult);
-        if ($dto === null) {
-            return [];
-        }
-
-        $map = [];
-        foreach ($dto->items as $line) {
-            $lineId = $line['id'] ?? null;
-            $variantId = $line['variant_id'] ?? null;
-            if (! is_string($lineId) || $lineId === '' || ! is_string($variantId) || $variantId === '') {
-                continue;
-            }
-            $map[$variantId] = $lineId;
-            // Also key on the bare numeric tail so a stripped id still resolves.
-            if (preg_match('~/(\d+)$~', $variantId, $m) === 1) {
-                $map[$m[1]] = $lineId;
+            if ($validatedId !== null) {
+                return $validatedId;
             }
         }
 
-        return $map;
-    }
+        // 4. Fallback: Resolve product handle / name to its first available variant
+        if (strlen($identifier) >= 3 && ! is_numeric($identifier) && ! str_starts_with($identifier, 'gid://')) {
+            $handleKey = "ai:product_handle_vid:{$ctx->shopDomain}:{$ctx->country}:".strtolower($identifier);
+            $resolvedByHandle = Cache::remember($handleKey, 3600, function () use ($identifier, $ctx): ?string {
+                try {
+                    $resp = $this->storefrontApi()->query('storefront/products/get_product_detail_for_chat', [
+                        'handle' => strtolower($identifier),
+                        'country' => $ctx->country,
+                    ]);
+                    $productNode = $resp['data']['product'] ?? null;
+                    if (is_array($productNode)) {
+                        $edges = $productNode['variants']['edges'] ?? [];
+                        foreach ($edges as $edge) {
+                            $v = $edge['node'] ?? null;
+                            if (is_array($v) && ! empty($v['id']) && ($v['availableForSale'] ?? true)) {
+                                return (string) $v['id'];
+                            }
+                        }
+                        if (isset($edges[0]['node']['id'])) {
+                            return (string) $edges[0]['node']['id'];
+                        }
+                    }
+                } catch (Throwable) {
+                    // Ignore and fall through
+                }
 
-    /**
-     * @param  array<string, string>  $map
-     */
-    private static function mapToLineId(string $ref, array $map): string
-    {
-        if (self::isCartLineGid($ref)) {
-            return $ref;
-        }
+                return null;
+            });
 
-        if (isset($map[$ref])) {
-            return $map[$ref];
-        }
-
-        // The Shopify ajax cart key format is `<variant_id>:<line_token>`;
-        // strip the trailing token so a bare-variant-numeric lookup wins.
-        if (str_contains($ref, ':') && ! str_starts_with($ref, 'gid://')) {
-            $head = strstr($ref, ':', true);
-            if (is_string($head) && isset($map[$head])) {
-                return $map[$head];
+            if ($resolvedByHandle !== null) {
+                return $resolvedByHandle;
             }
         }
 
-        // Tail numeric on a stray GID type (e.g. ProductVariant GID) so the
-        // map's bare-numeric key still resolves the line.
-        if (preg_match('~/(\d+)(?:[:?].*)?$~', $ref, $m) === 1 && isset($map[$m[1]])) {
-            return $map[$m[1]];
-        }
-
-        return $ref;
-    }
-
-    private static function isCartLineGid(string $value): bool
-    {
-        return str_starts_with($value, 'gid://shopify/CartLine/');
-    }
-
-    /**
-     * Call a Storefront cart tool, self-healing when the cart_id we injected
-     * (cached from a previous turn, or echoed by the model) is dead at Shopify.
-     *
-     * Shopify carts expire / get consumed at checkout, so a stale cached GID
-     * makes EVERY add fail with "cart not found" — and because the cache was
-     * never cleared, the session stayed wedged ("I don't have a cart ID … technical
-     * issue"). On a cart-specific error we forget the cached GID and, for an add,
-     * retry once with cart_id stripped so Shopify mints a fresh cart.
-     *
-     * @param  array<string, mixed>  $args
-     * @return array<string, mixed>
-     */
-    private function callCartToolWithRecovery(string $toolName, array $args, ChatSessionContext $ctx): array
-    {
-        try {
-            return $this->storefront->callTool($toolName, $args, $ctx->shopDomain);
-        } catch (McpToolException $e) {
-            if (! $this->isStaleCartError($e->getMessage())) {
-                throw $e;
-            }
-
-            // The cart_id we carried is dead — never reuse it again.
-            $this->forgetSessionCartId($ctx->sessionId);
-
-            $hasAdd = isset($args['add_items']) && is_array($args['add_items']) && $args['add_items'] !== [];
-            if ($toolName === ToolDefinitions::TOOL_UPDATE_CART && $hasAdd) {
-                Log::channel('ai')->info('cart.stale_id_recovered', [
-                    'session_id' => $ctx->sessionId,
-                    'shop_domain' => $ctx->shopDomain,
-                ]);
-
-                // Drop the dead cart_id + any line ops that referenced its now
-                // gone lines, then re-add on a fresh cart Shopify mints for us.
-                unset($args['cart_id'], $args['update_items'], $args['remove_line_ids']);
-
-                return $this->storefront->callTool($toolName, $args, $ctx->shopDomain);
-            }
-
-            // get_cart / quantity-change / removal on a dead cart can't be
-            // rescued without the cart — surface so the model re-syncs cleanly.
-            throw $e;
-        }
-    }
-
-    /**
-     * Heuristic: does this MCP error mean the cart_id is gone / invalid (vs an
-     * unrelated failure we must not swallow)? Requires a cart reference plus a
-     * "not found / invalid" signal so we don't nuke the cache on every error.
-     */
-    private function isStaleCartError(string $message): bool
-    {
-        $m = strtolower($message);
-        if (! str_contains($m, 'cart')) {
-            return false;
-        }
-
-        foreach (['not found', 'no longer', 'does not exist', "doesn't exist", 'invalid', 'expired', 'could not find', "couldn't find", 'not exist', 'unable to find'] as $needle) {
-            if (str_contains($m, $needle)) {
-                return true;
-            }
-        }
-
-        // Shopify rejects a malformed/foreign Cart GID with this phrasing.
-        return str_contains($m, 'invalid global id') || str_contains($m, 'invalid id');
-    }
-
-    /**
-     * Cache the active Shopify Storefront Cart GID for the chat session so
-     * future tool calls in the same session can reuse it without relying on
-     * the LLM to echo it back from the previous turn's message.
-     */
-    private function rememberSessionCartId(string $sessionId, string $cartId): void
-    {
-        if ($sessionId === '' || ! str_starts_with($cartId, 'gid://shopify/Cart/')) {
-            return;
-        }
-
-        Cache::put(sprintf(self::SESSION_CART_KEY, $sessionId), $cartId, self::SESSION_CART_TTL);
-    }
-
-    private function recallSessionCartId(string $sessionId): ?string
-    {
-        if ($sessionId === '') {
-            return null;
-        }
-
-        $value = Cache::get(sprintf(self::SESSION_CART_KEY, $sessionId));
-
-        return is_string($value) && str_starts_with($value, 'gid://shopify/Cart/') ? $value : null;
-    }
-
-    /**
-     * Drop the cached session cart GID — call when Shopify reports the cart
-     * has been consumed / abandoned and the next add should mint a new one.
-     */
-    private function forgetSessionCartId(string $sessionId): void
-    {
-        if ($sessionId === '') {
-            return;
-        }
-
-        Cache::forget(sprintf(self::SESSION_CART_KEY, $sessionId));
-    }
-
-    /**
-     * Backfill `image` on each cart line from the Storefront API (the MCP cart
-     * payload has no imagery). Best-effort: returns lines unchanged on failure.
-     *
-     * @param  list<array<string, mixed>>  $items
-     * @return list<array<string, mixed>>
-     */
-    private function attachCartLineImages(array $items, ChatSessionContext $ctx): array
-    {
-        $variantIds = [];
-        foreach ($items as $line) {
-            if (empty($line['image']) && ! empty($line['variant_id'])) {
-                $variantIds[] = (string) $line['variant_id'];
-            }
-        }
-        $variantIds = array_values(array_unique($variantIds));
-        if ($variantIds === []) {
-            return $items;
-        }
-
-        try {
-            $resp = $this->storefrontApi()->query('storefront/products/get_variant_images', ['ids' => $variantIds]);
-        } catch (Throwable $e) {
-            $this->logToolError('cart.variant_images', $ctx, $e);
-
-            return $items;
-        }
-
-        $byVariant = [];
-        foreach ((array) ($resp['data']['nodes'] ?? []) as $node) {
-            if (! is_array($node) || empty($node['id'])) {
-                continue;
-            }
-            $url = $node['image']['url'] ?? $node['product']['featuredImage']['url'] ?? null;
-            if (is_string($url) && $url !== '') {
-                $byVariant[(string) $node['id']] = $url;
-            }
-        }
-
-        foreach ($items as $idx => $line) {
-            if (empty($line['image']) && ! empty($line['variant_id']) && isset($byVariant[$line['variant_id']])) {
-                $items[$idx]['image'] = $byVariant[$line['variant_id']];
-            }
-        }
-
-        return $items;
+        return null;
     }
 
     /**
@@ -1509,30 +1568,36 @@ class ToolExecutor
 
     private function emitAuthRequired(ChatSessionContext $ctx): ToolResult
     {
-        Log::channel('ai')->info('tool.auth_required', [
+        $loginUrl = 'https://scottstonebridge.com/account/login';
+
+        Log::channel('ai')->info('tool.login_required', [
             'session_id' => $ctx->sessionId,
             'shop_domain' => $ctx->shopDomain,
-            'has_row' => AiCustomerSession::query()->where('session_id', $ctx->sessionId)->exists(),
+            'login_url' => $loginUrl,
         ]);
 
         $payload = [
-            'reason' => 'customer_account',
-            'oauth_start_url' => route('api.v1.ai.oauth.customer.start', [
-                'session_id' => $ctx->sessionId,
-                'shop_domain' => $ctx->shopDomain,
-            ]),
+            'reason' => 'login_required',
+            'login_url' => $loginUrl,
         ];
 
         $this->emitter->emit('auth_required', $payload);
+        $this->emitter->emit('text', [
+            'content' => "Please log in to your account to view your order history.\n\n[Log In]({$loginUrl})",
+        ]);
 
         return ToolResult::authRequired(
-            'Customer is not signed in — the UI is showing the sign-in popup now.',
-            ['type' => 'auth_required'] + $payload,
+            "Customer is not signed in. Instruct them: 'Please log in to your account to view your order history.' and direct them to {$loginUrl}",
+            ['type' => 'auth_required', 'login_url' => $loginUrl] + $payload,
         );
     }
 
-    private function resolveCustomerToken(string $sessionId, string $shopDomain = ''): ?string
+    private function resolveCustomerToken(string $sessionId, string $shopDomain = '', bool $isGuest = false): ?string
     {
+        if ($isGuest) {
+            return null;
+        }
+
         $row = AiCustomerSession::query()
             ->where('session_id', $sessionId)
             ->first();
@@ -1792,10 +1857,10 @@ class ToolExecutor
         $key = sprintf(self::RATE_LIMIT_KEY, $sessionId);
         $count = (int) Cache::increment($key);
         if ($count === 1) {
-            Cache::put($key, 1, self::RATE_LIMIT_TTL);
+            Cache::put($key, 1, $this->chatbotConfig()->toolExecutorRateLimitTtlSeconds());
         }
 
-        return $count <= self::RATE_LIMIT_MAX;
+        return $count <= $this->chatbotConfig()->toolExecutorRateLimitMax();
     }
 
     /**
@@ -1817,37 +1882,6 @@ class ToolExecutor
             // `resolveProductIdFromQuery` path can fall back to a search.
             if (is_string($pid) && ctype_digit($pid)) {
                 $args['product_id'] = $this->toGid('Product', $pid);
-            }
-        }
-
-        // Drop a bogus cart_id (empty string, placeholder, or anything that
-        // is not a real Shopify Cart GID). The model frequently invents one
-        // on the first add — leaving it in makes Shopify reject the call
-        // with "Invalid cart_id format" instead of minting a fresh cart.
-        // Applies to every Storefront cart op, not just update_cart.
-        if (in_array($toolName, [ToolDefinitions::TOOL_UPDATE_CART, ToolDefinitions::TOOL_GET_CART], true)
-            && isset($args['cart_id'])
-        ) {
-            $cid = is_string($args['cart_id']) ? trim($args['cart_id']) : '';
-            if (! str_starts_with($cid, 'gid://shopify/Cart/')) {
-                unset($args['cart_id']);
-            }
-        }
-
-        if ($toolName === ToolDefinitions::TOOL_UPDATE_CART) {
-
-            foreach (['add_items'] as $key) {
-                if (! isset($args[$key]) || ! is_array($args[$key])) {
-                    continue;
-                }
-                foreach ($args[$key] as $idx => $row) {
-                    if (! is_array($row)) {
-                        continue;
-                    }
-                    if (isset($row['product_variant_id'])) {
-                        $args[$key][$idx]['product_variant_id'] = $this->toGid('ProductVariant', $row['product_variant_id']);
-                    }
-                }
             }
         }
 
@@ -1873,6 +1907,7 @@ class ToolExecutor
             $resp = $this->storefrontApi()->query('storefront/products/get_all_products', [
                 'limit' => 1,
                 'query' => $query,
+                'country' => $ctx->country,
             ]);
             $node = $resp['data']['products']['edges'][0]['node'] ?? null;
         } catch (Throwable $e) {

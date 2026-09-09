@@ -1,0 +1,20 @@
+query getVariantById($id: ID!, $country: CountryCode)
+@inContext(country: $country) {
+  node(id: $id) {
+    ... on ProductVariant {
+      id
+      title
+      availableForSale
+      sku
+      price {
+        amount
+        currencyCode
+      }
+      product {
+        id
+        title
+        handle
+      }
+    }
+  }
+}

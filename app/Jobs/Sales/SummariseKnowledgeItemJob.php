@@ -44,6 +44,13 @@ class SummariseKnowledgeItemJob implements ShouldQueue
         public readonly string $handle,
         public readonly string $rawContent,
         public readonly ?string $shopifyUpdatedAt = null,
+        // Chunking (ADR 0009): documentHandle is the shared, unsuffixed
+        // handle every row of one document has in common — set on every
+        // row dispatchKnowledgeItem() creates, chunked or not. chunkIndex
+        // is this chunk's 0-based position, null when the document wasn't
+        // split. See StoreKnowledgeService::dispatchKnowledgeItem().
+        public readonly ?string $documentHandle = null,
+        public readonly ?int $chunkIndex = null,
     ) {}
 
     public function handle(StoreKnowledgeServiceInterface $knowledge): void
@@ -54,16 +61,24 @@ class SummariseKnowledgeItemJob implements ShouldQueue
 
         $summary = $this->summarise($this->rawContent);
 
-        // Embed the summary so the retrieval picker can rank by cosine
-        // similarity. Best-effort: if the embeddings API fails the row
-        // still saves with embedding=null and the keyword path keeps
-        // working — `knowledge:embed --missing-only` can backfill later.
-        $embedding = $this->embed("{$this->title}\n\n{$summary}");
+        // Embed the raw chunk (not the summary) so cosine similarity has
+        // the full detail to match against — a summary compressed to
+        // config('sales.knowledge.item_summary_max_tokens') tokens can
+        // drop the exact phrasing/nuance a paraphrased question needs to
+        // match confidently (ADR 0011). The summary itself is still
+        // generated and stored for prompt-injection token savings; it just
+        // no longer feeds the embedding. Best-effort: if the embeddings API
+        // fails the row still saves with embedding=null and the keyword
+        // path keeps working — `knowledge:embed --missing-only` can
+        // backfill later.
+        $embedding = $this->embed("{$this->title}\n\n{$this->rawContent}");
 
         $attrs = [
             'title' => $this->title,
             'summary' => $summary,
             'raw_content' => $this->rawContent,
+            'document_handle' => $this->documentHandle,
+            'chunk_index' => $this->chunkIndex,
             'last_synced_at' => now(),
             'shopify_updated_at' => $this->shopifyUpdatedAt !== null
                 ? Carbon::parse($this->shopifyUpdatedAt)

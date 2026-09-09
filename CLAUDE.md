@@ -9,7 +9,7 @@ The Laravel Boost guidelines are specifically curated by Laravel maintainers for
 
 This application is a Laravel application and its main Laravel ecosystems package & versions are below. You are an expert with them all. Ensure you abide by these specific packages & versions.
 
-- php - 8.5
+- php - 8.3
 - laravel/framework (LARAVEL) - v11
 - laravel/prompts (PROMPTS) - v0
 - laravel/sanctum (SANCTUM) - v4
@@ -187,12 +187,12 @@ If a required skill is not installed, inform the user and offer to install it be
 
 ## Laravel 11 Structure
 
-- In Laravel 11, middleware are no longer registered in `app\Http/Kernel.php`.
+- In Laravel 11, middleware are no longer registered in `app/Http/Kernel.php`.
 - Middleware are configured declaratively in `bootstrap/app.php` using `Application::configure()->withMiddleware()`.
 - `bootstrap/app.php` is the file to register middleware, exceptions, and routing files.
 - `bootstrap/providers.php` contains application specific service providers.
 - No app\Console\Kernel.php - use `bootstrap/app.php` or `routes/console.php` for console configuration.
-- Commands auto-register - files in `app\Console/Commands/` are automatically available and do not require manual registration.
+- Commands auto-register - files in `app/Console/Commands/` are automatically available and do not require manual registration.
 
 ## Database
 
@@ -236,3 +236,18 @@ If a required skill is not installed, inform the user and offer to install it be
 - To filter on a particular test name: `php artisan test --compact --filter=testName` (recommended after making a change to a related file).
 
 </laravel-boost-guidelines>
+
+## Agent skills
+
+### Issue tracker
+
+Local markdown under `.scratch/<feature-slug>/issues/` — chosen because `gh` isn't reliably available in every environment this repo is worked in, even though the remote is GitHub. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five canonical roles (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`), recorded as each ticket's `Status:` line. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Multi-context layout (`CONTEXT-MAP.md` at root, per-context `CONTEXT.md` under `docs/domain/<context-slug>/`). See `docs/agents/domain.md`.
+

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Str;
 
@@ -18,7 +19,7 @@ class CustomerEntitlementEmailsRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
@@ -49,11 +50,12 @@ class CustomerEntitlementEmailsRequest extends FormRequest
 
             if (empty($emails)) {
                 $validator->errors()->add('emails', 'Please provide at least one valid email address.');
+
                 return;
             }
 
             foreach ($emails as $email) {
-                if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                if (! filter_var($email, FILTER_VALIDATE_EMAIL)) {
                     $validator->errors()->add('emails', "The email address [{$email}] is not valid.");
                 }
             }
@@ -71,11 +73,11 @@ class CustomerEntitlementEmailsRequest extends FormRequest
         $entries = preg_split('/[\r\n,;]+/', $value) ?: [];
 
         $emails = array_map(
-            static fn(string $email): string => Str::lower(trim($email)),
+            static fn (string $email): string => Str::lower(trim($email)),
             $entries
         );
 
-        $emails = array_filter($emails, static fn(string $email): bool => $email !== '');
+        $emails = array_filter($emails, static fn (string $email): bool => $email !== '');
 
         return array_values(array_unique($emails));
     }

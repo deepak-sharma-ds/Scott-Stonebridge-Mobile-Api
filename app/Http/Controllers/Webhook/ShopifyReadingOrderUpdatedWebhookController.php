@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Jobs\EmailReading\SendEmailReadingJob;
 use App\Models\EmailReadingDelivery;
 use App\Models\ShopifyWebhookEvent;
+use App\Services\Shopify\ShippingScheduleResolver;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,6 +16,8 @@ use Throwable;
 
 class ShopifyReadingOrderUpdatedWebhookController extends Controller
 {
+    public function __construct(private readonly ShippingScheduleResolver $scheduleResolver) {}
+
     /**
      * Handle a Shopify orders/updated webhook.
      *
@@ -104,7 +107,7 @@ class ShopifyReadingOrderUpdatedWebhookController extends Controller
             return response()->json(['message' => 'Expedite disabled'], 200);
         }
 
-        if (! $this->hasSameDayUpgrade($order)) {
+        if (! $this->scheduleResolver->hasSameDayUpgrade($order, 'email_reading')) {
             return response()->json(['message' => 'No same-day upgrade'], 200);
         }
 
@@ -126,7 +129,14 @@ class ShopifyReadingOrderUpdatedWebhookController extends Controller
             return response()->json(['message' => 'Nothing to expedite'], 200);
         }
 
-        $expeditedAt = $this->resolveExpeditedAtForOrder($orderId);
+        $existingExpeditedAt = EmailReadingDelivery::where('shopify_order_id', $orderId)
+            ->whereNotNull('expedited_at')
+            ->value('scheduled_at');
+
+        $expeditedAt = $this->scheduleResolver->resolveExpeditedAt(
+            $existingExpeditedAt ? Carbon::parse($existingExpeditedAt) : null,
+            'email_reading'
+        );
         $now = Carbon::now();
         $expedited = 0;
 
@@ -158,63 +168,5 @@ class ShopifyReadingOrderUpdatedWebhookController extends Controller
             'message' => 'OK',
             'expedited' => $expedited,
         ], 200);
-    }
-
-    /**
-     * True when the order carries a non-removed shipping line whose title or
-     * code matches one of the configured same-day upgrade labels.
-     */
-    private function hasSameDayUpgrade(array $order): bool
-    {
-        $titles = (array) config('email_reading.expedite.shipping_titles', []);
-        if (empty($titles)) {
-            return false;
-        }
-
-        foreach ((array) ($order['shipping_lines'] ?? []) as $line) {
-            if (($line['is_removed'] ?? false) === true) {
-                continue;
-            }
-
-            $candidates = [
-                strtolower(trim((string) ($line['title'] ?? ''))),
-                strtolower(trim((string) ($line['code'] ?? ''))),
-            ];
-
-            foreach ($candidates as $candidate) {
-                if ($candidate !== '' && in_array($candidate, $titles, true)) {
-                    return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Resolve the pulled-forward send time for an order's reading emails.
-     *
-     * One random timestamp within the configured hours window is computed per
-     * order: an existing `expedited_at` already stored for the same order means
-     * we reuse that delivery's `scheduled_at` so a replayed/duplicate webhook
-     * cannot re-randomize the time and every reading in the order sends
-     * together.
-     */
-    private function resolveExpeditedAtForOrder(int $orderId): Carbon
-    {
-        $existing = EmailReadingDelivery::where('shopify_order_id', $orderId)
-            ->whereNotNull('expedited_at')
-            ->value('scheduled_at');
-
-        if ($existing) {
-            return Carbon::parse($existing);
-        }
-
-        $min = max(0, (int) config('email_reading.expedite.min_hours', 1));
-        $max = max($min, (int) config('email_reading.expedite.max_hours', 24));
-
-        $offsetSeconds = random_int($min * 3600, $max * 3600);
-
-        return Carbon::now()->addSeconds($offsetSeconds);
     }
 }

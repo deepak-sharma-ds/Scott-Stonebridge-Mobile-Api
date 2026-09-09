@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Contracts\Services\ContentServiceInterface;
+use App\Exceptions\ShopifyNotFoundException;
 use App\Http\Controllers\Base\BaseApiController;
 use App\Http\Resources\Content\ArticleResource;
 use App\Http\Resources\Content\BlogResource;
@@ -14,11 +15,11 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Content Controller (v1)
- * 
+ *
  * Handles CMS content endpoints including pages, blogs, articles, and policies.
  * Provides public access to store content for mobile app display.
  * Extends BaseApiController for standardized responses.
- * 
+ *
  * Requirements: 9.4, 9.6, 9.7, 9.8, 9.9, 9.10
  */
 class ContentController extends BaseApiController
@@ -29,12 +30,9 @@ class ContentController extends BaseApiController
 
     /**
      * Get page by handle
-     * 
+     *
      * Returns a Shopify page by its handle (URL slug).
      * Public endpoint - no authentication required.
-     * 
-     * @param string $handle
-     * @return JsonResponse
      */
     public function showPage(Request $request, ?string $handle = null): JsonResponse
     {
@@ -54,7 +52,7 @@ class ContentController extends BaseApiController
                 'Page retrieved successfully',
                 new PageResource($page)
             );
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             Log::info('Page not found', [
                 'correlation_id' => $this->getCorrelationId(),
                 'handle' => $handle,
@@ -80,12 +78,9 @@ class ContentController extends BaseApiController
 
     /**
      * Get policy by type
-     * 
+     *
      * Returns a Shopify policy page by type (privacy, refund, shipping, terms).
      * Public endpoint - no authentication required.
-     * 
-     * @param string $type
-     * @return JsonResponse
      */
     public function showPolicy(Request $request, ?string $type = null): JsonResponse
     {
@@ -117,7 +112,7 @@ class ContentController extends BaseApiController
                 [],
                 400
             );
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             Log::info('Policy not found', [
                 'correlation_id' => $this->getCorrelationId(),
                 'type' => $type,
@@ -143,12 +138,9 @@ class ContentController extends BaseApiController
 
     /**
      * List blogs
-     * 
+     *
      * Returns a paginated list of blogs.
      * Public endpoint - no authentication required.
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function indexBlogs(Request $request): JsonResponse
     {
@@ -181,13 +173,9 @@ class ContentController extends BaseApiController
 
     /**
      * List articles for a blog
-     * 
+     *
      * Returns a paginated list of articles for a specific blog.
      * Public endpoint - no authentication required.
-     * 
-     * @param Request $request
-     * @param string $blogHandle
-     * @return JsonResponse
      */
     public function indexArticles(Request $request, string $blogHandle): JsonResponse
     {
@@ -206,7 +194,7 @@ class ContentController extends BaseApiController
                 ArticleResource::collection($articles['items']),
                 $articles['pagination']
             );
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             Log::info('Blog not found', [
                 'correlation_id' => $this->getCorrelationId(),
                 'blog_handle' => $blogHandle,
@@ -232,13 +220,9 @@ class ContentController extends BaseApiController
 
     /**
      * Get single article
-     * 
+     *
      * Returns a single article by blog handle and article handle.
      * Public endpoint - no authentication required.
-     * 
-     * @param string $blogHandle
-     * @param string $articleHandle
-     * @return JsonResponse
      */
     public function showArticle(string $blogHandle, string $articleHandle): JsonResponse
     {
@@ -249,7 +233,7 @@ class ContentController extends BaseApiController
                 'Article retrieved successfully',
                 new ArticleResource($article)
             );
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             Log::info('Article not found', [
                 'correlation_id' => $this->getCorrelationId(),
                 'blog_handle' => $blogHandle,
@@ -279,9 +263,6 @@ class ContentController extends BaseApiController
      * Get a single Shopify media image by ID from the request body.
      *
      * Public endpoint - no authentication required.
-     *
-     * @param Request $request
-     * @return JsonResponse
      */
     public function showMediaImage(Request $request): JsonResponse
     {
@@ -301,7 +282,7 @@ class ContentController extends BaseApiController
                 'Media image retrieved successfully',
                 new MediaImageResource($mediaImage)
             );
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             Log::info('Media image not found', [
                 'correlation_id' => $this->getCorrelationId(),
                 'id' => $request->input('id'),
@@ -327,13 +308,10 @@ class ContentController extends BaseApiController
 
     /**
      * Resolve URL
-     * 
+     *
      * Resolves a Shopify URL to determine its resource type and handle.
      * Useful for deep linking and navigation in the mobile app.
      * Public endpoint - no authentication required.
-     * 
-     * @param Request $request
-     * @return JsonResponse
      */
     public function resolve(Request $request): JsonResponse
     {

@@ -2,23 +2,26 @@
 
 namespace App\Services\GraphQL;
 
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Str;
 use Exception;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class GraphQLLoaderService
 {
     protected string $disk = 'graphql';
+
     protected bool $cacheEnabled;
+
     protected int $cacheMinutes;
+
     protected bool $performanceLoggingEnabled;
 
     public function __construct()
     {
         // Enable cache except in local; you can change logic as needed
-        $this->cacheEnabled = !app()->environment('local');
+        $this->cacheEnabled = ! app()->environment('local');
         $this->cacheMinutes = (int) config('shopify.graphql.cache_minutes', 1440);
         $this->performanceLoggingEnabled = config('shopify.graphql.performance_logging', true);
     }
@@ -30,7 +33,7 @@ class GraphQLLoaderService
     {
         $startTime = microtime(true);
         $cacheHit = false;
-        
+
         $filePath = $this->normalizePath($path);
 
         // Cache key uses the normalized path (safe string)
@@ -40,7 +43,7 @@ class GraphQLLoaderService
             $content = Cache::remember($cacheKey, $this->cacheMinutes, function () use ($filePath) {
                 return $this->readFile($filePath);
             });
-            
+
             // Check if it was a cache hit
             $cacheHit = Cache::has($cacheKey);
         } else {
@@ -63,7 +66,7 @@ class GraphQLLoaderService
      */
     protected function readFile(string $filePath): string
     {
-        if (!Storage::disk($this->disk)->exists($filePath)) {
+        if (! Storage::disk($this->disk)->exists($filePath)) {
             throw new Exception("GraphQL file not found: {$filePath}");
         }
 
@@ -76,7 +79,7 @@ class GraphQLLoaderService
         // Point 3: Basic GraphQL sanity check:
         $trimmed = ltrim($content);
         $starts = strtolower(Str::substr($trimmed, 0, 8));
-        if (!Str::startsWith($trimmed, ['query', 'mutation', 'subscription', 'fragment', '{'])) {
+        if (! Str::startsWith($trimmed, ['query', 'mutation', 'subscription', 'fragment', '{'])) {
             // allow fragments or shorthand queries starting with '{'
             throw new Exception("Invalid GraphQL content in file: {$filePath}");
         }
@@ -99,32 +102,32 @@ class GraphQLLoaderService
         // Reject any traversal patterns (enhanced validation)
         if (str_contains($path, '..')) {
             $this->logSecurityViolation($path, 'Path traversal detected');
-            throw new Exception("Invalid GraphQL query path: path traversal detected.");
+            throw new Exception('Invalid GraphQL query path: path traversal detected.');
         }
 
         // Reject absolute paths
         if (str_starts_with($path, '/') || preg_match('/^[a-zA-Z]:[\\\\\/]/', $path)) {
             $this->logSecurityViolation($path, 'Absolute path detected');
-            throw new Exception("Invalid GraphQL query path: absolute paths not allowed.");
+            throw new Exception('Invalid GraphQL query path: absolute paths not allowed.');
         }
 
         // Reject null bytes (security)
         if (str_contains($path, "\0")) {
             $this->logSecurityViolation($path, 'Null byte detected');
-            throw new Exception("Invalid GraphQL query path: null bytes not allowed.");
+            throw new Exception('Invalid GraphQL query path: null bytes not allowed.');
         }
 
         // Allow only letters, numbers, dash, underscore and slashes
-        if (!preg_match('/^[a-zA-Z0-9\/_-]+$/', $path)) {
+        if (! preg_match('/^[a-zA-Z0-9\/_-]+$/', $path)) {
             $this->logSecurityViolation($path, 'Invalid characters detected');
-            throw new Exception("Invalid characters in GraphQL path.");
+            throw new Exception('Invalid characters in GraphQL path.');
         }
 
         // Enforce allowed namespaces (Point 2)
         $segments = explode('/', $path);
         $allowedTopLevel = ['storefront', 'admin'];
 
-        if (!in_array($segments[0] ?? '', $allowedTopLevel, true)) {
+        if (! in_array($segments[0] ?? '', $allowedTopLevel, true)) {
             $this->logSecurityViolation($path, "Forbidden namespace: {$segments[0]}");
             throw new Exception("Access to GraphQL namespace forbidden: {$segments[0]}");
         }
@@ -132,11 +135,11 @@ class GraphQLLoaderService
         // Validate path depth (prevent excessively deep paths)
         if (count($segments) > 5) {
             $this->logSecurityViolation($path, 'Path too deep');
-            throw new Exception("Invalid GraphQL query path: maximum depth exceeded.");
+            throw new Exception('Invalid GraphQL query path: maximum depth exceeded.');
         }
 
         // Return normalized path with extension
-        return $path . '.graphql';
+        return $path.'.graphql';
     }
 
     /**
@@ -168,12 +171,12 @@ class GraphQLLoaderService
         }
 
         // fallback: check Cache for pre-seeded value
-        if (!$expected && Cache::has("graphql_checksum_{$filePath}")) {
+        if (! $expected && Cache::has("graphql_checksum_{$filePath}")) {
             $expected = Cache::get("graphql_checksum_{$filePath}");
         }
 
         // If no expected is found, behave permissively (or throw - your choice)
-        if (!$expected) {
+        if (! $expected) {
             // Option A: throw to force strict pre-seeding
             // throw new Exception("No expected checksum found for {$filePath}");
 
@@ -183,7 +186,7 @@ class GraphQLLoaderService
         }
 
         $actual = $this->computeChecksum($content);
-        if (!hash_equals($expected, $actual)) {
+        if (! hash_equals($expected, $actual)) {
             logger()->error("Tampered GraphQL detected: {$filePath}");
             throw new Exception("GraphQL file checksum mismatch: {$filePath}");
         }
@@ -195,6 +198,7 @@ class GraphQLLoaderService
     public function disableCache(): self
     {
         $this->cacheEnabled = false;
+
         return $this;
     }
 
@@ -209,6 +213,7 @@ class GraphQLLoaderService
         $filePath = $this->normalizePath($path);
         $cacheKey = "graphql_query_{$filePath}";
         Cache::forget($cacheKey);
+
         return $this->load($path);
     }
 
@@ -217,7 +222,7 @@ class GraphQLLoaderService
      */
     protected function logPerformance(string $originalPath, string $normalizedPath, float $duration, bool $cacheHit, int $contentSize): void
     {
-        if (!$this->performanceLoggingEnabled) {
+        if (! $this->performanceLoggingEnabled) {
             return;
         }
 
@@ -225,7 +230,7 @@ class GraphQLLoaderService
         $threshold = config('shopify.graphql.performance_threshold_ms', 10);
         $durationMs = $duration * 1000;
 
-        if ($durationMs > $threshold || !$cacheHit) {
+        if ($durationMs > $threshold || ! $cacheHit) {
             Log::channel('performance')->info('GraphQL query loaded', [
                 'operation' => 'graphql_load',
                 'query_path' => $originalPath,
@@ -258,6 +263,7 @@ class GraphQLLoaderService
     public function enablePerformanceLogging(): self
     {
         $this->performanceLoggingEnabled = true;
+
         return $this;
     }
 
@@ -267,6 +273,7 @@ class GraphQLLoaderService
     public function disablePerformanceLogging(): self
     {
         $this->performanceLoggingEnabled = false;
+
         return $this;
     }
 }

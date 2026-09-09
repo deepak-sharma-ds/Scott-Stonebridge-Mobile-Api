@@ -2,22 +2,22 @@
 
 namespace App\Http\Controllers\Apis;
 
-use App\Http\Controllers\Controller;
-use App\Services\APIShopifyService;
 use App\Facades\Shopify;
+use App\Http\Controllers\Controller;
 use App\Http\Requests\Customer\AddCustomerAddressRequest;
 use App\Http\Requests\Customer\DeleteCustomerAddressRequest;
 use App\Http\Requests\Customer\UpdateCustomerAddressRequest;
 use App\Http\Requests\Customer\UpdateCustomerProfileRequest;
+use App\Services\APIShopifyService;
 use App\Traits\ShopifyResponseFormatter;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
 
 class ProfileController extends Controller
 {
     use ShopifyResponseFormatter;
 
     protected $shopify;
+
     protected $customerAccessToken;
 
     public function __construct(APIShopifyService $shopify, Request $request)
@@ -47,7 +47,7 @@ class ProfileController extends Controller
 
             $customer = data_get($response, 'data.customer');
 
-            if (!$customer) {
+            if (! $customer) {
                 return $this->fail('Customer not found');
             }
 
@@ -74,9 +74,9 @@ class ProfileController extends Controller
                 'customerAccessToken' => $this->customerAccessToken,
                 'customer' => [
                     'firstName' => $validated['firstName'],
-                    'lastName'  => $validated['lastName'],
-                    'email'     => $validated['email'],
-                    'phone'     => $validated['phone'],
+                    'lastName' => $validated['lastName'],
+                    'email' => $validated['email'],
+                    'phone' => $validated['phone'],
                 ],
             ];
 
@@ -91,13 +91,13 @@ class ProfileController extends Controller
 
             $result = data_get($response, 'data.customerUpdate');
 
-            if (!$result) {
+            if (! $result) {
                 return $this->fail('Failed to update customer details');
             }
 
             // Check for Shopify validation errors
             $errors = data_get($result, 'customerUserErrors', []);
-            if (!empty($errors)) {
+            if (! empty($errors)) {
                 return $this->fail('Failed to update customer details', $errors);
             }
 
@@ -109,7 +109,6 @@ class ProfileController extends Controller
         }
     }
 
-
     /**
      * Add customer address
      */
@@ -119,16 +118,16 @@ class ProfileController extends Controller
             $vars = [
                 'customerAccessToken' => $this->customerAccessToken,
                 'address' => [
-                    'address1'  => $request->address1,
-                    'address2'  => $request->address2,
-                    'city'      => $request->city,
-                    'company'   => $request->company,
-                    'country'   => $request->country,
+                    'address1' => $request->address1,
+                    'address2' => $request->address2,
+                    'city' => $request->city,
+                    'company' => $request->company,
+                    'country' => $request->country,
                     'firstName' => $request->firstName,
-                    'lastName'  => $request->lastName,
-                    'phone'     => $request->phone,
-                    'province'  => $request->province,
-                    'zip'       => $request->zip,
+                    'lastName' => $request->lastName,
+                    'phone' => $request->phone,
+                    'province' => $request->province,
+                    'zip' => $request->zip,
                 ],
             ];
 
@@ -143,12 +142,12 @@ class ProfileController extends Controller
 
             $result = data_get($response, 'data.customerAddressCreate');
 
-            if (!$result) {
+            if (! $result) {
                 return $this->fail('Failed to create address!');
             }
 
             // Shopify user-level input errors
-            if (!empty($result['customerUserErrors'])) {
+            if (! empty($result['customerUserErrors'])) {
                 return $this->fail('Failed to create customer address', $result['customerUserErrors']);
             }
 
@@ -160,7 +159,6 @@ class ProfileController extends Controller
         }
     }
 
-
     /**
      * Update customer address
      */
@@ -171,16 +169,16 @@ class ProfileController extends Controller
                 'customerAccessToken' => $this->customerAccessToken,
                 'id' => $request->address_id,
                 'address' => [
-                    'address1'  => $request->address1,
-                    'address2'  => $request->address2,
-                    'city'      => $request->city,
-                    'company'   => $request->company,
-                    'country'   => $request->country,
+                    'address1' => $request->address1,
+                    'address2' => $request->address2,
+                    'city' => $request->city,
+                    'company' => $request->company,
+                    'country' => $request->country,
                     'firstName' => $request->firstName,
-                    'lastName'  => $request->lastName,
-                    'phone'     => $request->phone,
-                    'province'  => $request->province,
-                    'zip'       => $request->zip,
+                    'lastName' => $request->lastName,
+                    'phone' => $request->phone,
+                    'province' => $request->province,
+                    'zip' => $request->zip,
                 ],
             ];
 
@@ -192,13 +190,13 @@ class ProfileController extends Controller
 
             $result = data_get($response, 'data.customerAddressUpdate');
 
-            if (!$result) {
+            if (! $result) {
                 return $this->fail('Failed to update address');
             }
 
             // Shopify-level user errors
             $userErrors = data_get($result, 'customerUserErrors', []);
-            if (!empty($userErrors)) {
+            if (! empty($userErrors)) {
                 return $this->fail('Failed to update address', $userErrors);
             }
 
@@ -235,13 +233,13 @@ class ProfileController extends Controller
 
             $result = data_get($response, 'data.customerAddressDelete');
 
-            if (!$result) {
+            if (! $result) {
                 return $this->fail('Failed to delete customer address');
             }
 
             // Shopify validation errors
             $userErrors = data_get($result, 'customerUserErrors', []);
-            if (!empty($userErrors)) {
+            if (! empty($userErrors)) {
                 return $this->fail('Failed to delete customer address', $userErrors);
             }
 

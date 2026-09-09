@@ -8,14 +8,19 @@ use App\Http\Controllers\Admin\AvailabilityGenerationController;
 use App\Http\Controllers\Admin\AvailabilitySlotController;
 use App\Http\Controllers\Admin\AvailabilityTemplateController;
 use App\Http\Controllers\Admin\BookingController;
+use App\Http\Controllers\Admin\CampaignDeliveryController;
+use App\Http\Controllers\Admin\CampaignProductController;
 use App\Http\Controllers\Admin\ConfigurationsController;
 use App\Http\Controllers\Admin\CustomerController;
 use App\Http\Controllers\Admin\CustomerEntitlementController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\EmailReadingController;
 use App\Http\Controllers\Admin\EmailReadingProductController;
+use App\Http\Controllers\Admin\MarketingCampaignController;
 use App\Http\Controllers\Admin\PackageController;
 use App\Http\Controllers\Admin\ReportingController;
+use App\Http\Controllers\Admin\RichTextUploadController;
+use App\Http\Controllers\Admin\UnlistedProductController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RoleController;
@@ -121,10 +126,36 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
             Route::delete('/{delivery}', [EmailReadingController::class, 'destroy'])->name('destroy');
         });
 
+        // Rich-text editor image uploads (shared by campaign + reading product email templates)
+        Route::post('rich-text-uploads', [RichTextUploadController::class, 'store'])->name('rich-text-uploads.store');
+
         // Reading Products (email reading templates)
         Route::post('email-reading-products/test', [EmailReadingProductController::class, 'test'])->name('email-reading-products.test');
         Route::post('email-reading-products/{emailReadingProduct}/toggle', [EmailReadingProductController::class, 'toggleActive'])->name('email-reading-products.toggle');
         Route::resource('email-reading-products', EmailReadingProductController::class)->except(['show']);
+
+        // Unlisted Products (local catalog synced from Shopify — feeds the campaign product picker)
+        Route::post('unlisted-products/sync', [UnlistedProductController::class, 'sync'])->name('unlisted-products.sync');
+        Route::resource('unlisted-products', UnlistedProductController::class)->only(['index', 'edit', 'update']);
+
+        // Marketing Campaigns (Campaign Email Automation admin registry)
+        Route::get('marketing-campaigns/{marketingCampaign}/products/available', [CampaignProductController::class, 'available'])->name('marketing-campaigns.products.available');
+        Route::post('marketing-campaigns/{marketingCampaign}/products', [CampaignProductController::class, 'store'])->name('marketing-campaigns.products.store');
+        Route::delete('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}', [CampaignProductController::class, 'destroy'])->name('marketing-campaigns.products.destroy');
+        Route::post('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}/respond', [CampaignProductController::class, 'respond'])->name('marketing-campaigns.products.respond');
+        Route::resource('marketing-campaigns', MarketingCampaignController::class);
+
+        // Campaign Deliveries (Campaign Email Automation admin listing)
+        Route::prefix('campaign-deliveries')->name('campaign_deliveries.')->group(function () {
+            Route::get('/', [CampaignDeliveryController::class, 'index'])->name('index');
+            Route::get('/export', [CampaignDeliveryController::class, 'export'])->name('export');
+            Route::get('/{delivery}', [CampaignDeliveryController::class, 'show'])->name('show');
+            Route::get('/{delivery}/edit', [CampaignDeliveryController::class, 'edit'])->name('edit');
+            Route::put('/{delivery}', [CampaignDeliveryController::class, 'update'])->name('update');
+            Route::post('/{delivery}/send', [CampaignDeliveryController::class, 'send'])->name('send');
+            Route::post('/{delivery}/cancel', [CampaignDeliveryController::class, 'cancel'])->name('cancel');
+            Route::delete('/{delivery}', [CampaignDeliveryController::class, 'destroy'])->name('destroy');
+        });
     });
 
     // Booking Inquiries

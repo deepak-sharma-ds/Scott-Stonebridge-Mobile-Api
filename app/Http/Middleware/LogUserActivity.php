@@ -2,8 +2,8 @@
 
 namespace App\Http\Middleware;
 
-use Closure;
 use App\Models\ApiLog;
+use Closure;
 use Illuminate\Support\Facades\Log;
 
 class LogUserActivity
@@ -32,7 +32,7 @@ class LogUserActivity
             }
         } catch (\Throwable $e) {
             // swallow; logging should not break requests
-            Log::warning('Failed to write ApiLog: ' . $e->getMessage());
+            Log::warning('Failed to write ApiLog: '.$e->getMessage());
         }
 
         return $resp;

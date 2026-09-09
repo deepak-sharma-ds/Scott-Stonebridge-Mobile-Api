@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AvailabilityDate;
-use App\Models\TimeSlot;
 use App\Models\ScheduledMeeting;
+use App\Models\TimeSlot;
 use App\Services\BookingService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -39,14 +39,14 @@ class AvailabilityCalendarController extends Controller
         $dates = AvailabilityDate::withCount('timeSlots')
             ->where('user_id', $userId)
             ->get()
-            ->map(fn($d) => [
-                'title' => $d->time_slots_count . ' slot' . ($d->time_slots_count > 1 ? 's' : ''),
+            ->map(fn ($d) => [
+                'title' => $d->time_slots_count.' slot'.($d->time_slots_count > 1 ? 's' : ''),
                 'start' => $d->date->toDateString(),
                 'allDay' => true,
                 'extendedProps' => [
                     'date' => $d->date->toDateString(),
                     'slots_count' => $d->time_slots_count,
-                ]
+                ],
             ]);
 
         return response()->json($dates);
@@ -76,11 +76,11 @@ class AvailabilityCalendarController extends Controller
                 'success' => true,
                 'exists' => false,
                 'date' => $d,
-                'slots' => []
+                'slots' => [],
             ]);
         }
 
-        $slots = $availability->timeSlots->map(fn($s) => [
+        $slots = $availability->timeSlots->map(fn ($s) => [
             'id' => $s->id,
             'start_time' => substr($s->start_time, 0, 5),
             'end_time' => substr($s->end_time, 0, 5),
@@ -91,7 +91,7 @@ class AvailabilityCalendarController extends Controller
             'exists' => true,
             'date' => $d,
             'availability_date_id' => $availability->id,
-            'slots' => $slots
+            'slots' => $slots,
         ]);
     }
 
@@ -158,7 +158,7 @@ class AvailabilityCalendarController extends Controller
         // For each slot to delete, ensure no booked meeting exists (time_slot_id usage)
         foreach ($toDelete as $es) {
             $meetingExists = ScheduledMeeting::where('time_slot_id', $es->id)
-                ->when($es->availability_date_id, fn($q) => $q->where('availability_date_id', $es->availability_date_id))
+                ->when($es->availability_date_id, fn ($q) => $q->where('availability_date_id', $es->availability_date_id))
                 ->exists();
 
             if ($meetingExists) {
@@ -177,12 +177,14 @@ class AvailabilityCalendarController extends Controller
         }
 
         // Create any new slots that don't already exist
-        $existingKeys = $availabilityDate->timeSlots()->get()->map(fn($s) => sprintf('%s-%s', substr($s->start_time, 0, 5), substr($s->end_time, 0, 5)))->toArray();
+        $existingKeys = $availabilityDate->timeSlots()->get()->map(fn ($s) => sprintf('%s-%s', substr($s->start_time, 0, 5), substr($s->end_time, 0, 5)))->toArray();
 
         $created = 0;
         foreach ($request->input('time_slots') as $slot) {
             $key = sprintf('%s-%s', $slot['start_time'], $slot['end_time']);
-            if (in_array($key, $existingKeys)) continue;
+            if (in_array($key, $existingKeys)) {
+                continue;
+            }
 
             TimeSlot::create([
                 'availability_date_id' => $availabilityDate->id,
@@ -213,13 +215,13 @@ class AvailabilityCalendarController extends Controller
 
         // Check booked meetings
         $meeting = ScheduledMeeting::where('time_slot_id', $timeSlot->id)
-            ->when($timeSlot->availability_date_id, fn($q) => $q->where('availability_date_id', $timeSlot->availability_date_id))
+            ->when($timeSlot->availability_date_id, fn ($q) => $q->where('availability_date_id', $timeSlot->availability_date_id))
             ->exists();
 
         if ($meeting) {
             return response()->json([
                 'success' => false,
-                'message' => 'Cannot delete this slot as it has booked meetings. Please reschedule or cancel the bookings first.'
+                'message' => 'Cannot delete this slot as it has booked meetings. Please reschedule or cancel the bookings first.',
             ], 409);
         }
 
@@ -260,18 +262,17 @@ class AvailabilityCalendarController extends Controller
             return response()->json(['success' => false, 'message' => 'Date not found'], 404);
         }
 
-        $hasMeetings = ScheduledMeeting::where('availability_date_id', $availability->id)->exists();
+        $bookedTimeSlotIds = ScheduledMeeting::where('availability_date_id', $availability->id)
+            ->pluck('time_slot_id')
+            ->filter()
+            ->unique();
 
-        if ($hasMeetings) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Cannot delete this date as it has booked meetings. Please reschedule or cancel the bookings first.'
-            ], 409);
+        // delete all slots except booked ones
+        $availability->timeSlots()->whereNotIn('id', $bookedTimeSlotIds)->delete();
+
+        if ($availability->timeSlots()->doesntExist()) {
+            $availability->delete();
         }
-
-        // safe delete
-        $availability->timeSlots()->delete();
-        $availability->delete();
 
         return response()->json(['success' => true, 'message' => 'Date deleted']);
     }

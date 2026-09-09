@@ -3,16 +3,16 @@
 namespace App\DTOs\Profile;
 
 use App\DTOs\Base\BaseDTO;
-use App\DTOs\Customer\CustomerDTO;
 use App\DTOs\Customer\AddressDTO;
+use App\DTOs\Customer\CustomerDTO;
 use InvalidArgumentException;
 
 /**
  * Profile Data Transfer Object
- * 
+ *
  * Represents customer profile data with personal details and addresses.
  * Used for profile management endpoints in the mobile API.
- * 
+ *
  * Requirements: 11.2, 11.3, 11.11, 11.12
  */
 class ProfileDTO extends BaseDTO
@@ -33,7 +33,7 @@ class ProfileDTO extends BaseDTO
 
     /**
      * Validate the profile data.
-     * 
+     *
      * @throws InvalidArgumentException
      */
     protected function validate(): void
@@ -45,19 +45,18 @@ class ProfileDTO extends BaseDTO
 
     /**
      * Create a ProfileDTO from Shopify API response data.
-     * 
+     *
      * Transforms raw Shopify GraphQL customer response into a typed DTO instance.
      * Handles nested addresses and customer metadata.
-     * 
-     * @param array $data Raw customer data from Shopify GraphQL response
-     * @return self
+     *
+     * @param  array  $data  Raw customer data from Shopify GraphQL response
      */
     public static function fromShopifyResponse(array $data): self
     {
         // Handle both edge/node structure and flat array structure for addresses
         $addresses = $data['addresses']['edges'] ?? $data['addresses'] ?? [];
         $defaultAddressId = $data['defaultAddress']['id'] ?? null;
-        
+
         return new self(
             id: $data['id'],
             email: $data['email'],
@@ -65,7 +64,7 @@ class ProfileDTO extends BaseDTO
             lastName: $data['lastName'] ?? null,
             phone: $data['phone'] ?? null,
             addresses: array_map(
-                fn($addr) => AddressDTO::fromShopifyResponse(array_merge(
+                fn ($addr) => AddressDTO::fromShopifyResponse(array_merge(
                     $addr['node'] ?? $addr,
                     ['isDefault' => (($addr['node']['id'] ?? $addr['id'] ?? null) === $defaultAddressId)]
                 )),
@@ -79,12 +78,11 @@ class ProfileDTO extends BaseDTO
 
     /**
      * Create a ProfileDTO from an existing CustomerDTO.
-     * 
+     *
      * Reuses CustomerDTO data to create a ProfileDTO instance.
      * This allows reusing the existing CustomerService logic.
-     * 
-     * @param CustomerDTO $customer Customer DTO instance
-     * @return self
+     *
+     * @param  CustomerDTO  $customer  Customer DTO instance
      */
     public static function fromCustomerDTO(CustomerDTO $customer): self
     {

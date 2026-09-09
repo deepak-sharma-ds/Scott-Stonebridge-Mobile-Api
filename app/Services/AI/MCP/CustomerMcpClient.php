@@ -6,15 +6,19 @@ namespace App\Services\AI\MCP;
 
 use App\Exceptions\AI\AuthRequiredException;
 use App\Exceptions\AI\McpToolException;
+use App\Services\AI\ChatbotConfigRepository;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
+/**
+ * @deprecated Deprecated in favor of Unified Storefront & Admin Bridge.
+ * Preserved for backward compatibility and reference.
+ */
 class CustomerMcpClient
 {
-    private const DISCOVERY_CACHE_TTL = 3600;
-
     public function __construct(
         private readonly McpClient $client,
+        private readonly ChatbotConfigRepository $chatbotConfig,
     ) {}
 
     /**
@@ -51,7 +55,7 @@ class CustomerMcpClient
 
         $cacheKey = "ai:mcp:customer_endpoint:{$shopDomain}";
 
-        return Cache::remember($cacheKey, self::DISCOVERY_CACHE_TTL, function () use ($shopDomain): string {
+        return Cache::remember($cacheKey, $this->chatbotConfig->mcpDiscoveryCacheTtlSeconds(), function () use ($shopDomain): string {
             $discoveryPath = (string) config('chatbot.mcp.customer_discovery', '/.well-known/customer-account-api');
             $url = "https://{$shopDomain}{$discoveryPath}";
 

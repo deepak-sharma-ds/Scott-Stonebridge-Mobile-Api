@@ -47,7 +47,7 @@ class GenerateConversationSummaryJob implements ShouldQueue
             ->orderBy('id')
             ->limit(40)
             ->get(['role', 'message'])
-            ->map(fn(AiMessage $m): string => strtoupper($m->role) . ': ' . $m->message)
+            ->map(fn (AiMessage $m): string => strtoupper($m->role).': '.$m->message)
             ->implode("\n");
 
         if ($messages === '') {
@@ -74,7 +74,7 @@ class GenerateConversationSummaryJob implements ShouldQueue
 
                             Write a concise summary under 80 words.
 
-                            Return plain text only.'
+                            Return plain text only.',
                     ],
                     ['role' => 'user', 'content' => $messages],
                 ],

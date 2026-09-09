@@ -7,10 +7,10 @@ use InvalidArgumentException;
 
 /**
  * Cart Line Item Data Transfer Object
- * 
+ *
  * Represents a single line item in a Shopify cart with typed properties.
  * Each line item contains product variant information and quantity.
- * 
+ *
  * Requirements: 16.2, 16.6, 16.7
  */
 class CartLineItemDTO extends BaseDTO
@@ -35,7 +35,7 @@ class CartLineItemDTO extends BaseDTO
 
     /**
      * Validate the cart line item data.
-     * 
+     *
      * @throws InvalidArgumentException
      */
     protected function validate(): void
@@ -49,18 +49,17 @@ class CartLineItemDTO extends BaseDTO
 
     /**
      * Create a CartLineItemDTO from Shopify API response data.
-     * 
+     *
      * Transforms raw Shopify GraphQL cart line item response into a typed DTO instance.
      * Handles nested merchandise and price information.
-     * 
-     * @param array $data Raw line item data from Shopify GraphQL response
-     * @return self
+     *
+     * @param  array  $data  Raw line item data from Shopify GraphQL response
      */
     public static function fromShopifyResponse(array $data): self
     {
         $merchandise = $data['merchandise'] ?? [];
         $product = $merchandise['product'] ?? [];
-        
+
         return new self(
             id: $data['id'],
             variantId: $merchandise['id'] ?? '',

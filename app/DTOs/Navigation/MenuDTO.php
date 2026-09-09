@@ -6,7 +6,7 @@ use App\DTOs\Base\BaseDTO;
 
 /**
  * Menu DTO
- * 
+ *
  * Represents a Shopify menu with its items
  */
 class MenuDTO extends BaseDTO
@@ -21,8 +21,6 @@ class MenuDTO extends BaseDTO
 
     /**
      * Validate the DTO data
-     * 
-     * @return void
      */
     protected function validate(): void
     {
@@ -33,15 +31,12 @@ class MenuDTO extends BaseDTO
 
     /**
      * Create from Shopify API response
-     * 
-     * @param array $data
-     * @return self
      */
     public static function fromShopifyResponse(array $data): self
     {
         $items = [];
-        
-        if (!empty($data['items'])) {
+
+        if (! empty($data['items'])) {
             foreach ($data['items'] as $item) {
                 $items[] = MenuItemDTO::fromShopifyResponse($item);
             }
@@ -56,15 +51,13 @@ class MenuDTO extends BaseDTO
 
     /**
      * Convert to array
-     * 
-     * @return array
      */
     public function toArray(): array
     {
         return [
             'handle' => $this->handle,
             'title' => $this->title,
-            'items' => array_map(fn($item) => $item->toArray(), $this->items),
+            'items' => array_map(fn ($item) => $item->toArray(), $this->items),
         ];
     }
 }

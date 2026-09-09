@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\AvailabilityTemplate;
-use App\Models\Configuration;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
@@ -24,6 +23,7 @@ class AvailabilityTemplateController extends Controller
     public function create()
     {
         $days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
         return view('admin.availability_templates.create', compact('days'));
     }
 
@@ -43,8 +43,12 @@ class AvailabilityTemplateController extends Controller
 
         foreach ($data['templates'] as $day => $slots) {
             foreach ($slots as $slot) {
-                if (empty($slot['start']) || empty($slot['end'])) continue;
-                if (strtotime($slot['end']) <= strtotime($slot['start'])) continue; // skip invalid
+                if (empty($slot['start']) || empty($slot['end'])) {
+                    continue;
+                }
+                if (strtotime($slot['end']) <= strtotime($slot['start'])) {
+                    continue;
+                } // skip invalid
                 AvailabilityTemplate::create([
                     'user_id' => Auth::id(),
                     'day_of_week' => $day,
@@ -62,6 +66,7 @@ class AvailabilityTemplateController extends Controller
     {
         $tpl = AvailabilityTemplate::findOrFail($id);
         $tpl->delete();
+
         return back()->with('success', 'Template deleted.');
     }
 }

@@ -7,18 +7,17 @@ use Illuminate\Http\Request;
 
 /**
  * Cart API Resource
- * 
+ *
  * Transforms CartDTO data to API response format.
  * Removes Shopify internal fields and includes calculated fields.
- * 
+ *
  * Requirements: 17.2, 17.6, 17.7, 17.8
  */
 class CartResource extends BaseApiResource
 {
     /**
      * Transform the resource into an array.
-     * 
-     * @param Request $request
+     *
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array

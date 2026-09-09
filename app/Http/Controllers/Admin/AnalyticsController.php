@@ -52,21 +52,21 @@ class AnalyticsController extends Controller
         $to = $request->get('to');
 
         return response()->json([
-            'data' => $this->analytics->getDashboardKPIs($from, $to, 30)
+            'data' => $this->analytics->getDashboardKPIs($from, $to, 30),
         ]);
     }
 
     public function salesTimeseries()
     {
         return response()->json([
-            'data' => $this->analytics->getSalesTimeseries(30)
+            'data' => $this->analytics->getSalesTimeseries(30),
         ]);
     }
 
     public function topProducts()
     {
         return response()->json([
-            'data' => $this->analytics->getTopProducts(10)
+            'data' => $this->analytics->getTopProducts(10),
         ]);
     }
 
@@ -75,7 +75,7 @@ class AnalyticsController extends Controller
         $days = request('days', 30);
 
         return response()->json([
-            'data'   => $this->analytics->getActivityTrends($days)
+            'data' => $this->analytics->getActivityTrends($days),
         ]);
     }
 }

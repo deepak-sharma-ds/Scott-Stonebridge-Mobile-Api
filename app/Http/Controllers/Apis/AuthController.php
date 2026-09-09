@@ -2,16 +2,17 @@
 
 namespace App\Http\Controllers\Apis;
 
-use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
-use Illuminate\Support\Facades\Http;
 use App\Services\APIShopifyService;
 use App\Services\ShopifyCustomerAuthService;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 
 class AuthController extends Controller
 {
     protected $shopify;
+
     protected $authService;
 
     public function __construct(APIShopifyService $shopify, ShopifyCustomerAuthService $authService)
@@ -22,7 +23,8 @@ class AuthController extends Controller
 
     /**
      * Register new customer
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function register(Request $request)
     {
@@ -53,7 +55,7 @@ class AuthController extends Controller
                     'verified_email' => true,
                     'password' => $data['password'],
                     'password_confirmation' => $data['password_confirmation'],
-                    'accepts_marketing' =>  $data['subscribe'] ?? false,
+                    'accepts_marketing' => $data['subscribe'] ?? false,
                     'send_email_welcome' => true,
                     'form_type' => 'create_customer',
                 ],
@@ -69,14 +71,15 @@ class AuthController extends Controller
             // Return the error message from the exception
             return response()->json([
                 'error' => 'Failed to register customer',
-                'message' => $th->getMessage()
+                'message' => $th->getMessage(),
             ], 400);
         }
     }
 
     /**
      * Login customer and return access token
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function login(Request $request)
     {
@@ -96,7 +99,7 @@ class AuthController extends Controller
         $data = $validator->validated();
         $tokenData = $this->authService->loginCustomer($request->email, $request->password);
 
-        if (!$tokenData) {
+        if (! $tokenData) {
             return response()->json(['status' => 401, 'message' => 'Invalid credentials'], 401);
         }
 
@@ -108,8 +111,6 @@ class AuthController extends Controller
                 'expires_at' => $tokenData['expires_at']->toDateTimeString(),
             ],
         ]);
-
-
 
         // $response = $this->shopify->customerAccessTokenCreate($data['email'], $data['password']);
 
@@ -132,7 +133,7 @@ class AuthController extends Controller
     public function forgotPassword(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email'
+            'email' => 'required|email',
         ]);
 
         if ($validator->fails()) {
@@ -148,23 +149,23 @@ class AuthController extends Controller
         try {
             $response = $this->authService->sendPasswordResetEmail($email);
 
-            if (!empty($response['success']) && $response['success']) {
+            if (! empty($response['success']) && $response['success']) {
                 return response()->json([
                     'status' => 200,
-                    'message' => 'Password reset email sent if the email exists in our system'
+                    'message' => 'Password reset email sent if the email exists in our system',
                 ], 200);
             }
 
             return response()->json([
                 'status' => 400,
                 'message' => 'Failed to send password reset email. Please check the email address.',
-                'error' => $response['error'] ?? []
+                'error' => $response['error'] ?? [],
             ], 400);
         } catch (\Throwable $th) {
             return response()->json([
                 'status' => 500,
                 'message' => 'Unexpected error',
-                'error' => $th->getMessage()
+                'error' => $th->getMessage(),
             ], 500);
         }
     }
@@ -193,7 +194,7 @@ class AuthController extends Controller
         try {
             $response = $this->authService->resetPassword($data['reset_token'], $data['new_password']);
 
-            if (!empty($response['success']) && $response['success']) {
+            if (! empty($response['success']) && $response['success']) {
                 return response()->json([
                     'status' => 200,
                     'message' => $response['message'] ?? 'Password has been reset successfully',
@@ -207,13 +208,13 @@ class AuthController extends Controller
             return response()->json([
                 'status' => 400,
                 'message' => 'Failed to reset password',
-                'error' => $response['error'] ?? []
+                'error' => $response['error'] ?? [],
             ], 400);
         } catch (\Throwable $th) {
             return response()->json([
                 'status' => 500,
                 'message' => 'Unexpected error',
-                'error' => $th->getMessage()
+                'error' => $th->getMessage(),
             ], 500);
         }
     }
@@ -229,33 +230,34 @@ class AuthController extends Controller
 
             $customer = $this->authService->verifyToken($token, $expiresAt);
 
-            if (!$customer) {
+            if (! $customer) {
                 return response()->json(['status' => 401, 'message' => 'Token invalid or expired'], 401);
             }
 
             return response()->json([
                 'status' => 200,
                 'message' => 'Profile retrieved successfully',
-                'data' => ['customer' => $customer]
+                'data' => ['customer' => $customer],
             ]);
         } catch (\Throwable $th) {
             return response()->json([
                 'status' => 500,
                 'message' => 'Internal Server Error',
-                'error' => $th->getMessage()
+                'error' => $th->getMessage(),
             ], 500);
         }
     }
 
     /**
      * Logout customer and revoke access token
-     * @return \Illuminate\Http\JsonResponse
+     *
+     * @return JsonResponse
      */
     public function logout(Request $request)
     {
         $accessToken = $request->bearerToken();
 
-        if (!$accessToken) {
+        if (! $accessToken) {
             return response()->json([
                 'status' => 401,
                 'message' => 'Access token missing',
@@ -264,7 +266,7 @@ class AuthController extends Controller
 
         $loggedOut = $this->authService->logoutCustomer($accessToken);
 
-        if (!$loggedOut) {
+        if (! $loggedOut) {
             return response()->json([
                 'status' => 400,
                 'message' => 'Failed to logout',

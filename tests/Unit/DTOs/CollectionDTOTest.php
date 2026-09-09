@@ -8,9 +8,9 @@ use PHPUnit\Framework\TestCase;
 
 /**
  * CollectionDTO Unit Tests
- * 
+ *
  * Tests validation, factory methods, and serialization for CollectionDTO.
- * 
+ *
  * Requirements: 16.5, 16.6, 16.7
  */
 class CollectionDTOTest extends TestCase
@@ -240,7 +240,7 @@ class CollectionDTOTest extends TestCase
         $this->assertArrayHasKey('description', $array);
         $this->assertArrayHasKey('image', $array);
         $this->assertArrayHasKey('updatedAt', $array);
-        
+
         $this->assertEquals('gid://shopify/Collection/444', $array['id']);
         $this->assertEquals('Array Test Collection', $array['title']);
         $this->assertEquals('array-test-collection', $array['handle']);
@@ -342,7 +342,7 @@ class CollectionDTOTest extends TestCase
     public function test_collection_with_long_description(): void
     {
         $longDescription = str_repeat('This is a very long description. ', 100);
-        
+
         $dto = new CollectionDTO(
             id: 'gid://shopify/Collection/999',
             title: 'Long Description Collection',

@@ -7,10 +7,10 @@ use InvalidArgumentException;
 
 /**
  * Wishlist Item Data Transfer Object
- * 
+ *
  * Represents a single product in a customer's wishlist.
  * Contains essential product information for wishlist display.
- * 
+ *
  * Requirements: 11.4, 11.5, 11.11, 11.12
  */
 class WishlistItemDTO extends BaseDTO
@@ -30,7 +30,7 @@ class WishlistItemDTO extends BaseDTO
 
     /**
      * Validate the wishlist item data.
-     * 
+     *
      * @throws InvalidArgumentException
      */
     protected function validate(): void
@@ -42,12 +42,11 @@ class WishlistItemDTO extends BaseDTO
 
     /**
      * Create a WishlistItemDTO from Shopify API response data.
-     * 
+     *
      * Transforms raw Shopify product data into a typed DTO instance.
      * Extracts essential product information for wishlist display.
-     * 
-     * @param array $data Raw product data from Shopify GraphQL response
-     * @return self
+     *
+     * @param  array  $data  Raw product data from Shopify GraphQL response
      */
     public static function fromShopifyResponse(array $data): self
     {

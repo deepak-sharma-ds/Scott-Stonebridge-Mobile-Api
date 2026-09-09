@@ -8,6 +8,7 @@ use App\Services\Base\BaseService;
 class CurrencyFlagService extends BaseService implements CurrencyFlagServiceInterface
 {
     protected const SHOPIFY_CDN = 'https://cdn.shopify.com/shopifycloud/web/assets/v1/';
+
     protected const FLAG_CDN = 'https://flagcdn.com/w40/';
 
     protected static array $flags = [
@@ -41,11 +42,11 @@ class CurrencyFlagService extends BaseService implements CurrencyFlagServiceInte
         $countryCode = strtolower($countryCode);
 
         // Primary: Shopify CDN
-        if (isset(self::$flags[$currencyCode])) {
-            return self::SHOPIFY_CDN . self::$flags[$currencyCode];
-        }
+        // if (isset(self::$flags[$currencyCode])) {
+        //     return self::SHOPIFY_CDN . self::$flags[$currencyCode];
+        // }
 
         // Fallback: Country flag CDN
-        return self::FLAG_CDN . $countryCode . '.png';
+        return self::FLAG_CDN.$countryCode.'.png';
     }
 }

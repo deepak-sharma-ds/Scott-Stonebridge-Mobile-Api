@@ -25,10 +25,10 @@ class CorrelationIdProcessorTest extends TestCase
 
     public function test_processor_adds_correlation_id_to_log_record(): void
     {
-        $processor = new CorrelationIdProcessor();
-        
+        $processor = new CorrelationIdProcessor;
+
         $record = new LogRecord(
-            datetime: new \DateTimeImmutable(),
+            datetime: new \DateTimeImmutable,
             channel: 'test',
             level: Level::Info,
             message: 'Test message',
@@ -45,10 +45,10 @@ class CorrelationIdProcessorTest extends TestCase
 
     public function test_processor_uses_same_correlation_id_for_multiple_records(): void
     {
-        $processor = new CorrelationIdProcessor();
-        
+        $processor = new CorrelationIdProcessor;
+
         $record1 = new LogRecord(
-            datetime: new \DateTimeImmutable(),
+            datetime: new \DateTimeImmutable,
             channel: 'test',
             level: Level::Info,
             message: 'First message',
@@ -57,7 +57,7 @@ class CorrelationIdProcessorTest extends TestCase
         );
 
         $record2 = new LogRecord(
-            datetime: new \DateTimeImmutable(),
+            datetime: new \DateTimeImmutable,
             channel: 'test',
             level: Level::Info,
             message: 'Second message',
@@ -77,14 +77,14 @@ class CorrelationIdProcessorTest extends TestCase
     public function test_processor_uses_header_correlation_id_when_available(): void
     {
         $expectedCorrelationId = 'test-correlation-id-123';
-        
+
         // Set correlation ID manually (simulating what middleware would do)
         CorrelationIdProcessor::setCorrelationId($expectedCorrelationId);
-        
-        $processor = new CorrelationIdProcessor();
-        
+
+        $processor = new CorrelationIdProcessor;
+
         $record = new LogRecord(
-            datetime: new \DateTimeImmutable(),
+            datetime: new \DateTimeImmutable,
             channel: 'test',
             level: Level::Info,
             message: 'Test message',
@@ -100,13 +100,13 @@ class CorrelationIdProcessorTest extends TestCase
     public function test_set_correlation_id_manually(): void
     {
         $expectedCorrelationId = 'manual-correlation-id-456';
-        
+
         CorrelationIdProcessor::setCorrelationId($expectedCorrelationId);
-        
-        $processor = new CorrelationIdProcessor();
-        
+
+        $processor = new CorrelationIdProcessor;
+
         $record = new LogRecord(
-            datetime: new \DateTimeImmutable(),
+            datetime: new \DateTimeImmutable,
             channel: 'test',
             level: Level::Info,
             message: 'Test message',
@@ -121,10 +121,10 @@ class CorrelationIdProcessorTest extends TestCase
 
     public function test_get_current_correlation_id(): void
     {
-        $processor = new CorrelationIdProcessor();
-        
+        $processor = new CorrelationIdProcessor;
+
         $record = new LogRecord(
-            datetime: new \DateTimeImmutable(),
+            datetime: new \DateTimeImmutable,
             channel: 'test',
             level: Level::Info,
             message: 'Test message',
@@ -140,10 +140,10 @@ class CorrelationIdProcessorTest extends TestCase
 
     public function test_reset_clears_correlation_id(): void
     {
-        $processor = new CorrelationIdProcessor();
-        
+        $processor = new CorrelationIdProcessor;
+
         $record1 = new LogRecord(
-            datetime: new \DateTimeImmutable(),
+            datetime: new \DateTimeImmutable,
             channel: 'test',
             level: Level::Info,
             message: 'First message',
@@ -156,10 +156,10 @@ class CorrelationIdProcessorTest extends TestCase
 
         // Reset and create new processor
         CorrelationIdProcessor::reset();
-        $processor2 = new CorrelationIdProcessor();
-        
+        $processor2 = new CorrelationIdProcessor;
+
         $record2 = new LogRecord(
-            datetime: new \DateTimeImmutable(),
+            datetime: new \DateTimeImmutable,
             channel: 'test',
             level: Level::Info,
             message: 'Second message',

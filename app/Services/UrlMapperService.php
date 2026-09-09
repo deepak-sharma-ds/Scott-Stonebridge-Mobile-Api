@@ -4,16 +4,16 @@ namespace App\Services;
 
 /**
  * URL Mapper Service
- * 
+ *
  * Converts Shopify web URLs to mobile API endpoints
  */
 class UrlMapperService
 {
     /**
      * Convert Shopify web URL to API endpoint
-     * 
-     * @param string $url Shopify URL
-     * @param string $type Menu item type
+     *
+     * @param  string  $url  Shopify URL
+     * @param  string  $type  Menu item type
      * @return array ['url' => string, 'api_endpoint' => string, 'params' => array]
      */
     public static function mapToApiEndpoint(string $url, string $type): array
@@ -21,13 +21,13 @@ class UrlMapperService
         // Parse the URL
         $parsedUrl = parse_url($url);
         $path = $parsedUrl['path'] ?? '';
-        
+
         // Remove leading/trailing slashes
         $path = trim($path, '/');
-        
+
         // Map based on type and path
         $mapping = self::detectEndpoint($path, $type);
-        
+
         return [
             'url' => $url, // Original Shopify URL
             'api_endpoint' => $mapping['endpoint'],
@@ -38,10 +38,9 @@ class UrlMapperService
 
     /**
      * Detect API endpoint from path and type
-     * 
-     * @param string $path URL path
-     * @param string $type Menu item type
-     * @return array
+     *
+     * @param  string  $path  URL path
+     * @param  string  $type  Menu item type
      */
     protected static function detectEndpoint(string $path, string $type): array
     {
@@ -56,7 +55,7 @@ class UrlMapperService
         // Collections
         if (preg_match('#^collections/([^/]+)$#', $path, $matches)) {
             return [
-                'endpoint' => '/api/v1/collections/' . $matches[1] . '/products',
+                'endpoint' => '/api/v1/collections/'.$matches[1].'/products',
                 'params' => ['handle' => $matches[1]],
             ];
         }
@@ -64,7 +63,7 @@ class UrlMapperService
         // Products
         if (preg_match('#^products/([^/]+)$#', $path, $matches)) {
             return [
-                'endpoint' => '/api/v1/products/' . $matches[1],
+                'endpoint' => '/api/v1/products/'.$matches[1],
                 'params' => ['handle' => $matches[1]],
             ];
         }
@@ -72,7 +71,7 @@ class UrlMapperService
         // Pages
         if (preg_match('#^pages/([^/]+)$#', $path, $matches)) {
             return [
-                'endpoint' => '/api/v1/pages/' . $matches[1],
+                'endpoint' => '/api/v1/pages/'.$matches[1],
                 'params' => ['handle' => $matches[1]],
             ];
         }
@@ -80,7 +79,7 @@ class UrlMapperService
         // Blogs
         if (preg_match('#^blogs/([^/]+)$#', $path, $matches)) {
             return [
-                'endpoint' => '/api/v1/blogs/' . $matches[1] . '/articles',
+                'endpoint' => '/api/v1/blogs/'.$matches[1].'/articles',
                 'params' => ['blog_handle' => $matches[1]],
             ];
         }
@@ -88,7 +87,7 @@ class UrlMapperService
         // Blog Articles
         if (preg_match('#^blogs/([^/]+)/([^/]+)$#', $path, $matches)) {
             return [
-                'endpoint' => '/api/v1/blogs/' . $matches[1] . '/articles/' . $matches[2],
+                'endpoint' => '/api/v1/blogs/'.$matches[1].'/articles/'.$matches[2],
                 'params' => [
                     'blog_handle' => $matches[1],
                     'article_handle' => $matches[2],
@@ -99,7 +98,7 @@ class UrlMapperService
         // Policies
         if (preg_match('#^policies/([^/]+)$#', $path, $matches)) {
             return [
-                'endpoint' => '/api/v1/policies/' . $matches[1],
+                'endpoint' => '/api/v1/policies/'.$matches[1],
                 'params' => ['type' => $matches[1]],
             ];
         }
@@ -130,24 +129,23 @@ class UrlMapperService
 
         // External URL or unrecognized - return as is
         return [
-            'endpoint' => $path ? '/' . $path : '/',
+            'endpoint' => $path ? '/'.$path : '/',
             'params' => [],
         ];
     }
 
     /**
      * Get full API URL with base URL
-     * 
-     * @param string $endpoint API endpoint
-     * @param string|null $baseUrl Base URL (optional)
-     * @return string
+     *
+     * @param  string  $endpoint  API endpoint
+     * @param  string|null  $baseUrl  Base URL (optional)
      */
     public static function getFullApiUrl(string $endpoint, ?string $baseUrl = null): string
     {
-        if (!$baseUrl) {
+        if (! $baseUrl) {
             $baseUrl = config('app.url', 'http://localhost');
         }
 
-        return rtrim($baseUrl, '/') . '/' . ltrim($endpoint, '/');
+        return rtrim($baseUrl, '/').'/'.ltrim($endpoint, '/');
     }
 }

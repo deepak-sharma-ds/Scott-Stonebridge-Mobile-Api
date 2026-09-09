@@ -7,18 +7,17 @@ use Illuminate\Http\Request;
 
 /**
  * Wishlist Item API Resource
- * 
+ *
  * Transforms WishlistItemDTO data to API response format.
  * Includes essential product information for wishlist display.
- * 
+ *
  * Requirements: 12.5, 12.9, 12.10, 12.11
  */
 class WishlistItemResource extends BaseApiResource
 {
     /**
      * Transform the resource into an array.
-     * 
-     * @param Request $request
+     *
      * @return array<string, mixed>
      */
     public function toArray(Request $request): array

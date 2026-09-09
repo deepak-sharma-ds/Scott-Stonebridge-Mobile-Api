@@ -23,6 +23,7 @@ class AudioController extends Controller
     {
         // Optimized: Eager loads package to prevent N+1 queries
         $audios = $this->audioService->getPaginatedAudios(10);
+
         return view('admin.audios.index', compact('audios'));
     }
 
@@ -33,6 +34,7 @@ class AudioController extends Controller
     {
         // Only load necessary fields for dropdown
         $packages = Package::select('id', 'title')->orderBy('title')->get()->pluck('title', 'id');
+
         return view('admin.audios.create', compact('packages'));
     }
 
@@ -65,6 +67,7 @@ class AudioController extends Controller
                 ->with('success', 'Audio added successfully. Conversion started in background.');
         } catch (\Throwable $e) {
             report($e);
+
             return back()
                 ->withInput()
                 ->with('error', 'Failed to create audio. Please try again.');
@@ -77,6 +80,7 @@ class AudioController extends Controller
     public function show(Audio $audio)
     {
         $audio->load('package:id,title,shopify_tag');
+
         return view('admin.audios.show', compact('audio'));
     }
 
@@ -86,6 +90,7 @@ class AudioController extends Controller
     public function edit(Audio $audio)
     {
         $packages = Package::select('id', 'title')->orderBy('title')->get()->pluck('title', 'id');
+
         return view('admin.audios.edit', compact('audio', 'packages'));
     }
 
@@ -122,7 +127,7 @@ class AudioController extends Controller
             // Update via service
             $this->audioService->updateAudio($audio, $data);
 
-            $message = $fileUpdated 
+            $message = $fileUpdated
                 ? 'Audio updated successfully and conversion restarted.'
                 : 'Audio updated successfully.';
 
@@ -131,6 +136,7 @@ class AudioController extends Controller
                 ->with('success', $message);
         } catch (\Throwable $e) {
             report($e);
+
             return back()
                 ->withInput()
                 ->with('error', 'Failed to update audio. Please try again.');
@@ -150,6 +156,7 @@ class AudioController extends Controller
                 ->with('success', 'Audio deleted successfully');
         } catch (\Throwable $e) {
             report($e);
+
             return back()->with('error', 'Failed to delete audio.');
         }
     }

@@ -20,6 +20,7 @@ class PackageController extends Controller
     {
         // Optimized: withCount prevents N+1, eager loads first 3 audios
         $packages = $this->packageService->getPaginatedPackages(10);
+
         return view('admin.packages.index', compact('packages'));
     }
 
@@ -47,6 +48,7 @@ class PackageController extends Controller
                 ->with('success', 'Package created successfully');
         } catch (\Throwable $e) {
             report($e); // Log to Laravel's error reporting
+
             return back()
                 ->withInput()
                 ->with('error', 'Failed to create package. Please try again.');
@@ -60,6 +62,7 @@ class PackageController extends Controller
     {
         // Load package with all audios for detailed view
         $package = $this->packageService->findPackageWithRelations($package->id);
+
         return view('admin.packages.show', compact('package'));
     }
 
@@ -88,6 +91,7 @@ class PackageController extends Controller
                 ->with('success', 'Package updated successfully');
         } catch (\Throwable $e) {
             report($e);
+
             return back()
                 ->withInput()
                 ->with('error', 'Failed to update package. Please try again.');
@@ -101,12 +105,13 @@ class PackageController extends Controller
     {
         try {
             $this->packageService->deletePackage($package);
-            
+
             return redirect()
                 ->route('packages.index')
                 ->with('success', 'Package deleted successfully');
         } catch (\Throwable $e) {
             report($e);
+
             return back()->with('error', 'Failed to delete package.');
         }
     }

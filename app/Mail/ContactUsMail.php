@@ -24,8 +24,8 @@ class ContactUsMail extends Mailable
             ->view('mail.contact-us')
             ->with([
                 'patient_name' => $this->contact->name,
-                'email'        => $this->contact->email,
-                'custom_text'  => $this->contact->message,
+                'email' => $this->contact->email,
+                'custom_text' => $this->contact->message,
                 'phone' => $this->contact->phone,
             ]);
     }

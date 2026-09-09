@@ -7,7 +7,7 @@ use App\Services\UrlMapperService;
 
 /**
  * Menu Item DTO
- * 
+ *
  * Represents a single menu item with optional nested items
  * Automatically maps Shopify URLs to API endpoints
  */
@@ -27,8 +27,6 @@ class MenuItemDTO extends BaseDTO
 
     /**
      * Validate the DTO data
-     * 
-     * @return void
      */
     protected function validate(): void
     {
@@ -39,15 +37,12 @@ class MenuItemDTO extends BaseDTO
 
     /**
      * Create from Shopify API response
-     * 
-     * @param array $data
-     * @return self
      */
     public static function fromShopifyResponse(array $data): self
     {
         $nestedItems = [];
-        
-        if (!empty($data['items'])) {
+
+        if (! empty($data['items'])) {
             foreach ($data['items'] as $item) {
                 $nestedItems[] = self::fromShopifyResponse($item);
             }
@@ -72,8 +67,6 @@ class MenuItemDTO extends BaseDTO
 
     /**
      * Convert to array
-     * 
-     * @return array
      */
     public function toArray(): array
     {
@@ -84,7 +77,7 @@ class MenuItemDTO extends BaseDTO
             'api_endpoint' => $this->apiEndpoint,
             'params' => $this->params,
             'type' => $this->type,
-            'items' => array_map(fn($item) => $item->toArray(), $this->items),
+            'items' => array_map(fn ($item) => $item->toArray(), $this->items),
         ];
     }
 }

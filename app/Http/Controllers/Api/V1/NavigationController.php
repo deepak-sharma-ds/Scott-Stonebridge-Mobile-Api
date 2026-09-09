@@ -3,13 +3,14 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Contracts\Services\NavigationServiceInterface;
+use App\Exceptions\ShopifyNotFoundException;
 use App\Http\Controllers\Base\BaseApiController;
 use App\Http\Resources\Navigation\MenuResource;
 use Illuminate\Http\JsonResponse;
 
 /**
  * Navigation Controller (v1)
- * 
+ *
  * Handles navigation/menu-related API endpoints
  */
 class NavigationController extends BaseApiController
@@ -20,9 +21,8 @@ class NavigationController extends BaseApiController
 
     /**
      * Get menu by handle
-     * 
-     * @param string $handle Menu handle (e.g., 'main-menu', 'footer')
-     * @return JsonResponse
+     *
+     * @param  string  $handle  Menu handle (e.g., 'main-menu', 'footer')
      */
     public function show(string $handle): JsonResponse
     {
@@ -35,7 +35,7 @@ class NavigationController extends BaseApiController
                     'menu' => new MenuResource($menu),
                 ]
             );
-        } catch (\App\Exceptions\ShopifyNotFoundException $e) {
+        } catch (ShopifyNotFoundException $e) {
             return $this->notFound($e->getMessage());
         } catch (\Exception $e) {
             return $this->error(

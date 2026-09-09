@@ -9,6 +9,7 @@ use App\Http\Middleware\RateLimitMiddleware;
 use App\Http\Middleware\ResponseCacheMiddleware;
 use App\Http\Middleware\ShopifyAuthMiddleware;
 use App\Http\Middleware\ShopifyCustomerAuth;
+use App\Http\Middleware\VerifyKlaviyoWebhookSecret;
 use App\Http\Middleware\VerifyShopifyWebhookHmac;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Application;
@@ -50,6 +51,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'api.logging' => ApiLoggingMiddleware::class,
             'response.cache' => ResponseCacheMiddleware::class,
             'shopify.hmac' => VerifyShopifyWebhookHmac::class,
+            'klaviyo.secret' => VerifyKlaviyoWebhookSecret::class,
         ]);
     })
     ->withSchedule(function (Schedule $schedule) {

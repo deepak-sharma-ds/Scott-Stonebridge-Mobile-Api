@@ -14,17 +14,17 @@ class AudioStreamController extends Controller
             $basePath = storage_path("app/private/{$audio->hls_path}");
 
             $target = "{$basePath}/{$file}";
-            if (!file_exists($target)) {
+            if (! file_exists($target)) {
                 abort(404, 'File not found');
             }
 
-            $ext  = pathinfo($target, PATHINFO_EXTENSION);
+            $ext = pathinfo($target, PATHINFO_EXTENSION);
             $size = filesize($target);
 
             $mime = match ($ext) {
-                'm3u8'  => 'application/vnd.apple.mpegurl',
-                'ts'    => 'video/mp2t',
-                'key'   => 'application/octet-stream',
+                'm3u8' => 'application/vnd.apple.mpegurl',
+                'ts' => 'video/mp2t',
+                'key' => 'application/octet-stream',
                 default => 'application/octet-stream',
             };
 
@@ -40,13 +40,13 @@ class AudioStreamController extends Controller
             // hosts that prepend a UTF-8 BOM (EF BB BF) to binary content, corrupting
             // the 16-byte AES key to 19 bytes and breaking HLS.js decryption.
             $headers = [
-                'Content-Type'                  => $mime,
-                'Content-Length'                => $size,
-                'Cache-Control'                 => $cacheControl,
-                'Access-Control-Allow-Origin'   => '*',
-                'Access-Control-Allow-Methods'  => 'GET, OPTIONS',
-                'Access-Control-Allow-Headers'  => '*',
-                'X-Content-Type-Options'        => 'nosniff',
+                'Content-Type' => $mime,
+                'Content-Length' => $size,
+                'Cache-Control' => $cacheControl,
+                'Access-Control-Allow-Origin' => '*',
+                'Access-Control-Allow-Methods' => 'GET, OPTIONS',
+                'Access-Control-Allow-Headers' => '*',
+                'X-Content-Type-Options' => 'nosniff',
             ];
 
             return response()->stream(function () use ($target) {

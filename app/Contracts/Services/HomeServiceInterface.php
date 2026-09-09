@@ -6,18 +6,17 @@ use App\DTOs\Home\HomeDTO;
 
 /**
  * Home Service Interface
- * 
+ *
  * Defines the contract for home page data and newsletter operations.
  */
 interface HomeServiceInterface
 {
     /**
      * Get home page data
-     * 
-     * @param string $featuredTag Tag for featured products collection
-     * @param int $featuredLimit Number of featured products to fetch
-     * @param int $collectionsLimit Number of collections to fetch
-     * @return HomeDTO
+     *
+     * @param  string  $featuredTag  Tag for featured products collection
+     * @param  int  $featuredLimit  Number of featured products to fetch
+     * @param  int  $collectionsLimit  Number of collections to fetch
      */
     public function getHomePageData(
         string $featuredTag = 'featured',
@@ -27,10 +26,9 @@ interface HomeServiceInterface
 
     /**
      * Subscribe customer to newsletter
-     * 
-     * @param string $email Customer email
-     * @param string $accessToken Customer access token
-     * @return bool
+     *
+     * @param  string  $email  Customer email
+     * @param  string  $accessToken  Customer access token
      */
     public function subscribeToNewsletter(string $email, string $accessToken): bool;
 }

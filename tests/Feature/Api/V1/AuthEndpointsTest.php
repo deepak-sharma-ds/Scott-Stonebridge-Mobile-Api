@@ -2,14 +2,13 @@
 
 namespace Tests\Feature\Api\V1;
 
-use Tests\TestCase;
-use Tests\Mocks\MockShopifyClient;
 use Tests\Helpers\ShopifyResponseFactory;
-use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Mocks\MockShopifyClient;
+use Tests\TestCase;
 
 /**
  * Integration tests for Auth API endpoints
- * 
+ *
  * Tests Requirements: 2.1, 2.2, 2.3, 2.5, 2.6
  */
 class AuthEndpointsTest extends TestCase
@@ -19,8 +18,8 @@ class AuthEndpointsTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        
-        $this->mockClient = new MockShopifyClient();
+
+        $this->mockClient = new MockShopifyClient;
         $this->app->instance('App\Contracts\Shopify\StorefrontApiClientInterface', $this->mockClient);
     }
 
@@ -36,9 +35,9 @@ class AuthEndpointsTest extends TestCase
                             'accessToken' => 'test-access-token-123',
                             'expiresAt' => '2025-12-31T23:59:59Z',
                         ],
-                        'customerUserErrors' => []
-                    ]
-                ]
+                        'customerUserErrors' => [],
+                    ],
+                ],
             ]
         );
 
@@ -57,14 +56,14 @@ class AuthEndpointsTest extends TestCase
                 'access_token',
                 'expires_at',
             ],
-            'meta'
+            'meta',
         ]);
 
         $response->assertJson([
             'success' => true,
             'data' => [
                 'access_token' => 'test-access-token-123',
-            ]
+            ],
         ]);
     }
 
@@ -81,10 +80,10 @@ class AuthEndpointsTest extends TestCase
                             [
                                 'code' => 'UNIDENTIFIED_CUSTOMER',
                                 'message' => 'Invalid email or password',
-                            ]
-                        ]
-                    ]
-                ]
+                            ],
+                        ],
+                    ],
+                ],
             ]
         );
 
@@ -114,9 +113,9 @@ class AuthEndpointsTest extends TestCase
                             'firstName' => 'John',
                             'lastName' => 'Doe',
                         ]),
-                        'customerUserErrors' => []
-                    ]
-                ]
+                        'customerUserErrors' => [],
+                    ],
+                ],
             ]
         );
 
@@ -139,9 +138,9 @@ class AuthEndpointsTest extends TestCase
                     'email',
                     'first_name',
                     'last_name',
-                ]
+                ],
             ],
-            'meta'
+            'meta',
         ]);
 
         $response->assertJson([
@@ -149,8 +148,8 @@ class AuthEndpointsTest extends TestCase
             'data' => [
                 'customer' => [
                     'email' => 'newuser@example.com',
-                ]
-            ]
+                ],
+            ],
         ]);
     }
 
@@ -167,11 +166,11 @@ class AuthEndpointsTest extends TestCase
                             [
                                 'code' => 'TAKEN',
                                 'message' => 'Email has already been taken',
-                                'field' => ['email']
-                            ]
-                        ]
-                    ]
-                ]
+                                'field' => ['email'],
+                            ],
+                        ],
+                    ],
+                ],
             ]
         );
 
@@ -207,7 +206,7 @@ class AuthEndpointsTest extends TestCase
 
         // Act
         $response = $this->getJson('/api/v1/auth/me', [
-            'Authorization' => 'Bearer ' . $accessToken
+            'Authorization' => 'Bearer '.$accessToken,
         ]);
 
         // Assert
@@ -221,9 +220,9 @@ class AuthEndpointsTest extends TestCase
                     'email',
                     'first_name',
                     'last_name',
-                ]
+                ],
             ],
-            'meta'
+            'meta',
         ]);
 
         $response->assertJson([
@@ -231,8 +230,8 @@ class AuthEndpointsTest extends TestCase
             'data' => [
                 'customer' => [
                     'email' => 'test@example.com',
-                ]
-            ]
+                ],
+            ],
         ]);
     }
 
@@ -289,9 +288,9 @@ class AuthEndpointsTest extends TestCase
                             'accessToken' => 'test-token',
                             'expiresAt' => '2025-12-31T23:59:59Z',
                         ],
-                        'customerUserErrors' => []
-                    ]
-                ]
+                        'customerUserErrors' => [],
+                    ],
+                ],
             ]
         );
 

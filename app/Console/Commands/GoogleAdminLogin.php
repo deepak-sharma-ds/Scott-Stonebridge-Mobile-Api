@@ -4,20 +4,19 @@ namespace App\Console\Commands;
 
 use App\Models\GoogleToken;
 use Carbon\Carbon;
-use Illuminate\Console\Command;
 use Google_Client;
+use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Crypt;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Storage;
 
 class GoogleAdminLogin extends Command
 {
     protected $signature = 'google:admin-login';
+
     protected $description = 'Get Google OAuth token for admin calendar';
 
     public function handle()
     {
-        $client = new Google_Client();
+        $client = new Google_Client;
         $client->setClientId(config('google.client_id') ?: env('GOOGLE_CLIENT_ID'));
         $client->setClientSecret(config('google.client_secret') ?: env('GOOGLE_CLIENT_SECRET'));
         $client->setRedirectUri(config('google.redirect_uri'));
@@ -38,7 +37,8 @@ class GoogleAdminLogin extends Command
         $token = $client->fetchAccessTokenWithAuthCode($code);
 
         if (isset($token['error'])) {
-            $this->error('Error fetching token: ' . $token['error_description']);
+            $this->error('Error fetching token: '.$token['error_description']);
+
             return 1;
         }
 
@@ -48,7 +48,7 @@ class GoogleAdminLogin extends Command
         /**
          * Step 4 — Compute expires_at
          */
-        $created   = $token['created'] ?? time();
+        $created = $token['created'] ?? time();
         $expiresIn = $token['expires_in'] ?? 3600;
         $expiresAt = Carbon::createFromTimestamp($created + $expiresIn);
 
@@ -58,18 +58,19 @@ class GoogleAdminLogin extends Command
         GoogleToken::updateOrCreate(
             ['id' => 1],
             [
-                'access_token'          => Crypt::encryptString($token['access_token']),
-                'refresh_token'         => isset($token['refresh_token'])
+                'access_token' => Crypt::encryptString($token['access_token']),
+                'refresh_token' => isset($token['refresh_token'])
                     ? Crypt::encryptString($token['refresh_token'])
                     : null,
-                'expires_at'            => $expiresAt,
-                'token_type'            => $token['token_type'] ?? null,
-                'scope'                 => $token['scope'] ?? null,
-                'created_at_timestamp'  => $created,
+                'expires_at' => $expiresAt,
+                'token_type' => $token['token_type'] ?? null,
+                'scope' => $token['scope'] ?? null,
+                'created_at_timestamp' => $created,
             ]
         );
 
-        $this->info("✅ Admin Google token stored securely in database.");
+        $this->info('✅ Admin Google token stored securely in database.');
+
         return 0;
     }
 }

@@ -13,9 +13,9 @@ class UpdateCustomerProfileRequest extends BaseApiRequest
          */
         return [
             'firstName' => 'required|string|max:100',
-            'lastName'  => 'required|string|max:100',
-            'email'     => 'required|email|max:255',
-            'phone'     => 'required|string|max:100',
+            'lastName' => 'required|string|max:100',
+            'email' => 'required|email|max:255',
+            'phone' => 'required|string|max:100',
         ];
     }
 }

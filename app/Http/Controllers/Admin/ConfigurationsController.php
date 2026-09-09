@@ -3,11 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
 use App\Models\Configuration;
-use Storage;
-use Str;
-use Carbon\Carbon;
+use Illuminate\Http\Request;
 
 class ConfigurationsController extends Controller
 {
@@ -26,35 +23,34 @@ class ConfigurationsController extends Controller
             }
         }
         $configurations = $resultQuery->orderBy('order')->paginate(config('Reading.nodes_per_page'));
+
         return view('admin.configurations.admin_index', compact('configurations', 'page_title'));
     }
 
-    public function admin_prefix(Request $request, $prefix = NULL)
+    public function admin_prefix(Request $request, $prefix = null)
     {
-
 
         $page_title = 'Configuration';
 
         if ($request->isMethod('post')) {
 
             if ($request->has('Configuration')) {
-                $newArr = array();
+                $newArr = [];
                 $fileNameArr = $this->__imageSave($request);
 
                 foreach ($request->input('Configuration') as $key => $config_value) {
 
-
-                    if (!isset($config_value['value']) && $config_value['input_type'] == 'checkbox') {
+                    if (! isset($config_value['value']) && $config_value['input_type'] == 'checkbox') {
                         $config_value['value'] = 0;
-                    } else if ($config_value['input_type'] == 'multiple_checkbox') {
+                    } elseif ($config_value['input_type'] == 'multiple_checkbox') {
                         if (isset($config_value['value'])) {
 
                             $config_value['value'] = array_keys($config_value['value']);
-                            $config_value['value'] = implode(',',  $config_value['value']);
+                            $config_value['value'] = implode(',', $config_value['value']);
                         } else {
                             $config_value['value'] = '';
                         }
-                    } else if (isset($config_value['value'])) {
+                    } elseif (isset($config_value['value'])) {
                         $config_value['value'] = $config_value['value'];
                     }
                     if (array_key_exists($key, $fileNameArr)) {
@@ -62,13 +58,14 @@ class ConfigurationsController extends Controller
                     }
                     $res = Configuration::where('id', '=', $key)->update($config_value);
                 }
+
                 return redirect()->back()->with('success', 'Configuration is successfully updated.');
             } else {
                 return redirect()->back()->with('error', 'Something went wrong, please try again later.');
             }
         } else {
             $page_title = $prefix;
-            $configurations = Configuration::select('id', 'name', 'value', 'title', 'description', 'input_type', 'editable', 'weight', 'params', 'order')->where('name', 'LIKE', $prefix . '%')->orderBy('order', 'asc')->get();
+            $configurations = Configuration::select('id', 'name', 'value', 'title', 'description', 'input_type', 'editable', 'weight', 'params', 'order')->where('name', 'LIKE', $prefix.'%')->orderBy('order', 'asc')->get();
 
             return view('admin.configurations.admin_prefix', compact('configurations', 'prefix', 'page_title'));
         }
@@ -77,6 +74,7 @@ class ConfigurationsController extends Controller
     public function admin_view($id = null)
     {
         $configuration = Configuration::select('id', 'name', 'value')->firstWhere('id', $id);
+
         return view('admin.configurations.admin_view', compact('configuration'));
     }
 
@@ -90,13 +88,13 @@ class ConfigurationsController extends Controller
             ]);
 
             $new_configuration = [
-                'name'              => $request->input('Configuration.name'),
-                'value'             => $request->input('Configuration.value'),
-                'title'             => $request->input('Configuration.title'),
-                'input_type'        => $request->input('Configuration.input_type'),
-                'description'       => $request->input('Configuration.description') ? $request->input('Configuration.description') : '',
-                'params'            => $request->input('Configuration.params') ? $request->input('Configuration.params') : '',
-                'editable'          => $request->input('Configuration.editable') ? 1 : 0,
+                'name' => $request->input('Configuration.name'),
+                'value' => $request->input('Configuration.value'),
+                'title' => $request->input('Configuration.title'),
+                'input_type' => $request->input('Configuration.input_type'),
+                'description' => $request->input('Configuration.description') ? $request->input('Configuration.description') : '',
+                'params' => $request->input('Configuration.params') ? $request->input('Configuration.params') : '',
+                'editable' => $request->input('Configuration.editable') ? 1 : 0,
             ];
 
             $res = Configuration::create($new_configuration);
@@ -118,18 +116,18 @@ class ConfigurationsController extends Controller
         if ($request->isMethod('post')) {
 
             $request->validate([
-                'Configuration.name' => 'required|unique:configurations,name,' . $id,
+                'Configuration.name' => 'required|unique:configurations,name,'.$id,
                 // Add more validation rules for other fields if needed
             ]);
 
             $edit_configuration = [
-                'name'                  => $request->input('Configuration.name'),
-                'value'                 => $request->input('Configuration.value'),
-                'title'                 => $request->input('Configuration.title'),
-                'input_type'            => $request->input('Configuration.input_type'),
-                'description'           => $request->input('Configuration.description'),
-                'params'                => $request->input('Configuration.params'),
-                'editable'              => $request->input('Configuration.editable') ? 1 : 0,
+                'name' => $request->input('Configuration.name'),
+                'value' => $request->input('Configuration.value'),
+                'title' => $request->input('Configuration.title'),
+                'input_type' => $request->input('Configuration.input_type'),
+                'description' => $request->input('Configuration.description'),
+                'params' => $request->input('Configuration.params'),
+                'editable' => $request->input('Configuration.editable') ? 1 : 0,
             ];
 
             $res = Configuration::where('id', '=', $id)->update($edit_configuration);
@@ -144,7 +142,7 @@ class ConfigurationsController extends Controller
         }
     }
 
-    public function admin_delete($id = NUll)
+    public function admin_delete($id = null)
     {
 
         $configuration = Configuration::findorFail($id);
@@ -160,15 +158,14 @@ class ConfigurationsController extends Controller
     /**
      * Admin moveup
      *
-     * @param integer $id
-     * @param integer $step
+     * @param  int  $id
+     * @param  int  $step
      * @return void
-     * @access public
      */
     public function admin_moveup($id, $step = 1)
     {
 
-        $configuration = new Configuration();
+        $configuration = new Configuration;
         $res = $configuration->moveUp($id, $step);
         if ($res) {
             return redirect()->back()->with('success', 'Moved up is successfully .');
@@ -180,15 +177,14 @@ class ConfigurationsController extends Controller
     /**
      * Admin moveup
      *
-     * @param integer $id
-     * @param integer $step
+     * @param  int  $id
+     * @param  int  $step
      * @return void
-     * @access public
      */
     public function admin_movedown($id, $step = 1)
     {
 
-        $configuration = new Configuration();
+        $configuration = new Configuration;
         $res = $configuration->moveDown($id, $step);
         if ($res) {
             return redirect()->back()->with('success', 'Moved down is successfully.');
@@ -204,7 +200,7 @@ class ConfigurationsController extends Controller
      **/
     private function __imageSave($request)
     {
-        $fileNameArr = array();
+        $fileNameArr = [];
         if (empty($request->file('Configuration'))) {
             return $fileNameArr;
         }
@@ -213,7 +209,6 @@ class ConfigurationsController extends Controller
 
             if (is_array($imgValue['value'])) {
 
-
                 foreach ($imgValue['value'] as $image) {
                     $fileName = $image->hashName();
 
@@ -221,22 +216,20 @@ class ConfigurationsController extends Controller
                     $fileFullName[] = $fileName;
                 }
 
-                $fileName = implode(",", $fileFullName);
+                $fileName = implode(',', $fileFullName);
             } else {
 
-
-                $fileName =  $imgValue['value']->getClientOriginalName();
+                $fileName = $imgValue['value']->getClientOriginalName();
                 $file_arr = explode('.', $fileName);
-                $name     = $file_arr[0];
+                $name = $file_arr[0];
                 $extension = $file_arr[1];
 
-                $fileName = $name . '-' . time() . '.' . $extension;
+                $fileName = $name.'-'.time().'.'.$extension;
                 $uploadpath = storage_path('app/public/configuration-images');
                 $imgValue['value']->move($uploadpath, $fileName);
             }
             $fileNameArr[$imgKey] = $fileName;
         }
-
 
         return $fileNameArr;
     }

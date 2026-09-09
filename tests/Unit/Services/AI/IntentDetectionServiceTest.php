@@ -6,6 +6,7 @@ namespace Tests\Unit\Services\AI;
 
 use App\DTOs\Chat\ChatContextDTO;
 use App\DTOs\Chat\IntentDTO;
+use App\Services\AI\ChatbotConfigRepository;
 use App\Services\AI\IntentDetectionService;
 use Illuminate\Support\Facades\Cache;
 use Tests\TestCase;
@@ -18,7 +19,7 @@ class IntentDetectionServiceTest extends TestCase
     {
         parent::setUp();
         Cache::flush();
-        $this->service = new IntentDetectionService;
+        $this->service = new IntentDetectionService(new ChatbotConfigRepository);
     }
 
     public function test_recommendation_keyword_is_classified_via_regex(): void

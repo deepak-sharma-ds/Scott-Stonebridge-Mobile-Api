@@ -18,6 +18,8 @@ use Illuminate\Support\Carbon;
  * @property string $content_type
  * @property string $title
  * @property string|null $handle
+ * @property string|null $document_handle Shared unsuffixed handle across every row of one document (set on every row synced since chunking shipped; null on legacy pre-chunking rows). See ADR 0009.
+ * @property int|null $chunk_index 0-based chunk position; null when the document was never split.
  * @property string $summary
  * @property array<int, float>|null $embedding
  * @property string|null $embedding_model
@@ -54,6 +56,8 @@ class StoreKnowledge extends Model
         'content_type',
         'title',
         'handle',
+        'document_handle',
+        'chunk_index',
         'summary',
         'embedding',
         'embedding_model',
@@ -70,6 +74,7 @@ class StoreKnowledge extends Model
             'shopify_updated_at' => 'datetime',
             'embedded_at' => 'datetime',
             'embedding' => 'array',
+            'chunk_index' => 'integer',
         ];
     }
 

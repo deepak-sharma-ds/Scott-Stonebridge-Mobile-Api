@@ -9,17 +9,17 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * CurrencyMiddleware
- * 
+ *
  * Extracts currency from request headers or query params and adds to request context.
  * Validates currency code against Shopify's supported currencies dynamically.
- * 
+ *
  * Requirements: 15.2
  */
 class CurrencyMiddleware
 {
     /**
      * Fallback currencies if API fails
-     * 
+     *
      * @var array<string>
      */
     protected array $fallbackCurrencies = [
@@ -28,8 +28,6 @@ class CurrencyMiddleware
 
     /**
      * Constructor
-     * 
-     * @param ShopServiceInterface $shopService
      */
     public function __construct(
         protected ShopServiceInterface $shopService
@@ -38,7 +36,7 @@ class CurrencyMiddleware
     /**
      * Handle an incoming request.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
@@ -56,7 +54,7 @@ class CurrencyMiddleware
         $currency = strtoupper(trim($currency));
 
         // Validate currency code against Shopify's supported currencies
-        if (!$this->isCurrencySupported($currency)) {
+        if (! $this->isCurrencySupported($currency)) {
             // Fall back to default if invalid
             $currency = config('shopify.currency', 'GBP');
         }
@@ -75,11 +73,8 @@ class CurrencyMiddleware
 
     /**
      * Check if currency is supported
-     * 
+     *
      * Fetches from Shopify API with fallback to static list
-     * 
-     * @param string $currency
-     * @return bool
      */
     protected function isCurrencySupported(string $currency): bool
     {
@@ -94,7 +89,7 @@ class CurrencyMiddleware
 
     /**
      * Get supported currencies
-     * 
+     *
      * @return array<string>
      */
     public function getSupportedCurrencies(): array

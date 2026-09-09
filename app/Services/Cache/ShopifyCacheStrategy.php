@@ -42,8 +42,8 @@ class ShopifyCacheStrategy implements CacheStrategyInterface
     /**
      * Generate cache key for an operation
      *
-     * @param string $operation Operation name (e.g., 'product.get', 'cart.fetch')
-     * @param array $params Operation parameters
+     * @param  string  $operation  Operation name (e.g., 'product.get', 'cart.fetch')
+     * @param  array  $params  Operation parameters
      * @return string Cache key
      */
     public function getCacheKey(string $operation, array $params): string
@@ -65,7 +65,7 @@ class ShopifyCacheStrategy implements CacheStrategyInterface
         }, ARRAY_FILTER_USE_KEY);
 
         // Create a hash of the parameters for compact key
-        if (!empty($relevantParams)) {
+        if (! empty($relevantParams)) {
             $keyParts[] = md5(json_encode($relevantParams));
         }
 
@@ -75,8 +75,8 @@ class ShopifyCacheStrategy implements CacheStrategyInterface
     /**
      * Get cache tags for an operation
      *
-     * @param string $operation Operation name
-     * @param array $params Operation parameters
+     * @param  string  $operation  Operation name
+     * @param  array  $params  Operation parameters
      * @return array Cache tags
      */
     public function getCacheTags(string $operation, array $params): array
@@ -86,16 +86,16 @@ class ShopifyCacheStrategy implements CacheStrategyInterface
         // Add resource type tag
         $resourceType = $this->getResourceType($operation);
         if ($resourceType) {
-            $tags[] = self::CACHE_PREFIX . ':' . $resourceType;
+            $tags[] = self::CACHE_PREFIX.':'.$resourceType;
         }
 
         // Add currency tag if present
         if (isset($params['currency'])) {
-            $tags[] = self::CACHE_PREFIX . ':currency:' . strtolower($params['currency']);
+            $tags[] = self::CACHE_PREFIX.':currency:'.strtolower($params['currency']);
         }
 
         // Add operation-specific tags
-        $tags[] = self::CACHE_PREFIX . ':operation:' . $operation;
+        $tags[] = self::CACHE_PREFIX.':operation:'.$operation;
 
         return $tags;
     }
@@ -103,14 +103,14 @@ class ShopifyCacheStrategy implements CacheStrategyInterface
     /**
      * Get cache TTL for an operation
      *
-     * @param string $operation Operation name
+     * @param  string  $operation  Operation name
      * @return int TTL in seconds
      */
     public function getCacheTTL(string $operation): int
     {
         $resourceType = $this->getResourceType($operation);
 
-        if (!$resourceType) {
+        if (! $resourceType) {
             return 0;
         }
 
@@ -123,13 +123,12 @@ class ShopifyCacheStrategy implements CacheStrategyInterface
     /**
      * Determine if an operation should be cached
      *
-     * @param string $operation Operation name
-     * @return bool
+     * @param  string  $operation  Operation name
      */
     public function shouldCache(string $operation): bool
     {
         // Check if caching is globally enabled
-        if (!config('shopify.cache.enabled', true)) {
+        if (! config('shopify.cache.enabled', true)) {
             return false;
         }
 
@@ -140,7 +139,7 @@ class ShopifyCacheStrategy implements CacheStrategyInterface
     /**
      * Get resource type from operation name
      *
-     * @param string $operation Operation name
+     * @param  string  $operation  Operation name
      * @return string|null Resource type or null if not mapped
      */
     private function getResourceType(string $operation): ?string
@@ -148,4 +147,3 @@ class ShopifyCacheStrategy implements CacheStrategyInterface
         return self::RESOURCE_TYPE_MAP[$operation] ?? null;
     }
 }
-

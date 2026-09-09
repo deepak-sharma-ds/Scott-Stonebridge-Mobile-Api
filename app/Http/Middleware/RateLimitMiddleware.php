@@ -9,10 +9,10 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * RateLimitMiddleware
- * 
+ *
  * Implements rate limiting per IP/user to prevent API abuse.
  * Returns 429 status when limit exceeded.
- * 
+ *
  * Requirements: 8.6, 15.3
  */
 class RateLimitMiddleware
@@ -33,7 +33,7 @@ class RateLimitMiddleware
     /**
      * Handle an incoming request.
      *
-     * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
+     * @param  Closure(Request): (Response)  $next
      */
     public function handle(Request $request, Closure $next): Response
     {
@@ -43,7 +43,7 @@ class RateLimitMiddleware
         $enabled = config('shopify.rate_limit.enabled', true);
 
         // Skip rate limiting if disabled
-        if (!$enabled) {
+        if (! $enabled) {
             return $next($request);
         }
 
@@ -75,16 +75,16 @@ class RateLimitMiddleware
     protected function resolveRequestSignature(Request $request): string
     {
         // Use authenticated user ID if available, otherwise use IP
-        $userId = $request->attributes->get('shopify_customer_id') 
+        $userId = $request->attributes->get('shopify_customer_id')
             ?? $request->input('shopify_customer_data.id')
             ?? null;
 
         if ($userId) {
-            return 'rate_limit:user:' . sha1($userId);
+            return 'rate_limit:user:'.sha1($userId);
         }
 
         // Fall back to IP-based rate limiting for guest users
-        return 'rate_limit:ip:' . sha1($request->ip());
+        return 'rate_limit:ip:'.sha1($request->ip());
     }
 
     /**
@@ -93,6 +93,7 @@ class RateLimitMiddleware
     protected function calculateRemainingAttempts(string $key, int $maxAttempts): int
     {
         $attempts = $this->limiter->attempts($key);
+
         return max(0, $maxAttempts - $attempts);
     }
 
@@ -143,10 +144,11 @@ class RateLimitMiddleware
     protected function formatRetryAfter(int $seconds): string
     {
         if ($seconds < 60) {
-            return $seconds . ' second' . ($seconds !== 1 ? 's' : '');
+            return $seconds.' second'.($seconds !== 1 ? 's' : '');
         }
 
         $minutes = ceil($seconds / 60);
-        return $minutes . ' minute' . ($minutes !== 1 ? 's' : '');
+
+        return $minutes.' minute'.($minutes !== 1 ? 's' : '');
     }
 }

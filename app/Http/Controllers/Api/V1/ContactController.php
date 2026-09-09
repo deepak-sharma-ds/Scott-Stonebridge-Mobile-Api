@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Contracts\Services\ContactServiceInterface;
 use App\DTOs\Contact\ContactDTO;
+use App\Exceptions\ShopifyApiException;
 use App\Http\Controllers\Base\BaseApiController;
 use App\Http\Requests\Contact\ContactFormRequest;
 use Illuminate\Http\JsonResponse;
@@ -11,11 +12,11 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Contact Controller (v1)
- * 
+ *
  * Handles contact form submission endpoint.
  * Provides public contact form for customer inquiries.
  * Extends BaseApiController for standardized responses.
- * 
+ *
  * Requirements: 9.5, 9.6, 9.7, 9.8, 9.9, 9.10
  */
 class ContactController extends BaseApiController
@@ -26,13 +27,10 @@ class ContactController extends BaseApiController
 
     /**
      * Submit contact form
-     * 
+     *
      * Processes contact form submissions and sends email notifications.
      * Public endpoint - no authentication required.
      * Rate limited to prevent abuse.
-     * 
-     * @param ContactFormRequest $request
-     * @return JsonResponse
      */
     public function store(ContactFormRequest $request): JsonResponse
     {
@@ -52,7 +50,7 @@ class ContactController extends BaseApiController
                 [],
                 201
             );
-        } catch (\App\Exceptions\ShopifyApiException $e) {
+        } catch (ShopifyApiException $e) {
             Log::error('Contact form submission failed - API error', [
                 'correlation_id' => $this->getCorrelationId(),
                 'error' => $e->getMessage(),

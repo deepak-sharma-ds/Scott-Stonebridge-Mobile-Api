@@ -16,8 +16,8 @@ class ShopifyServiceProvider extends ServiceProvider
     public function register(): void
     {
         // Storefront + Admin services
-        $this->app->singleton(StorefrontService::class, fn() => new StorefrontService());
-        $this->app->singleton(AdminService::class, fn() => new AdminService());
+        $this->app->singleton(StorefrontService::class, fn () => new StorefrontService);
+        $this->app->singleton(AdminService::class, fn () => new AdminService);
 
         // Shopify Manager
         $this->app->singleton('shopify', function ($app) {
@@ -29,7 +29,7 @@ class ShopifyServiceProvider extends ServiceProvider
 
         // 💡 Register your new GraphQLLoaderService here
         $this->app->singleton('graphql.loader', function () {
-            return new GraphQLLoaderService();
+            return new GraphQLLoaderService;
         });
     }
 

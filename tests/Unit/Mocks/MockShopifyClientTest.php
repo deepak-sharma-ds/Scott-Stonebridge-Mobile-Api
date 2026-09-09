@@ -12,7 +12,7 @@ class MockShopifyClientTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->client = new MockShopifyClient();
+        $this->client = new MockShopifyClient;
     }
 
     public function test_mock_response_can_be_configured(): void

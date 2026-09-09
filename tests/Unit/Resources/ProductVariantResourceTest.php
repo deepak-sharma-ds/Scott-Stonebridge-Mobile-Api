@@ -9,7 +9,7 @@ use Tests\TestCase;
 
 /**
  * ProductVariantResource Unit Tests
- * 
+ *
  * Tests transformation logic from ProductVariantDTO to API response format.
  * Validates field mapping, pricing information, and edge cases.
  */
@@ -328,7 +328,7 @@ class ProductVariantResourceTest extends TestCase
         $this->assertArrayHasKey('quantity_available', $result);
         $this->assertArrayHasKey('selected_options', $result);
         $this->assertArrayHasKey('weight_unit', $result);
-        
+
         // Verify camelCase fields are NOT present
         $this->assertArrayNotHasKey('currencyCode', $result);
         $this->assertArrayNotHasKey('compareAtPrice', $result);

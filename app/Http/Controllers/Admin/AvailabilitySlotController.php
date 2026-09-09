@@ -12,8 +12,6 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\Rule;
 use Validator;
 
-
-
 class AvailabilitySlotController extends Controller
 {
     private $bookingService;
@@ -22,10 +20,12 @@ class AvailabilitySlotController extends Controller
     {
         $this->bookingService = $bookingService;
     }
+
     public function index()
     {
         $query = AvailabilityDate::with('timeSlots')->where('user_id', Auth::id())->orderBy('date', 'desc');
         $availability_dates = $query->latest()->paginate(config('Reading.nodes_per_page'));
+
         return view('admin.availability.index', compact('availability_dates'));
     }
 
@@ -38,7 +38,7 @@ class AvailabilitySlotController extends Controller
     {
 
         $validator = Validator::make($request->all(), [
-            'date' => 'required|date|unique:availability_dates,date,NULL,id,user_id,' . Auth::id(),
+            'date' => 'required|date|unique:availability_dates,date,NULL,id,user_id,'.Auth::id(),
             'time_slots' => 'required|array',
             'time_slots.*.start_time' => 'required',
             'time_slots.*.end_time' => 'required',
@@ -55,7 +55,7 @@ class AvailabilitySlotController extends Controller
         $validator->validate();
 
         $request->validate([
-            'date' => 'required|date|unique:availability_dates,date,NULL,id,user_id,' . Auth::id(),
+            'date' => 'required|date|unique:availability_dates,date,NULL,id,user_id,'.Auth::id(),
             'time_slots' => 'required|array',
             'time_slots.*.start_time' => 'required|date_format:H:i',
             'time_slots.*.end_time' => 'required|date_format:H:i|after:start_time',
@@ -80,6 +80,7 @@ class AvailabilitySlotController extends Controller
     public function edit($id)
     {
         $availabilityDate = AvailabilityDate::with('timeSlots')->findOrFail($id);
+
         return view('admin.availability.edit', compact('availabilityDate'));
     }
 
@@ -134,6 +135,7 @@ class AvailabilitySlotController extends Controller
         }
         $availabilityDate->timeSlots()->delete();
         $availabilityDate->delete();
+
         return redirect()->route('admin.availability.index')->with('success', 'Availability slot deleted successfully.');
     }
 
@@ -142,12 +144,12 @@ class AvailabilitySlotController extends Controller
         $timeSlot = TimeSlot::findOrFail($id);
 
         $meeting = ScheduledMeeting::where('time_slot_id', $timeSlot->id)
-            ->when($timeSlot->availability_date_id, fn($q) => $q->where('availability_date_id', $timeSlot->availability_date_id))
+            ->when($timeSlot->availability_date_id, fn ($q) => $q->where('availability_date_id', $timeSlot->availability_date_id))
             ->exists();
         if ($meeting) {
             return response()->json([
                 'success' => false,
-                'message' => 'Cannot delete this slot as it has booked meetings. Please reschedule or cancel the bookings first.'
+                'message' => 'Cannot delete this slot as it has booked meetings. Please reschedule or cancel the bookings first.',
             ]);
         }
 

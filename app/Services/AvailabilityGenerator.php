@@ -7,9 +7,9 @@ use App\Models\AvailabilityTemplate;
 use App\Models\ScheduledMeeting;
 use App\Models\TimeSlot;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Collection;
 
 class AvailabilityGenerator
 {
@@ -23,9 +23,6 @@ class AvailabilityGenerator
     /**
      * Generate slots for given date range (inclusive) for a given user id
      *
-     * @param Carbon $start
-     * @param Carbon $end
-     * @param int $userId
      * @return array ['created' => int, 'skipped_holiday' => int, 'skipped_existing' => int, 'skipped_booked' => int]
      */
     public function generateForRange(Carbon $start, Carbon $end, int $userId): array
@@ -56,12 +53,14 @@ class AvailabilityGenerator
             if (in_array($dateStr, $holidays)) {
                 $this->log->info("Skipping {$dateStr} ({$dayName}) - Bank Holiday");
                 $stats['skipped_holiday']++;
+
                 continue;
             }
 
             // No template for the weekday
             if (empty($templates[$dayName]) || $templates[$dayName]->isEmpty()) {
                 $stats['skipped_no_template']++;
+
                 continue;
             }
 
@@ -72,7 +71,7 @@ class AvailabilityGenerator
             ]);
 
             // If there's already a scheduled meeting for this date and template wants to modify slots we'll still attempt only to add missing slots but not delete existing ones.
-            $existingSlots = $availabilityDate->timeSlots()->get()->map(fn($s) => "{$s->start_time}-{$s->end_time}")->toArray();
+            $existingSlots = $availabilityDate->timeSlots()->get()->map(fn ($s) => "{$s->start_time}-{$s->end_time}")->toArray();
 
             // For each template slot for this weekday
             foreach ($templates[$dayName] as $template) {
@@ -82,6 +81,7 @@ class AvailabilityGenerator
                 if (in_array($slotKey, $existingSlots)) {
                     $this->log->info("Skipping creation for {$dateStr} {$slotKey} - already exists");
                     $stats['skipped_existing_slot']++;
+
                     continue;
                 }
 
@@ -96,13 +96,14 @@ class AvailabilityGenerator
                         // If meeting has time_slot_id then we cannot easily compare; but check by datetime if possible (best-effort)
                         // We assume ScheduledMeeting->datetime column exists and is a timestamp in the same timezone.
                         $q->whereNotNull('datetime')
-                            ->whereRaw("TIME(datetime) BETWEEN ? AND ?", [$template->start_time, $template->end_time]);
+                            ->whereRaw('TIME(datetime) BETWEEN ? AND ?', [$template->start_time, $template->end_time]);
                     })
                     ->exists();
 
                 if ($hasBooking || $overlapBooking) {
                     $this->log->warning("Skipping {$dateStr} {$slotKey} — existing booking present");
                     $stats['skipped_booked']++;
+
                     continue;
                 }
 
@@ -132,15 +133,17 @@ class AvailabilityGenerator
             if ($resp->ok()) {
                 $data = $resp->json();
                 $events = data_get($data, 'england-and-wales.events', []);
+
                 return collect($events)
-                    ->filter(fn($e) => Carbon::parse($e['date'])->year === $year)
-                    ->map(fn($e) => $e['date'])
+                    ->filter(fn ($e) => Carbon::parse($e['date'])->year === $year)
+                    ->map(fn ($e) => $e['date'])
                     ->values()
                     ->toArray();
             }
         } catch (\Throwable $e) {
-            $this->log->error("Failed to fetch bank holidays: " . $e->getMessage());
+            $this->log->error('Failed to fetch bank holidays: '.$e->getMessage());
         }
+
         return [];
     }
 }

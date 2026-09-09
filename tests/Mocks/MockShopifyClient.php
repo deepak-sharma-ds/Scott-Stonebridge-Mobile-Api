@@ -2,19 +2,19 @@
 
 namespace Tests\Mocks;
 
+use App\Contracts\Shopify\AdminApiClientInterface;
 use App\Contracts\Shopify\ShopifyClientInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
-use App\Contracts\Shopify\AdminApiClientInterface;
 
 /**
  * Mock implementation of ShopifyClientInterface for testing
- * 
+ *
  * This mock allows tests to simulate Shopify API responses without
  * making actual HTTP requests. Responses can be configured per query path.
- * 
+ *
  * Implements all Shopify client interfaces for maximum flexibility in tests.
  */
-class MockShopifyClient implements ShopifyClientInterface, StorefrontApiClientInterface, AdminApiClientInterface
+class MockShopifyClient implements AdminApiClientInterface, ShopifyClientInterface, StorefrontApiClientInterface
 {
     /**
      * Mocked responses keyed by query path
@@ -25,15 +25,11 @@ class MockShopifyClient implements ShopifyClientInterface, StorefrontApiClientIn
 
     /**
      * Last request duration in milliseconds
-     *
-     * @var float
      */
     private float $lastRequestDuration = 0.0;
 
     /**
      * Last request GraphQL cost
-     *
-     * @var int|null
      */
     private ?int $lastRequestCost = null;
 
@@ -46,8 +42,6 @@ class MockShopifyClient implements ShopifyClientInterface, StorefrontApiClientIn
 
     /**
      * Circuit breaker name
-     *
-     * @var string|null
      */
     private ?string $circuitBreakerName = null;
 
@@ -61,9 +55,8 @@ class MockShopifyClient implements ShopifyClientInterface, StorefrontApiClientIn
     /**
      * Configure a mock response for a specific query path
      *
-     * @param string $queryPath Path to the GraphQL query file
-     * @param array $response Response data to return
-     * @return void
+     * @param  string  $queryPath  Path to the GraphQL query file
+     * @param  array  $response  Response data to return
      */
     public function mockResponse(string $queryPath, array $response): void
     {
@@ -73,11 +66,10 @@ class MockShopifyClient implements ShopifyClientInterface, StorefrontApiClientIn
     /**
      * Configure mock response with performance metrics
      *
-     * @param string $queryPath Path to the GraphQL query file
-     * @param array $response Response data to return
-     * @param float $duration Request duration in milliseconds
-     * @param int|null $cost GraphQL cost
-     * @return void
+     * @param  string  $queryPath  Path to the GraphQL query file
+     * @param  array  $response  Response data to return
+     * @param  float  $duration  Request duration in milliseconds
+     * @param  int|null  $cost  GraphQL cost
      */
     public function mockResponseWithMetrics(
         string $queryPath,
@@ -93,14 +85,15 @@ class MockShopifyClient implements ShopifyClientInterface, StorefrontApiClientIn
     /**
      * Execute a GraphQL query
      *
-     * @param string $queryPath Path to the GraphQL query file
-     * @param array $variables Query variables
+     * @param  string  $queryPath  Path to the GraphQL query file
+     * @param  array  $variables  Query variables
      * @return array Response data
+     *
      * @throws \Exception If no mock response is configured
      */
     public function query(string $queryPath, array $variables = []): array
     {
-        if (!isset($this->responses[$queryPath])) {
+        if (! isset($this->responses[$queryPath])) {
             throw new \Exception("No mock response configured for query path: {$queryPath}");
         }
 
@@ -110,9 +103,8 @@ class MockShopifyClient implements ShopifyClientInterface, StorefrontApiClientIn
     /**
      * Configure retry behavior for the next request
      *
-     * @param int $maxAttempts Maximum number of retry attempts
-     * @param int $delayMs Initial delay in milliseconds
-     * @return self
+     * @param  int  $maxAttempts  Maximum number of retry attempts
+     * @param  int  $delayMs  Initial delay in milliseconds
      */
     public function withRetry(int $maxAttempts, int $delayMs): self
     {
@@ -127,8 +119,7 @@ class MockShopifyClient implements ShopifyClientInterface, StorefrontApiClientIn
     /**
      * Enable circuit breaker for the next request
      *
-     * @param string $breakerName Circuit breaker identifier
-     * @return self
+     * @param  string  $breakerName  Circuit breaker identifier
      */
     public function withCircuitBreaker(string $breakerName): self
     {
@@ -140,9 +131,8 @@ class MockShopifyClient implements ShopifyClientInterface, StorefrontApiClientIn
     /**
      * Enable caching for the next request
      *
-     * @param int $ttl Cache time-to-live in seconds
-     * @param array $tags Cache tags
-     * @return self
+     * @param  int  $ttl  Cache time-to-live in seconds
+     * @param  array  $tags  Cache tags
      */
     public function withCache(int $ttl, array $tags = []): self
     {
@@ -156,8 +146,6 @@ class MockShopifyClient implements ShopifyClientInterface, StorefrontApiClientIn
 
     /**
      * Get the duration of the last request in milliseconds
-     *
-     * @return float
      */
     public function getLastRequestDuration(): float
     {
@@ -166,8 +154,6 @@ class MockShopifyClient implements ShopifyClientInterface, StorefrontApiClientIn
 
     /**
      * Get the GraphQL cost of the last request
-     *
-     * @return int|null
      */
     public function getLastRequestCost(): ?int
     {
@@ -186,8 +172,6 @@ class MockShopifyClient implements ShopifyClientInterface, StorefrontApiClientIn
 
     /**
      * Get the circuit breaker name
-     *
-     * @return string|null
      */
     public function getCircuitBreakerName(): ?string
     {
@@ -206,8 +190,6 @@ class MockShopifyClient implements ShopifyClientInterface, StorefrontApiClientIn
 
     /**
      * Clear all mocked responses
-     *
-     * @return void
      */
     public function clearMocks(): void
     {
@@ -222,8 +204,7 @@ class MockShopifyClient implements ShopifyClientInterface, StorefrontApiClientIn
     /**
      * Check if a mock response exists for a query path
      *
-     * @param string $queryPath Path to the GraphQL query file
-     * @return bool
+     * @param  string  $queryPath  Path to the GraphQL query file
      */
     public function hasMockFor(string $queryPath): bool
     {
@@ -233,9 +214,9 @@ class MockShopifyClient implements ShopifyClientInterface, StorefrontApiClientIn
     /**
      * Query with currency context (StorefrontApiClientInterface)
      *
-     * @param string $queryPath Path to the GraphQL query file
-     * @param array $variables Query variables
-     * @param string|null $currencyCode Currency code (ISO 4217)
+     * @param  string  $queryPath  Path to the GraphQL query file
+     * @param  array  $variables  Query variables
+     * @param  string|null  $currencyCode  Currency code (ISO 4217)
      * @return array Response data
      */
     public function queryWithCurrency(string $queryPath, array $variables = [], ?string $currencyCode = null): array
@@ -246,9 +227,9 @@ class MockShopifyClient implements ShopifyClientInterface, StorefrontApiClientIn
     /**
      * Query with automatic caching (StorefrontApiClientInterface)
      *
-     * @param string $queryPath Path to the GraphQL query file
-     * @param array $variables Query variables
-     * @param string $resourceType Resource type for cache tagging
+     * @param  string  $queryPath  Path to the GraphQL query file
+     * @param  array  $variables  Query variables
+     * @param  string  $resourceType  Resource type for cache tagging
      * @return array Response data
      */
     public function queryWithCache(string $queryPath, array $variables = [], string $resourceType = 'storefront'): array
@@ -259,10 +240,10 @@ class MockShopifyClient implements ShopifyClientInterface, StorefrontApiClientIn
     /**
      * Query with both currency context and caching (StorefrontApiClientInterface)
      *
-     * @param string $queryPath Path to the GraphQL query file
-     * @param array $variables Query variables
-     * @param string $resourceType Resource type for cache tagging
-     * @param string|null $currencyCode Currency code (ISO 4217)
+     * @param  string  $queryPath  Path to the GraphQL query file
+     * @param  array  $variables  Query variables
+     * @param  string  $resourceType  Resource type for cache tagging
+     * @param  string|null  $currencyCode  Currency code (ISO 4217)
      * @return array Response data
      */
     public function queryWithCurrencyAndCache(

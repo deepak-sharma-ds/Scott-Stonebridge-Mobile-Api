@@ -7,7 +7,6 @@ use App\Contracts\Shopify\StorefrontApiClientInterface;
 
 class StorefrontApiClient extends BaseShopifyClient implements StorefrontApiClientInterface
 {
-
     /**
      * Get the API endpoint URL
      */
@@ -44,8 +43,8 @@ class StorefrontApiClient extends BaseShopifyClient implements StorefrontApiClie
      * functionality like automatic cache tagging, circuit breaker support,
      * and currency context handling.
      *
-     * @param string $queryPath Path to the GraphQL query file (e.g., "storefront/products/get_products")
-     * @param array $variables Query variables
+     * @param  string  $queryPath  Path to the GraphQL query file (e.g., "storefront/products/get_products")
+     * @param  array  $variables  Query variables
      * @return array Response data
      */
     public function query(string $queryPath, array $variables = []): array
@@ -58,7 +57,7 @@ class StorefrontApiClient extends BaseShopifyClient implements StorefrontApiClie
         // Execute with circuit breaker if enabled
         if ($this->circuitBreakerName !== null) {
             return $this->executeWithCircuitBreaker(
-                fn() => parent::query($queryPath, $variables),
+                fn () => parent::query($queryPath, $variables),
                 $this->circuitBreakerName
             );
         }
@@ -72,26 +71,26 @@ class StorefrontApiClient extends BaseShopifyClient implements StorefrontApiClie
      * Automatically adds currency context to the query variables if available
      * from the request context.
      *
-     * @param string $queryPath Path to the GraphQL query file
-     * @param array $variables Query variables
-     * @param string|null $currencyCode Currency code (ISO 4217)
+     * @param  string  $queryPath  Path to the GraphQL query file
+     * @param  array  $variables  Query variables
+     * @param  string|null  $currencyCode  Currency code (ISO 4217)
      * @return array Response data
      */
     public function queryWithCurrency(string $queryPath, array $variables = [], ?string $currencyCode = null): array
     {
         // Get currency from parameter, request context, or config default
-        $currency = $currencyCode 
-            ?? request()->header('X-Currency') 
+        $currency = $currencyCode
+            ?? request()->header('X-Currency')
             ?? request()->get('currency')
             ?? config('shopify.currency', 'GBP');
 
         // Add currency to variables if not already present
-        if (!isset($variables['currency'])) {
+        if (! isset($variables['currency'])) {
             $variables['currency'] = $currency;
         }
 
         // Add currency to cache tags for currency-specific caching
-        $tags = array_merge($this->cacheTags, ['currency:' . strtoupper($currency)]);
+        $tags = array_merge($this->cacheTags, ['currency:'.strtoupper($currency)]);
         $this->cacheTags = $tags;
 
         return $this->query($queryPath, $variables);
@@ -103,9 +102,9 @@ class StorefrontApiClient extends BaseShopifyClient implements StorefrontApiClie
      * Convenience method that automatically enables caching with default TTL
      * based on the operation type.
      *
-     * @param string $queryPath Path to the GraphQL query file
-     * @param array $variables Query variables
-     * @param string $resourceType Resource type for cache tagging (e.g., 'product', 'cart', 'collection')
+     * @param  string  $queryPath  Path to the GraphQL query file
+     * @param  array  $variables  Query variables
+     * @param  string  $resourceType  Resource type for cache tagging (e.g., 'product', 'cart', 'collection')
      * @return array Response data
      */
     public function queryWithCache(string $queryPath, array $variables = [], string $resourceType = 'storefront'): array
@@ -118,7 +117,7 @@ class StorefrontApiClient extends BaseShopifyClient implements StorefrontApiClie
 
         // Add currency tag if currency is in variables
         if (isset($variables['currency'])) {
-            $tags[] = 'currency:' . strtoupper($variables['currency']);
+            $tags[] = 'currency:'.strtoupper($variables['currency']);
         }
 
         return $this->withCache($ttl, $tags)->query($queryPath, $variables);
@@ -129,10 +128,10 @@ class StorefrontApiClient extends BaseShopifyClient implements StorefrontApiClie
      *
      * Combines currency context handling with automatic caching.
      *
-     * @param string $queryPath Path to the GraphQL query file
-     * @param array $variables Query variables
-     * @param string $resourceType Resource type for cache tagging
-     * @param string|null $currencyCode Currency code (ISO 4217)
+     * @param  string  $queryPath  Path to the GraphQL query file
+     * @param  array  $variables  Query variables
+     * @param  string  $resourceType  Resource type for cache tagging
+     * @param  string|null  $currencyCode  Currency code (ISO 4217)
      * @return array Response data
      */
     public function queryWithCurrencyAndCache(
@@ -142,13 +141,13 @@ class StorefrontApiClient extends BaseShopifyClient implements StorefrontApiClie
         ?string $currencyCode = null
     ): array {
         // Get currency
-        $currency = $currencyCode 
-            ?? request()->header('X-Currency') 
+        $currency = $currencyCode
+            ?? request()->header('X-Currency')
             ?? request()->get('currency')
             ?? config('shopify.currency', 'GBP');
 
         // Add currency to variables
-        if (!isset($variables['currency'])) {
+        if (! isset($variables['currency'])) {
             $variables['currency'] = $currency;
         }
 
@@ -156,7 +155,7 @@ class StorefrontApiClient extends BaseShopifyClient implements StorefrontApiClie
         $ttl = $this->getCacheTtlForResource($resourceType);
 
         // Set cache tags including currency
-        $tags = ['shopify', 'storefront', $resourceType, 'currency:' . strtoupper($currency)];
+        $tags = ['shopify', 'storefront', $resourceType, 'currency:'.strtoupper($currency)];
 
         return $this->withCache($ttl, $tags)->query($queryPath, $variables);
     }
@@ -164,7 +163,6 @@ class StorefrontApiClient extends BaseShopifyClient implements StorefrontApiClie
     /**
      * Get cache TTL for a resource type
      *
-     * @param string $resourceType
      * @return int TTL in seconds
      */
     protected function getCacheTtlForResource(string $resourceType): int
@@ -186,13 +184,13 @@ class StorefrontApiClient extends BaseShopifyClient implements StorefrontApiClie
     {
         // Extract currency from variables if present
         $currency = $variables['currency'] ?? 'default';
-        
+
         // Remove currency from variables for hash calculation to avoid duplication
         $variablesForHash = $variables;
         unset($variablesForHash['currency']);
-        
+
         $variablesHash = md5(json_encode($variablesForHash));
-        
+
         return "shopify:{$this->getApiType()}:{$currency}:{$queryPath}:{$variablesHash}";
     }
 }

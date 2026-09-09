@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Log;
 
 /**
  * Currency Country Map Service
- * 
+ *
  * Provides dynamic mapping between currency codes and country codes
  * based on Shopify markets data with fallback to static mapping.
  */
@@ -17,7 +17,7 @@ class CurrencyCountryMapService
     /**
      * Fallback static mapping for common currencies
      * Used when Shopify markets data is unavailable
-     * 
+     *
      * @var array<string, string>
      */
     protected static array $fallbackMapping = [
@@ -56,8 +56,8 @@ class CurrencyCountryMapService
 
     /**
      * Get country code for a given currency
-     * 
-     * @param string $currencyCode Currency code (e.g., 'GBP', 'USD')
+     *
+     * @param  string  $currencyCode  Currency code (e.g., 'GBP', 'USD')
      * @return string Country code (e.g., 'GB', 'US')
      */
     public static function getCountryCode(string $currencyCode): string
@@ -66,7 +66,7 @@ class CurrencyCountryMapService
 
         // Try to get from dynamic Shopify markets
         $countryCode = static::getCountryCodeFromMarkets($currencyCode);
-        
+
         if ($countryCode) {
             return $countryCode;
         }
@@ -77,8 +77,8 @@ class CurrencyCountryMapService
 
     /**
      * Get country code from Shopify markets for a given currency
-     * 
-     * @param string $currencyCode Currency code
+     *
+     * @param  string  $currencyCode  Currency code
      * @return string|null Country code or null if not found
      */
     protected static function getCountryCodeFromMarkets(string $currencyCode): ?string
@@ -99,14 +99,14 @@ class CurrencyCountryMapService
                 'currency' => $currencyCode,
                 'error' => $e->getMessage(),
             ]);
-            
+
             return null;
         }
     }
 
     /**
      * Build currency-to-country mapping from Shopify markets
-     * 
+     *
      * @return array<string, string>
      */
     protected static function buildCurrencyToCountryMap(): array
@@ -114,41 +114,41 @@ class CurrencyCountryMapService
         try {
             $shopService = app(ShopServiceInterface::class);
             $shopData = $shopService->getMarkets();
-            
+
             $mapping = [];
-            
+
             // Build mapping from markets
             // Use the first country for each currency
             foreach ($shopData->markets as $market) {
-                if (!isset($mapping[$market->currencyCode])) {
+                if (! isset($mapping[$market->currencyCode])) {
                     $mapping[$market->currencyCode] = $market->countryCode;
                 }
             }
-            
+
             // Also add primary currency mapping
-            if (!isset($mapping[$shopData->primaryCurrency])) {
+            if (! isset($mapping[$shopData->primaryCurrency])) {
                 $mapping[$shopData->primaryCurrency] = $shopData->countryCode;
             }
-            
+
             return $mapping;
         } catch (\Exception $e) {
             Log::error('Failed to build currency-to-country map from Shopify', [
                 'error' => $e->getMessage(),
             ]);
-            
+
             return [];
         }
     }
 
     /**
      * Get all currency-to-country mappings
-     * 
+     *
      * @return array<string, string>
      */
     public static function getAllMappings(): array
     {
-        $dynamicMapping = static::getCountryCodeFromMarkets('') ? 
-            Cache::get('currency_to_country_map', []) : 
+        $dynamicMapping = static::getCountryCodeFromMarkets('') ?
+            Cache::get('currency_to_country_map', []) :
             [];
 
         // Merge dynamic with fallback (dynamic takes precedence)
@@ -157,8 +157,6 @@ class CurrencyCountryMapService
 
     /**
      * Clear the cached mapping
-     * 
-     * @return void
      */
     public static function clearCache(): void
     {
@@ -167,7 +165,7 @@ class CurrencyCountryMapService
 
     /**
      * Get fallback mapping
-     * 
+     *
      * @return array<string, string>
      */
     public static function getFallbackMapping(): array

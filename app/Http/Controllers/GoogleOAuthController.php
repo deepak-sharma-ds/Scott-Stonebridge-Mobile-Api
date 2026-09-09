@@ -2,16 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\Http\Request;
-use Google_Client;
 use App\Services\BookingService;
+use Google_Client;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class GoogleOAuthController extends Controller
 {
     private function getClient()
     {
-        $client = new Google_Client();
+        $client = new Google_Client;
 
         // Load credentials from config
         $client->setClientId(config('google.client_id') ?: env('GOOGLE_CLIENT_ID'));
@@ -45,7 +45,7 @@ class GoogleOAuthController extends Controller
 
         // Wrap payload + nonce together
         $state = json_encode([
-            'nonce'   => $nonce,
+            'nonce' => $nonce,
             'payload' => $payload,
         ]);
 
@@ -56,8 +56,6 @@ class GoogleOAuthController extends Controller
         ]);
     }
 
-
-
     public function handleCallback(Request $request, BookingService $bookingService)
     {
         Log::info('handleCallback started', ['query' => $request->query()]);
@@ -65,23 +63,25 @@ class GoogleOAuthController extends Controller
         // 🔒 1. Validate OAuth state (CSRF protection)
         $stateRaw = $request->query('state');
 
-        if (!$stateRaw) {
+        if (! $stateRaw) {
             Log::error('Missing OAuth state');
-            return redirect(config('app.frontend_url') . '?error=invalid_state');
+
+            return redirect(config('app.frontend_url').'?error=invalid_state');
         }
 
         $decodedState = json_decode($stateRaw, true);
 
         // Backwards compatibility with old flow (payload-only state)
-        if (!isset($decodedState['nonce'])) {
-            Log::warning("State missing nonce — backward compatibility mode");
+        if (! isset($decodedState['nonce'])) {
+            Log::warning('State missing nonce — backward compatibility mode');
             $stateRaw = $stateRaw; // use original payload
         } else {
             $nonce = $decodedState['nonce'];
 
-            if (!cache()->has("google_oauth_nonce_{$nonce}")) {
-                Log::error("State nonce mismatch / expired", ['nonce' => $nonce]);
-                return redirect(config('app.frontend_url') . '?error=state_mismatch');
+            if (! cache()->has("google_oauth_nonce_{$nonce}")) {
+                Log::error('State nonce mismatch / expired', ['nonce' => $nonce]);
+
+                return redirect(config('app.frontend_url').'?error=state_mismatch');
             }
 
             // Remove nonce immediately to prevent reuse
@@ -94,8 +94,9 @@ class GoogleOAuthController extends Controller
         // 🔄 2. Handle authorization code
         $code = $request->query('code');
 
-        if (!$code) {
+        if (! $code) {
             Log::error('Authorization code missing');
+
             return response()->json(['error' => 'Authorization code missing'], 400);
         }
 
@@ -105,11 +106,13 @@ class GoogleOAuthController extends Controller
             $token = $client->fetchAccessTokenWithAuthCode($code);
         } catch (\Exception $e) {
             Log::error('Failed to fetch access token', ['exception' => $e->getMessage()]);
+
             return response()->json(['error' => 'Failed to fetch access token'], 500);
         }
 
         if (isset($token['error'])) {
             Log::error('Token error', ['error' => $token['error_description'] ?? 'Unknown']);
+
             return response()->json(['error' => $token['error_description'] ?? 'Unknown error'], 400);
         }
 
@@ -119,8 +122,9 @@ class GoogleOAuthController extends Controller
         // 🔄 3. Extract your original formData (slot + user info)
         $formData = json_decode($stateRaw, true);
 
-        if (!is_array($formData)) {
+        if (! is_array($formData)) {
             Log::error('Invalid state payload JSON', ['payload' => $stateRaw]);
+
             return redirect(config('app.frontend_url'));
         }
 
@@ -134,16 +138,19 @@ class GoogleOAuthController extends Controller
             $result = $bookingService->bookMeeting($formData);
         } catch (\Exception $e) {
             Log::error('Error in booking flow', ['exception' => $e->getMessage()]);
-            return redirect(config('app.frontend_url') . '?error=' . urlencode('Internal server error during booking'));
+
+            return redirect(config('app.frontend_url').'?error='.urlencode('Internal server error during booking'));
         }
 
         // 5. Handle result
-        if (!empty($result['success'])) {
+        if (! empty($result['success'])) {
             Log::info('Booking successful', ['meeting_link' => $result['meeting_link']]);
-            return redirect(config('app.frontend_url') . '?meeting_link=' . urlencode($result['meeting_link']));
+
+            return redirect(config('app.frontend_url').'?meeting_link='.urlencode($result['meeting_link']));
         }
 
         Log::error('Booking failed', ['message' => $result['message'] ?? 'Unknown']);
-        return redirect(config('app.frontend_url') . '?error=' . urlencode($result['message'] ?? 'Booking failed'));
+
+        return redirect(config('app.frontend_url').'?error='.urlencode($result['message'] ?? 'Booking failed'));
     }
 }

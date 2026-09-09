@@ -31,6 +31,7 @@ class ProductRecommendationResource extends BaseApiResource
             'image' => $dto->image,
             'available' => $dto->available,
             'url' => $dto->url,
+            'tags' => $dto->tags,
         ];
     }
 }

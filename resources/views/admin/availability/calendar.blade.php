@@ -110,7 +110,7 @@
     position: fixed;
     top: 0;
     right: 0;
-    height: 100vh;
+    height: 100%;
     width: 400px;
     max-width: 92vw;
     background: #fff;
@@ -246,7 +246,7 @@
             {{-- Add new slot --}}
             <div>
                 <label class="form-label">Add New Slot</label>
-                <div style="display:flex;gap:0.5rem;align-items:center;">
+                <div style="display:flex;gap:0.5rem;align-items:center; flex-wrap: wrap;">
                     <input type="time" id="new_slot_start" class="form-control" style="flex:1;">
                     <span style="color:var(--text-muted);font-weight:600;flex-shrink:0;">—</span>
                     <input type="time" id="new_slot_end" class="form-control" style="flex:1;">

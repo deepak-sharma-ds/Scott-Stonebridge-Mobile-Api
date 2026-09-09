@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\AvailabilityTemplate;
-use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
 class AvailabilityTemplateSeeder extends Seeder
@@ -23,10 +22,10 @@ class AvailabilityTemplateSeeder extends Seeder
 
                 // $slot = ['19:00', '19:30']
                 AvailabilityTemplate::firstOrCreate([
-                    'user_id'     => $userId,
+                    'user_id' => $userId,
                     'day_of_week' => $day,
-                    'start_time'  => $slot[0],
-                    'end_time'    => $slot[1],
+                    'start_time' => $slot[0],
+                    'end_time' => $slot[1],
                 ]);
             }
         }

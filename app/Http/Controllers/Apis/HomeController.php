@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers\Apis;
 
-use Illuminate\Http\Request;
 use App\Http\Controllers\Controller;
-use Illuminate\Support\Facades\Http;
 use App\Services\APIShopifyService;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Validator;
 
 class HomeController extends Controller
@@ -43,7 +43,6 @@ class HomeController extends Controller
     //     ]);
     // }
 
-
     public function home()
     {
         // 1. Get Home Page Sections
@@ -55,7 +54,6 @@ class HomeController extends Controller
          * $data['sections']['1632364695b0f88b4f'] => Horoscope
          * $data['sections']['lookbook_slider_f4w4Mp'] => Top rated products
          */
-
         if (isset($data['errors'])) {
             return response()->json(['error' => $data['errors']], 500);
         }
@@ -69,12 +67,12 @@ class HomeController extends Controller
         // 3. Fetch sections/header-group.json from theme assets
         $headerResponse = Http::withHeaders([
             'X-Shopify-Access-Token' => config('shopify.access_token'),
-        ])->get("https://" . config('shopify.store_domain') . "/admin/api/2024-07/themes/{$themeId}/assets.json", [
+        ])->get('https://'.config('shopify.store_domain')."/admin/api/2024-07/themes/{$themeId}/assets.json", [
             'asset[key]' => 'sections/header-group.json',
         ]);
 
         $headerRaw = $headerResponse->json()['asset']['value'] ?? null;
-        if (!$headerRaw) {
+        if (! $headerRaw) {
             return response()->json(['error' => 'Header group file not found.'], 500);
         }
 
@@ -98,7 +96,7 @@ class HomeController extends Controller
 
                         if ($logoPath && str_starts_with($logoPath, 'shopify://shop_images/')) {
                             $imageFile = str_replace('shopify://shop_images/', '', $logoPath);
-                            $logoUrl = "https://" . config('shopify.store_domain') . "/cdn/shop/files/{$imageFile}";
+                            $logoUrl = 'https://'.config('shopify.store_domain')."/cdn/shop/files/{$imageFile}";
                             break 2; // exit both loops
                         }
                     }
@@ -125,13 +123,12 @@ class HomeController extends Controller
                     'main' => $mainMenu,
                     'footer' => $footerMenu,
                     'account' => $accountMenu,
-                ]
+                ],
             ],
         ]);
     }
 
-
-    function replaceShopifyImagePaths(array &$array)
+    public function replaceShopifyImagePaths(array &$array)
     {
         foreach ($array as $key => &$value) {
             if (is_array($value)) {
@@ -153,7 +150,7 @@ class HomeController extends Controller
             'email' => 'required|email',
         ]);
 
-        if($validator->fails()) {
+        if ($validator->fails()) {
             return response()->json([
                 'message' => 'Validation failed',
                 'errors' => $validator->errors(),
@@ -161,25 +158,26 @@ class HomeController extends Controller
         }
 
         try {
-            
+
             $email = $request->input('email');
             $response = Http::withHeaders([
                 'X-Shopify-Access-Token' => config('shopify.access_token'),
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
-            ])->post("https://" . config('shopify.store_domain') . "/admin/api/2025-01/customers.json", [
+            ])->post('https://'.config('shopify.store_domain').'/admin/api/2025-01/customers.json', [
                 'customer' => [
                     'email' => $email,
                     'accepts_marketing' => true,
-                ]
+                ],
             ]);
-    
+
             if ($response->successful()) {
                 return response()->json([
                     'message' => 'Subscribed successfully!',
                     'shopify_response' => $response->json(),
                 ]);
             }
+
             return response()->json([
                 'error' => 'Subscription failed',
                 'details' => $response->json(),
@@ -187,10 +185,9 @@ class HomeController extends Controller
         } catch (\Throwable $th) {
             return response()->json([
                 'error' => 'Failed to join our mailing list',
-                'message' => $th->getMessage()
+                'message' => $th->getMessage(),
             ], 400);
         }
 
-        
     }
 }

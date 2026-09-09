@@ -12,7 +12,7 @@ class ShopifyCacheStrategyTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->strategy = new ShopifyCacheStrategy();
+        $this->strategy = new ShopifyCacheStrategy;
     }
 
     /** @test */
@@ -221,4 +221,3 @@ class ShopifyCacheStrategyTest extends TestCase
         $this->assertEquals($tagsUppercase, $tagsLowercase);
     }
 }
-

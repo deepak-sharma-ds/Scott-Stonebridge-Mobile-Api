@@ -9,11 +9,11 @@ use Illuminate\Queue\SerializesModels;
 
 /**
  * Contact Form Mail
- * 
+ *
  * Mailable class for sending contact form submission notifications
  * to the admin email address. Contains all contact form data including
  * name, email, subject, message, and optional phone number.
- * 
+ *
  * Requirements: 11.9, 11.11, 11.12
  */
 class ContactFormMail extends Mailable
@@ -22,15 +22,13 @@ class ContactFormMail extends Mailable
 
     /**
      * Contact form data
-     *
-     * @var ContactDTO
      */
     public ContactDTO $contact;
 
     /**
      * Create a new message instance.
      *
-     * @param ContactDTO $contact Contact form data
+     * @param  ContactDTO  $contact  Contact form data
      */
     public function __construct(ContactDTO $contact)
     {
