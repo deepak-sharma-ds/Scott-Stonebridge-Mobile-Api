@@ -8,6 +8,8 @@ use App\Http\Controllers\Webhook\KlaviyoFlowWebhookController;
 use App\Http\Controllers\Webhook\ShopifyReadingOrderCancelledWebhookController;
 use App\Http\Controllers\Webhook\ShopifyReadingOrderUpdatedWebhookController;
 use App\Http\Controllers\Webhook\ShopifyReadingWebhookController;
+use App\Http\Controllers\KlaviyoWebhookController;
+use App\Http\Controllers\ShopifyWebhookController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -15,6 +17,7 @@ use Illuminate\Support\Facades\Route;
  */
 Route::prefix('webhook')->group(function () {
     Route::post('/shopify', [ShopifyController::class, 'handleAppointmentBookingWebhook']);
+    Route::post('/shopify/consent-update', [ShopifyWebhookController::class, 'consentUpdate']);
 
     Route::post('/order-paid', [ShopifyController::class, 'orderPaid']);
 
