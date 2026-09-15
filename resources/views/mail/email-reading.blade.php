@@ -44,13 +44,13 @@
                     {{-- Body --}}
                     <tr>
                         <td class="ss-body" style="padding:36px 32px;">
-                            <div style="font-size:15px;color:#4a3a5e;line-height:1.6;margin:0 0 22px;">{!! $emailContent !!}</div>
+                            <div style="font-size:15px;color:#4a3a5e;line-height:1.5;margin:0 0 22px;">{!! $emailContent !!}</div>
 
-                            <div class="ss-reading" style="color:#2b1a3d;font-size:15px;line-height:1.75;white-space:pre-line;">{{ $readingBody }}</div>
+                            <div class="ss-reading" style="color:#2b1a3d;font-size:15px;line-height:1.5;">{{ $readingBody }}</div>
 
                             <hr style="border:none;border-top:1px solid #e5ddef;margin:28px 0;">
 
-                            <div style="font-size:15px;color:#4a3a5e;line-height:1.6;">{!! $emailFooter !!}</div>
+                            <div style="font-size:15px;color:#4a3a5e;line-height:1.5;">{!! $emailFooter !!}</div>
                         </td>
                     </tr>
 
