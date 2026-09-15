@@ -17,10 +17,12 @@ return new class extends Migration
 
         Schema::create('sync_events', function (Blueprint $table) {
             $table->id();
-            $table->string('email')->index();
-            $table->string('channel');       // 'email' or 'sms'
-            $table->string('state');         // 'subscribed' or 'unsubscribed'
-            $table->string('source');        // 'shopify' or 'klaviyo' - who WE wrote this to
+
+            $table->string('email', 191);
+            $table->string('channel', 20);
+            $table->string('state', 20);
+            $table->string('source', 20);
+
             $table->timestamp('synced_at');
             $table->timestamps();
 

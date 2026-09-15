@@ -4,7 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class SyncEvents extends Model
+class SyncEvent extends Model
 {
     protected $fillable = ['email', 'channel', 'state', 'source', 'synced_at'];
 

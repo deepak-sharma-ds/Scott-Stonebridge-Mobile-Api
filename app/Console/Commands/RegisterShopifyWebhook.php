@@ -3,16 +3,15 @@
 namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
-
-class RegisterShopifyWehbook extends Command
+use Illuminate\Support\Facades\Http;
+class RegisterShopifyWebhook extends Command
 {
     /**
      * The name and signature of the console command.
      *
      * @var string
      */
-    protected $signature = 'app:register-shopify-wehbook';
-
+    protected $signature = 'shopify:register-webhook {url}';
     /**
      * The console command description.
      *
@@ -26,8 +25,7 @@ class RegisterShopifyWehbook extends Command
     public function handle()
       {
         $ngrokUrl = rtrim($this->argument('url'), '/');
-        $webhookUri = $ngrokUrl . '/api/webhooks/shopify/consent-update';
-
+        $webhookUri = $ngrokUrl . '/webhook/shopify/consent-update';
         $shop = config('services.shopify.shop_domain');
         $token = config('services.shopify.admin_token');
 

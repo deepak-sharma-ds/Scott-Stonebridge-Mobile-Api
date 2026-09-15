@@ -1,6 +1,7 @@
 <?php
-
 namespace App\Http\Controllers\Webhook;
+
+use App\Http\Controllers\Controller;
 use App\Models\SyncEvent;
 use App\Services\KlaviyoService;
 use Illuminate\Http\Request;
