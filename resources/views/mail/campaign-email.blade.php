@@ -15,7 +15,7 @@
         }
     </style>
 </head>
-<body style="margin:0;padding:0;background-color:#f4f1ec;font-family:'Georgia','Times New Roman',serif;">
+<body style="margin:0;padding:0;background-color:#f4f1ec;font-family:'Arial','Times New Roman',serif;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f1ec;">
         <tr>
             <td align="center" class="ss-wrapper" style="padding:24px 12px;">
@@ -31,7 +31,7 @@
                     {{-- Body --}}
                     <tr>
                         <td class="ss-body" style="padding:36px 32px;">
-                            <h1 style="font-family:'Georgia',serif;font-size:22px;color:#3a1b5e;text-decoration:underline;margin:0 0 20px;">
+                            <h1 style="font-family:'Arial',serif;font-size:22px;color:#3a1b5e;text-decoration:underline;margin:0 0 20px;">
                                 Your Psychic Email Reading
                             </h1>
 
@@ -41,7 +41,7 @@
 
                             <div style="font-size:15px;color:#4a3a5e;line-height:1.6;margin:0 0 22px;white-space:pre-line;">{!! $emailContent !!}</div>
 
-                            <div class="ss-reading" style="background:#faf7f2;border-left:4px solid #f5d97a;border-radius:0 6px 6px 0;padding:26px 28px;color:#2b1a3d;font-size:15px;line-height:1.75;white-space:pre-line;">{{ $campaignBody }}</div>
+                            <div class="ss-reading" style="background:#faf7f2;color:#2b1a3d;font-size:15px;line-height:1.75;white-space:pre-line;">{{ $campaignBody }}</div>
 
                             <hr style="border:none;border-top:1px solid #e5ddef;margin:28px 0;">
 
