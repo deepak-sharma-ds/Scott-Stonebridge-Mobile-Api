@@ -17,7 +17,6 @@ use Illuminate\Support\Facades\Route;
  */
 Route::prefix('webhook')->group(function () {
     Route::post('/shopify', [ShopifyController::class, 'handleAppointmentBookingWebhook']);
-    Route::post('/shopify/consent-update', [ShopifyWebhookController::class, 'consentUpdate']);
 
     Route::post('/order-paid', [ShopifyController::class, 'orderPaid']);
 
@@ -51,4 +50,6 @@ Route::prefix('webhook')->group(function () {
     Route::post('/klaviyo-flow-email', [KlaviyoFlowWebhookController::class, 'handle'])
         ->middleware('klaviyo.secret')
         ->name('webhook.klaviyo.flow');
+
+    Route::post('/shopify/consent-update', [ShopifyWebhookController::class, 'consentUpdate']);
 });
