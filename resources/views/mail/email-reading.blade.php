@@ -8,6 +8,19 @@
     <style>
         body { margin: 0; padding: 0; background-color: #f4f1ec; }
         img { max-width: 100%; }
+
+        /* Rich-text (CKEditor) content — header/footer copy is real HTML now,
+           not plain text, so it needs its own block/list/table styling. */
+        .ss-body p { margin: 0 0 14px; }
+        .ss-body p:last-child { margin-bottom: 0; }
+        .ss-body ul, .ss-body ol { margin: 0 0 14px; padding-left: 22px; }
+        .ss-body blockquote { margin: 0 0 14px; padding: 6px 16px; border-left: 3px solid #d8cbe8; color: #6b5b7d; font-style: italic; }
+        .ss-body table { border-collapse: collapse; width: 100%; margin: 0 0 14px; }
+        .ss-body table td, .ss-body table th { border: 1px solid #e5ddef; padding: 8px; }
+        .ss-body a { color: #6c3fa1; }
+        .ss-body h1, .ss-body h2, .ss-body h3, .ss-body h4 { margin: 0 0 12px; color: #2b1a3d; }
+        .ss-body hr { border: none; border-top: 1px solid #e5ddef; margin: 20px 0; }
+
         @media only screen and (max-width: 600px) {
             .ss-wrapper { padding: 16px !important; }
             .ss-body { padding: 24px 20px !important; }
@@ -15,7 +28,7 @@
         }
     </style>
 </head>
-<body style="margin:0;padding:0;background-color:#f4f1ec;font-family:'Georgia','Times New Roman',serif;">
+<body style="margin:0;padding:0;background-color:#f4f1ec;font-family:'Arial','Times New Roman',serif;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#f4f1ec;">
         <tr>
             <td align="center" class="ss-wrapper" style="padding:24px 12px;">
@@ -31,21 +44,13 @@
                     {{-- Body --}}
                     <tr>
                         <td class="ss-body" style="padding:36px 32px;">
-                            <h1 style="font-family:'Georgia',serif;font-size:22px;color:#3a1b5e;text-decoration:underline;margin:0 0 20px;">
-                                Your Psychic Email Reading
-                            </h1>
+                            <div style="font-size:15px;color:#4a3a5e;line-height:1.5;margin:0 0 22px;">{!! $emailContent !!}</div>
 
-                            <p style="font-size:16px;color:#2b1a3d;margin:0 0 18px;">
-                                Hello
-                            </p>
-
-                            <div style="font-size:15px;color:#4a3a5e;line-height:1.6;margin:0 0 22px;white-space:pre-line;">{!! $emailContent !!}</div>
-
-                            <div class="ss-reading" style="background:#faf7f2;border-left:4px solid #f5d97a;border-radius:0 6px 6px 0;padding:26px 28px;color:#2b1a3d;font-size:15px;line-height:1.75;white-space:pre-line;">{{ $readingBody }}</div>
+                            <div class="ss-reading" style="color:#2b1a3d;font-size:15px;line-height:1.5;">{!! $readingBody !!}</div>
 
                             <hr style="border:none;border-top:1px solid #e5ddef;margin:28px 0;">
 
-                            <div style="font-size:15px;color:#4a3a5e;line-height:1.6;white-space:pre-line;">{!! $emailFooter !!}</div>
+                            <div style="font-size:15px;color:#4a3a5e;line-height:1.5;">{!! $emailFooter !!}</div>
                         </td>
                     </tr>
 
