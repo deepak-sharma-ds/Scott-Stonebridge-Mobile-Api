@@ -31,17 +31,9 @@
                     {{-- Body --}}
                     <tr>
                         <td class="ss-body" style="padding:36px 32px;">
-                            <h1 style="font-family:'Arial',serif;font-size:22px;color:#3a1b5e;text-decoration:underline;margin:0 0 20px;">
-                                Your Psychic Email Reading
-                            </h1>
-
-                            <p style="font-size:16px;color:#2b1a3d;margin:0 0 18px;">
-                                Hello
-                            </p>
-
                             <div style="font-size:15px;color:#4a3a5e;line-height:1.6;margin:0 0 22px;white-space:pre-line;">{!! $emailContent !!}</div>
 
-                            <div class="ss-reading" style="background:#faf7f2;color:#2b1a3d;font-size:15px;line-height:1.75;white-space:pre-line;">{{ $campaignBody }}</div>
+                            <div class="ss-reading" style="color:#2b1a3d;font-size:15px;line-height:1.75;white-space:pre-line;">{{ $campaignBody }}</div>
 
                             <hr style="border:none;border-top:1px solid #e5ddef;margin:28px 0;">
 
