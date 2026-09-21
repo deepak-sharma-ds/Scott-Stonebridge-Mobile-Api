@@ -159,14 +159,83 @@ class ChatSessionLifecycleTest extends TestCase
 
         $response = $this->postJson('/api/v1/ai/chat/escalate', [
             'session_id' => $conversation->session_id,
-            'reason' => 'Refund issue',
+            'reason' => 'Refund issue with my order',
+            'customer_name' => 'Jane Doe',
             'customer_email' => 'cust@example.com',
+            'customer_phone' => '+14155552671',
         ]);
 
         $response->assertStatus(200);
         $response->assertJsonPath('data.status', AiConversation::STATUS_ESCALATED);
 
-        Queue::assertPushed(NotifyEscalationJob::class);
+        Queue::assertPushed(NotifyEscalationJob::class, function (NotifyEscalationJob $job) {
+            return $job->customerName === 'Jane Doe' && $job->customerPhone === '+14155552671';
+        });
+    }
+
+    public function test_escalate_rejects_missing_customer_name(): void
+    {
+        Queue::fake();
+        $conversation = AiConversation::factory()->create();
+
+        $response = $this->postJson('/api/v1/ai/chat/escalate', [
+            'session_id' => $conversation->session_id,
+            'reason' => 'Refund issue with my order',
+            'customer_email' => 'cust@example.com',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('success', false);
+        Queue::assertNotPushed(NotifyEscalationJob::class);
+    }
+
+    public function test_escalate_rejects_spammy_reason(): void
+    {
+        Queue::fake();
+        $conversation = AiConversation::factory()->create();
+
+        $response = $this->postJson('/api/v1/ai/chat/escalate', [
+            'session_id' => $conversation->session_id,
+            'reason' => 'ddddddddddddddddd',
+            'customer_name' => 'Jane Doe',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('success', false);
+        Queue::assertNotPushed(NotifyEscalationJob::class);
+    }
+
+    public function test_escalate_rejects_spammy_customer_name(): void
+    {
+        Queue::fake();
+        $conversation = AiConversation::factory()->create();
+
+        $response = $this->postJson('/api/v1/ai/chat/escalate', [
+            'session_id' => $conversation->session_id,
+            'reason' => 'Refund issue with my order',
+            'customer_name' => 'asdasdasdasdasd',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('success', false);
+        Queue::assertNotPushed(NotifyEscalationJob::class);
+    }
+
+    public function test_escalate_rejects_invalid_customer_phone(): void
+    {
+        Queue::fake();
+        $conversation = AiConversation::factory()->create();
+
+        $response = $this->postJson('/api/v1/ai/chat/escalate', [
+            'session_id' => $conversation->session_id,
+            'reason' => 'Refund issue with my order',
+            'customer_name' => 'Jane Doe',
+            'customer_phone' => 'not-a-phone',
+        ]);
+
+        $response->assertStatus(422);
+        $response->assertJsonPath('success', false);
+        Queue::assertNotPushed(NotifyEscalationJob::class);
     }
 
     public function test_start_session_rejects_missing_shop_domain(): void
