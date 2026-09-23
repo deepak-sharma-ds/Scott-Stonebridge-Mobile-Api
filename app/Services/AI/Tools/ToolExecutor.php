@@ -217,18 +217,31 @@ class ToolExecutor
                     ]);
                     $edges = $resp['data']['collectionByHandle']['products']['edges'] ?? [];
                 } else {
+                    $storefrontQuery = $this->buildStorefrontSearchQuery($query);
                     $resp = $this->storefrontApi()->query('storefront/products/get_all_products', [
                         'limit' => $limit,
-                        'query' => $query !== '' ? $query : '*',
+                        'query' => $storefrontQuery,
                         'country' => $country,
                     ]);
                     $edges = $resp['data']['products']['edges'] ?? [];
+
+                    // Fallback to free-text query if tag query returned 0 items
+                    if (empty($edges) && $storefrontQuery !== $query && $query !== '') {
+                        $respFallback = $this->storefrontApi()->query('storefront/products/get_all_products', [
+                            'limit' => $limit,
+                            'query' => $query,
+                            'country' => $country,
+                        ]);
+                        $edges = $respFallback['data']['products']['edges'] ?? [];
+                    }
                 }
 
-                return array_values(array_filter(array_map(
+                $rawNodes = array_values(array_filter(array_map(
                     static fn ($e) => is_array($e) ? ($e['node'] ?? null) : null,
                     is_array($edges) ? $edges : [],
                 )));
+
+                return $this->rankCatalogResults($rawNodes, $query);
             });
         } catch (Throwable $e) {
             $this->logToolError('search_catalog.storefront', $ctx, $e);
@@ -256,36 +269,184 @@ class ToolExecutor
     }
 
     /**
-     * Map a free-text query to a curated Shopify collection handle. Keyword
-     * order matters — first hit wins. Returns null when no category fires so
-     * the caller falls back to text search.
+     * Map a free-text query to a curated Shopify collection handle only for broad
+     * category inquiries (e.g. "email readings", "crystals", "private 1-2-1 reading").
+     * Specific topics (e.g. "love", "future", "heaven", "tarot") should NOT map to broad
+     * collection handles, allowing them to use tag-and-title search.
      */
     private function mapQueryToCollection(string $query): ?string
     {
-        $q = strtolower($query);
+        $q = strtolower(trim($query));
 
-        // handle => keyword list (live collections on the Scott Stonebridge store)
-        $map = [
-            'email-readings' => ['email reading', 'email readings'],
-            'readings' => ['reading', 'tarot', 'psychic reading', 'clairvoyant', 'fortune', 'spirit reading'],
-            'meditations' => ['meditation', 'guided meditation', 'sleep meditation', 'relaxation'],
-            'crystals' => ['crystal', 'gemstone', 'quartz', 'amethyst', 'healing stone', 'chakra stone'],
-            'candles' => ['candle', 'burner', 'incense', 'wax'],
-            'oils' => ['oil', 'diffuser', 'essential oil', 'aromatherapy'],
-            'bracelets' => ['bracelet', 'bangle'],
-            'necklaces' => ['necklace', 'pendant', 'choker'],
-            'gift-cards' => ['gift card', 'gift voucher', 'gift certificate'],
+        // In-person / Private live readings collection (contains 1-2-1 and Group Reading)
+        if (preg_match('/\b(1-2-1|1\s*to\s*1|1\s*on\s*1|private\s+reading|meet\s+scott|group\s+reading|zoom\s+reading|live\s+reading|phone\s+reading)\b/i', $q)) {
+            return 'readings';
+        }
+
+        // Broad Email readings collection
+        if (preg_match('/\b(all\s+email\s+readings?|email\s+readings?|written\s+readings?)\b/i', $q) && ! preg_match('/\b(love|future|heaven|tarot|crystal|angel|astrology|attraction|energy)\b/i', $q)) {
+            return 'email-readings';
+        }
+
+        // Broad Meditations collection
+        if (preg_match('/\b(meditations?|guided\s+meditations?|sleep\s+meditations?|relaxation)\b/i', $q) && ! preg_match('/\b(crystal|bracelet|candle|reading)\b/i', $q)) {
+            return 'meditations';
+        }
+
+        // Broad Crystals collection
+        if (preg_match('/\b(crystals?|gemstones?|healing\s+stones?|chakra\s+stones?)\b/i', $q) && ! preg_match('/\b(reading|tarot|meditation)\b/i', $q)) {
+            return 'crystals';
+        }
+
+        // Broad Candles / Incense collection
+        if (preg_match('/\b(candles?|incense|wax\s+melts?|burners?)\b/i', $q)) {
+            return 'candles';
+        }
+
+        // Broad Essential Oils collection
+        if (preg_match('/\b(essential\s+oils?|oils?|diffusers?|aromatherapy)\b/i', $q) && ! preg_match('/\b(crystal|reading)\b/i', $q)) {
+            return 'oils';
+        }
+
+        // Broad Bracelets collection
+        if (preg_match('/\b(bracelets?|bangles?)\b/i', $q)) {
+            return 'bracelets';
+        }
+
+        // Broad Necklaces collection
+        if (preg_match('/\b(necklaces?|pendants?|chokers?)\b/i', $q)) {
+            return 'necklaces';
+        }
+
+        // Broad Gift Cards collection
+        if (preg_match('/\b(gift\s*cards?|gift\s*vouchers?|gift\s*certificates?)\b/i', $q)) {
+            return 'gift-cards';
+        }
+
+        return null;
+    }
+
+    /**
+     * Build an optimized Shopify Storefront search query using tags and titles.
+     */
+    private function buildStorefrontSearchQuery(string $query): string
+    {
+        $q = strtolower(trim($query));
+        if ($q === '') {
+            return '*';
+        }
+
+        // Tag definitions present on the Scott Stonebridge store
+        $knownTags = [
+            'Love' => ['love', 'relationships?', 'soulmate', 'partner', 'romance', 'ex', 'marriage', 'twin flame'],
+            'Future' => ['future', 'predictions?', 'what lies ahead', 'month ahead', 'year ahead', 'destiny', 'outlook'],
+            'Heaven' => ['heaven', 'messages? from heaven', 'spirits?', 'passed away', 'deceased', 'loved ones in heaven', 'afterlife', 'guardian angels?', 'angels?'],
+            'Tarot Card' => ['tarot', 'tarot cards?', 'card reading', '3 card', '6 card', 'cards'],
+            'Crystal Ball' => ['crystal ball', 'scrying'],
+            'Astrology Outlook' => ['astrology', 'horoscope', 'zodiac', 'astrological'],
+            'Attraction Ritual' => ['attraction ritual', 'manifestation', 'attract love', 'attract money'],
+            'Energy' => ['energy', 'aura', 'chakra', 'vibration'],
+            'Ask A Question' => ['ask a question', '1 question', 'one question', '2 question', 'two question', '3 question', 'three question', '5 question', 'five question'],
         ];
 
-        foreach ($map as $handle => $keywords) {
+        $matchedTags = [];
+        $matchedTopics = [];
+
+        foreach ($knownTags as $tag => $keywords) {
             foreach ($keywords as $kw) {
-                if (str_contains($q, $kw)) {
-                    return $handle;
+                if (preg_match('/\b'.$kw.'\b/i', $q)) {
+                    $matchedTags[] = $tag;
+                    $matchedTopics[] = str_replace(['?', '\\s+'], '', $kw);
+                    break;
                 }
             }
         }
 
-        return null;
+        if (! empty($matchedTags)) {
+            $parts = [];
+            foreach ($matchedTags as $tag) {
+                $parts[] = "tag:\"{$tag}\"";
+            }
+            foreach (array_unique($matchedTopics) as $topic) {
+                $parts[] = "title:\"{$topic}\"";
+                $parts[] = $topic;
+            }
+
+            return implode(' OR ', $parts);
+        }
+
+        // Strip pure noise words
+        $noise = ['show', 'me', 'find', 'looking', 'for', 'any', 'available', 'please', 'suggest', 'recommend', 'i', 'want', 'need', 'some', 'the', 'a', 'an'];
+        $words = preg_split('/\s+/u', $q) ?: [];
+        $clean = array_values(array_filter($words, static fn ($w) => ! in_array($w, $noise, true)));
+
+        return ! empty($clean) ? implode(' ', $clean) : $q;
+    }
+
+    /**
+     * Score and sort product nodes based on user query intent.
+     *
+     * @param  array<int, array<string, mixed>>  $nodes
+     * @return array<int, array<string, mixed>>
+     */
+    private function rankCatalogResults(array $nodes, string $query): array
+    {
+        if (empty($nodes)) {
+            return [];
+        }
+
+        $q = strtolower($query);
+        $wantsReading = (bool) preg_match('/\b(readings?|questions?|tarot|future|love|heaven|spirit|angel|astrology|predictions?|insight|guidance)\b/i', $q);
+        $wantsPhysical = (bool) preg_match('/\b(crystals?|stones?|candles?|incense|oils?|bracelets?|necklaces?|burners?|wax)\b/i', $q);
+
+        $scored = [];
+        foreach ($nodes as $node) {
+            if (! is_array($node)) {
+                continue;
+            }
+            $title = strtolower((string) ($node['title'] ?? ''));
+            $productType = strtolower((string) ($node['productType'] ?? ''));
+            $tags = array_map('strtolower', (array) ($node['tags'] ?? []));
+
+            $score = 1.0;
+
+            // Gift cards should not appear in specific topic searches unless requested
+            if (str_contains($title, 'gift card') && ! str_contains($q, 'gift')) {
+                $score -= 5.0;
+            }
+
+            $isReading = str_contains($productType, 'reading') || str_contains($title, 'reading') || in_array('email reading', $tags, true);
+            $isPhysical = ! $isReading;
+
+            if ($wantsReading && $isReading) {
+                $score += 3.0;
+            }
+            if ($wantsPhysical && $isPhysical) {
+                $score += 3.0;
+            }
+
+            // Keyword/tag match bonuses
+            $tokens = preg_split('/\s+/', $q) ?: [];
+            foreach ($tokens as $token) {
+                if (strlen($token) < 3) {
+                    continue;
+                }
+                if (str_contains($title, $token)) {
+                    $score += 2.0;
+                }
+                foreach ($tags as $tag) {
+                    if (str_contains($tag, $token)) {
+                        $score += 2.5;
+                    }
+                }
+            }
+
+            $scored[] = ['node' => $node, 'score' => $score];
+        }
+
+        usort($scored, static fn ($a, $b) => $b['score'] <=> $a['score']);
+
+        return array_values(array_map(static fn ($item) => $item['node'], $scored));
     }
 
     /**
@@ -746,8 +907,27 @@ class ToolExecutor
         $payload = ['order_tracking' => $dto->toArray()];
         $this->emitter->emit('order_tracking', $payload);
 
+        $itemSummaries = [];
+        foreach ($dto->lineItems as $item) {
+            $itemTitle = $item['title'].($item['variant_title'] ? " ({$item['variant_title']})" : '');
+            $qty = $item['quantity'] > 1 ? " x{$item['quantity']}" : '';
+            $custom = '';
+            if (! empty($item['custom_attributes'])) {
+                $attrs = [];
+                foreach ($item['custom_attributes'] as $k => $v) {
+                    $attrs[] = "{$k}: {$v}";
+                }
+                $custom = ' ['.implode(', ', $attrs).']';
+            }
+            $itemSummaries[] = "{$itemTitle}{$qty}{$custom}";
+        }
+
+        $itemsText = ! empty($itemSummaries) ? ' Items: '.implode('; ', $itemSummaries).'.' : '';
+        $shippingText = $dto->shippingTitle ? " Delivery option: {$dto->shippingTitle}." : '';
+        $estDelivery = $dto->estimatedDelivery ? " Estimated delivery: {$dto->estimatedDelivery}." : '';
+
         return ToolResult::success(
-            "Order {$dto->orderNumber} status: {$dto->status}.",
+            "Order #{$dto->orderNumber} status: {$dto->status}.{$itemsText}{$shippingText}{$estDelivery}",
             ['type' => 'order_tracking'] + $payload,
         );
     }
@@ -773,11 +953,27 @@ class ToolExecutor
                     shopMoney { amount currencyCode }
                     presentmentMoney { amount currencyCode }
                   }
+                  shippingLine { title }
                   fulfillments {
                     estimatedDeliveryAt
                     trackingInfo { number url company }
                   }
                   shippingAddress { city }
+                  lineItems(first: 20) {
+                    edges {
+                      node {
+                        id
+                        title
+                        quantity
+                        variantTitle
+                        originalUnitPriceSet {
+                          presentmentMoney { amount currencyCode }
+                          shopMoney { amount currencyCode }
+                        }
+                        customAttributes { key value }
+                      }
+                    }
+                  }
                 }
               }
             }
@@ -805,11 +1001,27 @@ class ToolExecutor
                   shopMoney { amount currencyCode }
                   presentmentMoney { amount currencyCode }
                 }
+                shippingLine { title }
                 fulfillments {
                   estimatedDeliveryAt
                   trackingInfo { number url company }
                 }
                 shippingAddress { city }
+                lineItems(first: 20) {
+                  edges {
+                    node {
+                      id
+                      title
+                      quantity
+                      variantTitle
+                      originalUnitPriceSet {
+                        presentmentMoney { amount currencyCode }
+                        shopMoney { amount currencyCode }
+                      }
+                      customAttributes { key value }
+                    }
+                  }
+                }
               }
             }
           }

@@ -139,18 +139,59 @@ class ProductRecommendationService extends BaseService implements ProductRecomme
      */
     private function buildShopifyQuery(string $userMessage, ChatContextDTO $context): string
     {
+        $q = mb_strtolower(trim($userMessage));
+        if ($q === '') {
+            return '';
+        }
+
+        $knownTags = [
+            'Love' => ['love', 'relationships?', 'soulmate', 'partner', 'romance', 'ex', 'marriage'],
+            'Future' => ['future', 'predictions?', 'what lies ahead', 'month ahead', 'year ahead', 'destiny'],
+            'Heaven' => ['heaven', 'messages? from heaven', 'spirits?', 'passed away', 'deceased', 'guardian angels?', 'angels?'],
+            'Tarot Card' => ['tarot', 'tarot cards?', 'card reading', '3 card', '6 card'],
+            'Crystal Ball' => ['crystal ball', 'scrying'],
+            'Astrology Outlook' => ['astrology', 'horoscope', 'zodiac'],
+            'Attraction Ritual' => ['attraction ritual', 'manifestation', 'attract love', 'attract money'],
+            'Energy' => ['energy', 'aura', 'chakra'],
+            'Ask A Question' => ['ask a question', '1 question', 'one question', '2 question', 'two question', '3 question', 'three question', '5 question'],
+        ];
+
+        $matchedTags = [];
+        $matchedTopics = [];
+
+        foreach ($knownTags as $tag => $keywords) {
+            foreach ($keywords as $kw) {
+                if (preg_match('/\b'.$kw.'\b/i', $q)) {
+                    $matchedTags[] = $tag;
+                    $matchedTopics[] = str_replace(['?', '\\s+'], '', $kw);
+                    break;
+                }
+            }
+        }
+
+        if (! empty($matchedTags)) {
+            $parts = [];
+            foreach ($matchedTags as $tag) {
+                $parts[] = "tag:\"{$tag}\"";
+            }
+            foreach (array_unique($matchedTopics) as $topic) {
+                $parts[] = "title:\"{$topic}\"";
+                $parts[] = $topic;
+            }
+
+            return implode(' OR ', $parts);
+        }
+
         $stop = [
             'recommend', 'recommendation', 'suggest', 'suggestion', 'please',
             'best', 'top', 'good', 'better', 'looking', 'for', 'show', 'me',
             'find', 'i', 'want', 'need', 'a', 'an', 'the', 'some', 'any',
             'can', 'you', 'your', 'something', 'similar', 'to', 'this', 'that',
-            // Generic e-commerce filler — every Shopify item is a "product",
-            // so the literal word matches almost nothing as a search filter.
             'product', 'products', 'item', 'items', 'thing', 'things',
             'are', 'is', 'what', 'which',
         ];
 
-        $words = preg_split('/\s+/u', mb_strtolower(trim($userMessage))) ?: [];
+        $words = preg_split('/\s+/u', $q) ?: [];
         $kept = array_values(array_filter($words, static function (string $w) use ($stop): bool {
             $w = preg_replace('/[^\p{L}\p{N}\-]/u', '', $w) ?? $w;
 

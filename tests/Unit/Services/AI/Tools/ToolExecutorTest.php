@@ -73,20 +73,23 @@ class ToolExecutorTest extends TestCase
         $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
         $storefrontApi->expects($this->once())
             ->method('query')
+            ->with('storefront/products/get_all_products', [
+                'limit' => 10,
+                'query' => 'tag:"Tarot Card" OR title:"tarot" OR tarot',
+                'country' => 'GB',
+            ])
             ->willReturn([
                 'data' => [
-                    'collectionByHandle' => [
-                        'products' => [
-                            'edges' => [
-                                [
-                                    'node' => [
-                                        'id' => 'gid://shopify/Product/1',
-                                        'title' => 'Tarot Deck',
-                                        'handle' => 'tarot-deck',
-                                        'variants' => [
-                                            'edges' => [
-                                                ['node' => ['id' => 'gid://shopify/ProductVariant/11', 'price' => ['amount' => '24.99', 'currencyCode' => 'GBP'], 'availableForSale' => true]],
-                                            ],
+                    'products' => [
+                        'edges' => [
+                            [
+                                'node' => [
+                                    'id' => 'gid://shopify/Product/1',
+                                    'title' => 'Tarot Deck',
+                                    'handle' => 'tarot-deck',
+                                    'variants' => [
+                                        'edges' => [
+                                            ['node' => ['id' => 'gid://shopify/ProductVariant/11', 'price' => ['amount' => '24.99', 'currencyCode' => 'GBP'], 'availableForSale' => true]],
                                         ],
                                     ],
                                 ],
@@ -121,8 +124,8 @@ class ToolExecutorTest extends TestCase
                                 [
                                     'node' => [
                                         'id' => 'gid://shopify/Product/1',
-                                        'title' => 'Reading',
-                                        'handle' => 'reading',
+                                        'title' => '1-2-1 Reading',
+                                        'handle' => '1-2-1-reading',
                                         'variants' => [
                                             'edges' => [
                                                 ['node' => ['id' => 'gid://shopify/ProductVariant/11', 'price' => ['amount' => '21.00', 'currencyCode' => 'USD'], 'availableForSale' => true]],
@@ -144,7 +147,7 @@ class ToolExecutorTest extends TestCase
             country: 'US',
         );
 
-        $output = $this->invoke('search_catalog', ['query' => 'reading'], $ctx);
+        $output = $this->invoke('search_catalog', ['query' => '1-2-1 reading'], $ctx);
 
         $this->assertStringContainsString('"type":"products"', $output);
         $this->assertStringContainsString('"currency":"USD"', $output);
@@ -156,20 +159,23 @@ class ToolExecutorTest extends TestCase
         $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
         $storefrontApi->expects($this->once())   // ← critical: only ONE upstream call
             ->method('query')
+            ->with('storefront/products/get_all_products', [
+                'limit' => 10,
+                'query' => 'tag:"Tarot Card" OR title:"tarot" OR tarot',
+                'country' => 'GB',
+            ])
             ->willReturn([
                 'data' => [
-                    'collectionByHandle' => [
-                        'products' => [
-                            'edges' => [
-                                [
-                                    'node' => [
-                                        'id' => 'gid://shopify/Product/1',
-                                        'title' => 'Tarot Deck',
-                                        'handle' => 'tarot-deck',
-                                        'variants' => [
-                                            'edges' => [
-                                                ['node' => ['id' => 'gid://shopify/ProductVariant/11', 'price' => ['amount' => '24.99', 'currencyCode' => 'GBP'], 'availableForSale' => true]],
-                                            ],
+                    'products' => [
+                        'edges' => [
+                            [
+                                'node' => [
+                                    'id' => 'gid://shopify/Product/1',
+                                    'title' => 'Tarot Deck',
+                                    'handle' => 'tarot-deck',
+                                    'variants' => [
+                                        'edges' => [
+                                            ['node' => ['id' => 'gid://shopify/ProductVariant/11', 'price' => ['amount' => '24.99', 'currencyCode' => 'GBP'], 'availableForSale' => true]],
                                         ],
                                     ],
                                 ],
