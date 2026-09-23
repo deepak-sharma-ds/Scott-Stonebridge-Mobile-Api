@@ -269,9 +269,26 @@ class ToolExecutor
     }
 
     /**
-     * Map a free-text query to a curated Shopify collection handle only for broad
-     * category inquiries (e.g. "email readings", "crystals", "private 1-2-1 reading").
-     * Specific topics (e.g. "love", "future", "heaven", "tarot") should NOT map to broad
+     * Canonical Topic Facets on the Scott Stonebridge store and their detection keywords.
+     *
+     * @var array<string, array<int, string>>
+     */
+    private const TOPIC_FACETS = [
+        'Love' => ['love', 'relationships?', 'soulmate', 'partner', 'romance', 'ex', 'marriage', 'twin flame'],
+        'Future' => ['future', 'predictions?', 'what lies ahead', 'month ahead', 'year ahead', 'destiny', 'outlook'],
+        'Heaven' => ['heaven', 'messages? from heaven', 'spirits?', 'passed away', 'deceased', 'loved ones in heaven', 'afterlife', 'guardian angels?', 'angels?'],
+        'Tarot Card' => ['tarot', 'tarot cards?', 'card reading', '3 card', '6 card', 'cards?'],
+        'Crystal Ball' => ['crystal ball', 'scrying'],
+        'Astrology Outlook' => ['astrology', 'horoscope', 'zodiac', 'astrological'],
+        'Attraction Ritual' => ['attraction ritual', 'manifestation', 'attract love', 'attract money'],
+        'Energy' => ['energy', 'aura', 'chakra', 'vibration'],
+        'Ask A Question' => ['ask a question', '1 question', 'one question', '2 question', 'two question', '3 question', 'three question', '5 question', 'five question'],
+    ];
+
+    /**
+     * Map a free-text query to a curated Shopify collection handle for broad
+     * category or emotion inquiries (e.g. "email readings", "crystals", "recommend a reading").
+     * Specific topic queries (e.g. "love", "future", "heaven", "tarot") should NOT map to broad
      * collection handles, allowing them to use tag-and-title search.
      */
     private function mapQueryToCollection(string $query): ?string
@@ -283,8 +300,18 @@ class ToolExecutor
             return 'readings';
         }
 
-        // Broad Email readings collection
-        if (preg_match('/\b(all\s+email\s+readings?|email\s+readings?|written\s+readings?)\b/i', $q) && ! preg_match('/\b(love|future|heaven|tarot|crystal|angel|astrology|attraction|energy)\b/i', $q)) {
+        $hasSpecificTopic = false;
+        foreach (self::TOPIC_FACETS as $keywords) {
+            foreach ($keywords as $kw) {
+                if (preg_match('/\b'.$kw.'\b/i', $q)) {
+                    $hasSpecificTopic = true;
+                    break 2;
+                }
+            }
+        }
+
+        // Broad/emotional reading inquiries without specific topic facet -> Diverse Best-Seller Showcase
+        if (! $hasSpecificTopic && preg_match('/\b(all\s+email\s+readings?|email\s+readings?|written\s+readings?|readings?|recommend.*reading|popular\s+readings?|suggest.*reading|what\s+reading|best\s+reading|feel\s+lost|need\s+guidance|help\s+me\s+choose)\b/i', $q)) {
             return 'email-readings';
         }
 
@@ -294,27 +321,27 @@ class ToolExecutor
         }
 
         // Broad Crystals collection
-        if (preg_match('/\b(crystals?|gemstones?|healing\s+stones?|chakra\s+stones?)\b/i', $q) && ! preg_match('/\b(reading|tarot|meditation)\b/i', $q)) {
+        if (preg_match('/\b(crystals?|gemstones?|healing\s+stones?|chakra\s+stones?)\b/i', $q) && ! preg_match('/\b(reading|tarot|meditation)\b/i', $q) && ! $hasSpecificTopic) {
             return 'crystals';
         }
 
         // Broad Candles / Incense collection
-        if (preg_match('/\b(candles?|incense|wax\s+melts?|burners?)\b/i', $q)) {
+        if (preg_match('/\b(candles?|incense|wax\s+melts?|burners?)\b/i', $q) && ! $hasSpecificTopic) {
             return 'candles';
         }
 
         // Broad Essential Oils collection
-        if (preg_match('/\b(essential\s+oils?|oils?|diffusers?|aromatherapy)\b/i', $q) && ! preg_match('/\b(crystal|reading)\b/i', $q)) {
+        if (preg_match('/\b(essential\s+oils?|oils?|diffusers?|aromatherapy)\b/i', $q) && ! preg_match('/\b(crystal|reading)\b/i', $q) && ! $hasSpecificTopic) {
             return 'oils';
         }
 
         // Broad Bracelets collection
-        if (preg_match('/\b(bracelets?|bangles?)\b/i', $q)) {
+        if (preg_match('/\b(bracelets?|bangles?)\b/i', $q) && ! $hasSpecificTopic) {
             return 'bracelets';
         }
 
         // Broad Necklaces collection
-        if (preg_match('/\b(necklaces?|pendants?|chokers?)\b/i', $q)) {
+        if (preg_match('/\b(necklaces?|pendants?|chokers?)\b/i', $q) && ! $hasSpecificTopic) {
             return 'necklaces';
         }
 
@@ -336,27 +363,17 @@ class ToolExecutor
             return '*';
         }
 
-        // Tag definitions present on the Scott Stonebridge store
-        $knownTags = [
-            'Love' => ['love', 'relationships?', 'soulmate', 'partner', 'romance', 'ex', 'marriage', 'twin flame'],
-            'Future' => ['future', 'predictions?', 'what lies ahead', 'month ahead', 'year ahead', 'destiny', 'outlook'],
-            'Heaven' => ['heaven', 'messages? from heaven', 'spirits?', 'passed away', 'deceased', 'loved ones in heaven', 'afterlife', 'guardian angels?', 'angels?'],
-            'Tarot Card' => ['tarot', 'tarot cards?', 'card reading', '3 card', '6 card', 'cards'],
-            'Crystal Ball' => ['crystal ball', 'scrying'],
-            'Astrology Outlook' => ['astrology', 'horoscope', 'zodiac', 'astrological'],
-            'Attraction Ritual' => ['attraction ritual', 'manifestation', 'attract love', 'attract money'],
-            'Energy' => ['energy', 'aura', 'chakra', 'vibration'],
-            'Ask A Question' => ['ask a question', '1 question', 'one question', '2 question', 'two question', '3 question', 'three question', '5 question', 'five question'],
-        ];
-
         $matchedTags = [];
         $matchedTopics = [];
 
-        foreach ($knownTags as $tag => $keywords) {
+        foreach (self::TOPIC_FACETS as $tag => $keywords) {
             foreach ($keywords as $kw) {
                 if (preg_match('/\b'.$kw.'\b/i', $q)) {
                     $matchedTags[] = $tag;
-                    $matchedTopics[] = str_replace(['?', '\\s+'], '', $kw);
+                    $cleanKw = str_replace(['?', '\\s+'], '', $kw);
+                    if ($cleanKw !== 'reading' && $cleanKw !== 'cards') {
+                        $matchedTopics[] = $cleanKw;
+                    }
                     break;
                 }
             }
@@ -364,12 +381,11 @@ class ToolExecutor
 
         if (! empty($matchedTags)) {
             $parts = [];
-            foreach ($matchedTags as $tag) {
+            foreach (array_unique($matchedTags) as $tag) {
                 $parts[] = "tag:\"{$tag}\"";
             }
             foreach (array_unique($matchedTopics) as $topic) {
                 $parts[] = "title:\"{$topic}\"";
-                $parts[] = $topic;
             }
 
             return implode(' OR ', $parts);
@@ -384,7 +400,8 @@ class ToolExecutor
     }
 
     /**
-     * Score and sort product nodes based on user query intent.
+     * Score, filter, and rank product nodes based on multi-facet intent,
+     * additive boosting, and hard relevance gating (ADR 0013).
      *
      * @param  array<int, array<string, mixed>>  $nodes
      * @return array<int, array<string, mixed>>
@@ -395,53 +412,113 @@ class ToolExecutor
             return [];
         }
 
-        $q = strtolower($query);
-        $wantsReading = (bool) preg_match('/\b(readings?|questions?|tarot|future|love|heaven|spirit|angel|astrology|predictions?|insight|guidance)\b/i', $q);
+        $q = strtolower(trim($query));
+
+        // Detect all active requested topic facets
+        $requestedFacets = [];
+        foreach (self::TOPIC_FACETS as $facet => $keywords) {
+            foreach ($keywords as $kw) {
+                if (preg_match('/\b'.$kw.'\b/i', $q)) {
+                    $requestedFacets[$facet] = $keywords;
+                    break;
+                }
+            }
+        }
+
         $wantsPhysical = (bool) preg_match('/\b(crystals?|stones?|candles?|incense|oils?|bracelets?|necklaces?|burners?|wax)\b/i', $q);
+        $wantsReading = (bool) preg_match('/\b(readings?|questions?|guidance|insight)\b/i', $q) || ! empty($requestedFacets);
 
         $scored = [];
         foreach ($nodes as $node) {
             if (! is_array($node)) {
                 continue;
             }
+
             $title = strtolower((string) ($node['title'] ?? ''));
+            $handle = strtolower((string) ($node['handle'] ?? ''));
             $productType = strtolower((string) ($node['productType'] ?? ''));
             $tags = array_map('strtolower', (array) ($node['tags'] ?? []));
 
-            $score = 1.0;
-
-            // Gift cards should not appear in specific topic searches unless requested
+            // Exclude gift cards on non-gift searches
             if (str_contains($title, 'gift card') && ! str_contains($q, 'gift')) {
-                $score -= 5.0;
+                continue;
             }
 
             $isReading = str_contains($productType, 'reading') || str_contains($title, 'reading') || in_array('email reading', $tags, true);
             $isPhysical = ! $isReading;
 
-            if ($wantsReading && $isReading) {
-                $score += 3.0;
-            }
-            if ($wantsPhysical && $isPhysical) {
-                $score += 3.0;
-            }
+            $topicScore = 0.0;
+            $facetMatches = 0;
 
-            // Keyword/tag match bonuses
-            $tokens = preg_split('/\s+/', $q) ?: [];
-            foreach ($tokens as $token) {
-                if (strlen($token) < 3) {
+            if (! empty($requestedFacets)) {
+                foreach ($requestedFacets as $facet => $keywords) {
+                    $hasTag = in_array(strtolower($facet), $tags, true);
+                    $hasTitle = false;
+
+                    foreach ($keywords as $kw) {
+                        $cleanKw = str_replace(['?', '\\s+'], '', $kw);
+                        if ($cleanKw !== 'reading' && $cleanKw !== 'cards' && (str_contains($title, $cleanKw) || str_contains($handle, $cleanKw))) {
+                            $hasTitle = true;
+                            break;
+                        }
+                    }
+
+                    if ($hasTag) {
+                        $topicScore += 5.0; // Tier 1: Exact Tag Match
+                        $facetMatches++;
+                    } elseif ($hasTitle) {
+                        $topicScore += 3.0; // Tier 2: Strong Title Match
+                        $facetMatches++;
+                    }
+                }
+
+                // Hard Relevance Gate: Product must have > 0 match to at least one requested topic facet
+                if ($topicScore <= 0) {
                     continue;
                 }
-                if (str_contains($title, $token)) {
-                    $score += 2.0;
+
+                // Multi-Topic Additive Boost: Products matching multiple requested facets rank highest
+                if ($facetMatches > 1) {
+                    $topicScore += ($facetMatches * 4.0);
                 }
-                foreach ($tags as $tag) {
-                    if (str_contains($tag, $token)) {
-                        $score += 2.5;
+            }
+
+            $baseScore = 1.0 + $topicScore;
+
+            // Type awareness adjustments
+            if ($wantsPhysical) {
+                if ($isPhysical) {
+                    $baseScore += 4.0;
+                } elseif ($isReading) {
+                    $baseScore -= 2.0;
+                }
+            } elseif ($wantsReading) {
+                if ($isReading) {
+                    $baseScore += 2.0;
+                } elseif ($isPhysical) {
+                    $baseScore -= 1.0;
+                }
+            }
+
+            // General token overlap for non-facet queries
+            if (empty($requestedFacets)) {
+                $tokens = preg_split('/\s+/', $q) ?: [];
+                foreach ($tokens as $token) {
+                    if (strlen($token) < 3) {
+                        continue;
+                    }
+                    if (str_contains($title, $token)) {
+                        $baseScore += 2.0;
+                    }
+                    foreach ($tags as $tag) {
+                        if (str_contains($tag, $token)) {
+                            $baseScore += 2.5;
+                        }
                     }
                 }
             }
 
-            $scored[] = ['node' => $node, 'score' => $score];
+            $scored[] = ['node' => $node, 'score' => $baseScore];
         }
 
         usort($scored, static fn ($a, $b) => $b['score'] <=> $a['score']);

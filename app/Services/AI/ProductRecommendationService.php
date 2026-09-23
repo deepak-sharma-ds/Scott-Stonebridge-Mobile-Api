@@ -171,12 +171,14 @@ class ProductRecommendationService extends BaseService implements ProductRecomme
 
         if (! empty($matchedTags)) {
             $parts = [];
-            foreach ($matchedTags as $tag) {
+            foreach (array_unique($matchedTags) as $tag) {
                 $parts[] = "tag:\"{$tag}\"";
             }
             foreach (array_unique($matchedTopics) as $topic) {
-                $parts[] = "title:\"{$topic}\"";
-                $parts[] = $topic;
+                $cleanTopic = str_replace(['?', '\\s+'], '', $topic);
+                if ($cleanTopic !== 'reading' && $cleanTopic !== 'cards') {
+                    $parts[] = "title:\"{$cleanTopic}\"";
+                }
             }
 
             return implode(' OR ', $parts);

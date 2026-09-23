@@ -31,46 +31,140 @@ class CatalogTagSearchTest extends TestCase
         $this->app->forgetInstance(ToolExecutor::class);
     }
 
-    public function test_catalog_search_for_love_constructs_tag_query_and_ranks_readings(): void
+    public function test_catalog_search_for_love_readings_isolates_love_products_and_excludes_unrelated_readings(): void
     {
         $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
         $storefrontApi->expects($this->once())
             ->method('query')
             ->with('storefront/products/get_all_products', $this->callback(function (array $params): bool {
-                return str_contains((string) ($params['query'] ?? ''), 'tag:"Love"')
-                    && str_contains((string) ($params['query'] ?? ''), 'title:"love"');
+                $q = (string) ($params['query'] ?? '');
+
+                return str_contains($q, 'tag:"Love"') && str_contains($q, 'title:"love"');
             }))
             ->willReturn([
                 'data' => [
                     'products' => [
                         'edges' => [
-                            [
-                                'node' => [
-                                    'id' => 'gid://shopify/Product/101',
-                                    'title' => 'Rose Quartz Crystal',
-                                    'productType' => 'Crystals',
-                                    'tags' => ['Crystal', 'Rose Quartz'],
-                                    'handle' => 'rose-quartz-crystal',
-                                    'variants' => [
-                                        'edges' => [
-                                            ['node' => ['id' => 'gid://shopify/ProductVariant/201', 'price' => ['amount' => '15.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]],
-                                        ],
-                                    ],
-                                ],
-                            ],
-                            [
-                                'node' => [
-                                    'id' => 'gid://shopify/Product/102',
-                                    'title' => 'Love & Relationships Two Question Email Reading',
-                                    'productType' => 'Email Reading',
-                                    'tags' => ['Love', 'Email Reading'],
-                                    'handle' => 'love-relationships-two-question-email-reading',
-                                    'variants' => [
-                                        'edges' => [
-                                            ['node' => ['id' => 'gid://shopify/ProductVariant/202', 'price' => ['amount' => '35.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]],
-                                        ],
-                                    ],
-                                ],
+                            // 6 Dedicated Love Readings
+                            ['node' => ['id' => 'gid://shopify/Product/1', 'title' => '3 Card Love Reading', 'productType' => 'Email Reading', 'tags' => ['Love', 'Tarot Card'], 'handle' => '3-card-love-reading', 'variants' => ['edges' => [['node' => ['id' => 'v1', 'price' => ['amount' => '25.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]]]],
+                            ['node' => ['id' => 'gid://shopify/Product/2', 'title' => '6 Card Love Reading', 'productType' => 'Email Reading', 'tags' => ['Love', 'Tarot Card'], 'handle' => '6-card-love-reading', 'variants' => ['edges' => [['node' => ['id' => 'v2', 'price' => ['amount' => '35.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]]]],
+                            ['node' => ['id' => 'gid://shopify/Product/3', 'title' => 'In-Depth Love & Prosperity Reading', 'productType' => 'Email Reading', 'tags' => ['Love', 'Prosperity'], 'handle' => 'in-depth-love-prosperity', 'variants' => ['edges' => [['node' => ['id' => 'v3', 'price' => ['amount' => '45.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]]]],
+                            ['node' => ['id' => 'gid://shopify/Product/4', 'title' => 'Love & Relationships Two Question Email Reading', 'productType' => 'Email Reading', 'tags' => ['Love', 'Email Reading'], 'handle' => 'love-relationships-two-question', 'variants' => ['edges' => [['node' => ['id' => 'v4', 'price' => ['amount' => '35.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]]]],
+                            ['node' => ['id' => 'gid://shopify/Product/5', 'title' => 'You & Me Love Reading', 'productType' => 'Email Reading', 'tags' => ['Love'], 'handle' => 'you-and-me-love-reading', 'variants' => ['edges' => [['node' => ['id' => 'v5', 'price' => ['amount' => '30.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]]]],
+                            ['node' => ['id' => 'gid://shopify/Product/6', 'title' => 'Your Future Love Reading & Predictions', 'productType' => 'Email Reading', 'tags' => ['Love', 'Future'], 'handle' => 'your-future-love-reading', 'variants' => ['edges' => [['node' => ['id' => 'v6', 'price' => ['amount' => '40.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]]]],
+
+                            // 5 Unrelated Candidate Products that must be completely excluded by Relevance Gating
+                            ['node' => ['id' => 'gid://shopify/Product/7', 'title' => '1-2-1 Reading With Scott', 'productType' => 'Reading', 'tags' => ['Readings'], 'handle' => '1-2-1-reading-with-scott', 'variants' => ['edges' => [['node' => ['id' => 'v7', 'price' => ['amount' => '120.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]]]],
+                            ['node' => ['id' => 'gid://shopify/Product/8', 'title' => 'Online Group Reading With Scott', 'productType' => 'Reading', 'tags' => ['Readings'], 'handle' => 'online-group-reading', 'variants' => ['edges' => [['node' => ['id' => 'v8', 'price' => ['amount' => '60.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]]]],
+                            ['node' => ['id' => 'gid://shopify/Product/9', 'title' => 'Messages From Heaven', 'productType' => 'Email Reading', 'tags' => ['Heaven'], 'handle' => 'messages-from-heaven', 'variants' => ['edges' => [['node' => ['id' => 'v9', 'price' => ['amount' => '35.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]]]],
+                            ['node' => ['id' => 'gid://shopify/Product/10', 'title' => 'Future Two Question Email Reading', 'productType' => 'Email Reading', 'tags' => ['Future'], 'handle' => 'future-two-question-email-reading', 'variants' => ['edges' => [['node' => ['id' => 'v10', 'price' => ['amount' => '35.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]]]],
+                            ['node' => ['id' => 'gid://shopify/Product/11', 'title' => 'Gold Three Question Email Reading', 'productType' => 'Email Reading', 'tags' => ['Ask A Question'], 'handle' => 'gold-three-question-email-reading', 'variants' => ['edges' => [['node' => ['id' => 'v11', 'price' => ['amount' => '50.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]]]],
+                        ],
+                    ],
+                ],
+            ]);
+        $this->app->instance(StorefrontApiClientInterface::class, $storefrontApi);
+        $this->app->forgetInstance(ToolExecutor::class);
+
+        $executor = $this->app->make(ToolExecutor::class);
+        $ctx = new ChatSessionContext(
+            sessionId: self::SESSION_ID,
+            shopDomain: self::SHOP,
+        );
+
+        ob_start();
+        try {
+            $result = $executor->execute('search_catalog', ['query' => 'love readings'], $ctx);
+        } finally {
+            $output = (string) ob_get_clean();
+        }
+
+        $this->assertTrue($result->isSuccess());
+        $products = $result->emittedChunk['products'] ?? [];
+
+        // All 6 Love readings must be present
+        $this->assertCount(6, $products);
+        $titles = array_column($products, 'title');
+        $this->assertContains('3 Card Love Reading', $titles);
+        $this->assertContains('6 Card Love Reading', $titles);
+        $this->assertContains('In-Depth Love & Prosperity Reading', $titles);
+        $this->assertContains('Love & Relationships Two Question Email Reading', $titles);
+        $this->assertContains('You & Me Love Reading', $titles);
+        $this->assertContains('Your Future Love Reading & Predictions', $titles);
+
+        // Disqualified / unrelated readings must NOT appear
+        $this->assertNotContains('1-2-1 Reading With Scott', $titles);
+        $this->assertNotContains('Online Group Reading With Scott', $titles);
+        $this->assertNotContains('Messages From Heaven', $titles);
+        $this->assertNotContains('Future Two Question Email Reading', $titles);
+        $this->assertNotContains('Gold Three Question Email Reading', $titles);
+    }
+
+    public function test_compound_query_future_love_reading_ranks_dual_matched_product_highest(): void
+    {
+        $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
+        $storefrontApi->expects($this->once())
+            ->method('query')
+            ->with('storefront/products/get_all_products', $this->callback(function (array $params): bool {
+                $q = (string) ($params['query'] ?? '');
+
+                return str_contains($q, 'tag:"Future"') && str_contains($q, 'tag:"Love"');
+            }))
+            ->willReturn([
+                'data' => [
+                    'products' => [
+                        'edges' => [
+                            ['node' => ['id' => 'gid://shopify/Product/1', 'title' => 'Love & Relationships Two Question Email Reading', 'productType' => 'Email Reading', 'tags' => ['Love'], 'handle' => 'love-relationships', 'variants' => ['edges' => [['node' => ['id' => 'v1', 'price' => ['amount' => '35.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]]]],
+                            ['node' => ['id' => 'gid://shopify/Product/2', 'title' => 'Your Future Love Reading & Predictions', 'productType' => 'Email Reading', 'tags' => ['Love', 'Future'], 'handle' => 'your-future-love-reading', 'variants' => ['edges' => [['node' => ['id' => 'v2', 'price' => ['amount' => '40.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]]]],
+                            ['node' => ['id' => 'gid://shopify/Product/3', 'title' => 'Future Predictions Email Reading', 'productType' => 'Email Reading', 'tags' => ['Future'], 'handle' => 'future-predictions', 'variants' => ['edges' => [['node' => ['id' => 'v3', 'price' => ['amount' => '35.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]]]],
+                            ['node' => ['id' => 'gid://shopify/Product/4', 'title' => 'Messages From Heaven', 'productType' => 'Email Reading', 'tags' => ['Heaven'], 'handle' => 'messages-from-heaven', 'variants' => ['edges' => [['node' => ['id' => 'v4', 'price' => ['amount' => '35.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]]]],
+                        ],
+                    ],
+                ],
+            ]);
+        $this->app->instance(StorefrontApiClientInterface::class, $storefrontApi);
+        $this->app->forgetInstance(ToolExecutor::class);
+
+        $executor = $this->app->make(ToolExecutor::class);
+        $ctx = new ChatSessionContext(
+            sessionId: self::SESSION_ID,
+            shopDomain: self::SHOP,
+        );
+
+        ob_start();
+        try {
+            $result = $executor->execute('search_catalog', ['query' => 'future love reading'], $ctx);
+        } finally {
+            $output = (string) ob_get_clean();
+        }
+
+        $this->assertTrue($result->isSuccess());
+        $products = $result->emittedChunk['products'] ?? [];
+
+        // Dual match (Future + Love) must rank #1 at index 0
+        $this->assertNotEmpty($products);
+        $this->assertSame('Your Future Love Reading & Predictions', $products[0]['title']);
+
+        // Messages From Heaven must be completely excluded
+        $titles = array_column($products, 'title');
+        $this->assertNotContains('Messages From Heaven', $titles);
+    }
+
+    public function test_broad_guidance_query_routes_to_email_readings_collection_showcase(): void
+    {
+        $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
+        $storefrontApi->expects($this->once())
+            ->method('query')
+            ->with('storefront/collection/collection_products', $this->callback(function (array $params): bool {
+                return ($params['handle'] ?? '') === 'email-readings';
+            }))
+            ->willReturn([
+                'data' => [
+                    'collectionByHandle' => [
+                        'products' => [
+                            'edges' => [
+                                ['node' => ['id' => 'gid://shopify/Product/1', 'title' => 'Gold Three Question Email Reading', 'productType' => 'Email Reading', 'tags' => ['Ask A Question'], 'handle' => 'gold-three-question', 'variants' => ['edges' => [['node' => ['id' => 'v1', 'price' => ['amount' => '50.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]]]],
+                                ['node' => ['id' => 'gid://shopify/Product/2', 'title' => 'Love & Relationships Two Question Email Reading', 'productType' => 'Email Reading', 'tags' => ['Love'], 'handle' => 'love-relationships', 'variants' => ['edges' => [['node' => ['id' => 'v2', 'price' => ['amount' => '35.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]]]],
                             ],
                         ],
                     ],
@@ -87,19 +181,52 @@ class CatalogTagSearchTest extends TestCase
 
         ob_start();
         try {
-            $result = $executor->execute('search_catalog', ['query' => 'Love'], $ctx);
+            $result = $executor->execute('search_catalog', ['query' => 'recommend a reading for me'], $ctx);
         } finally {
             $output = (string) ob_get_clean();
         }
 
         $this->assertTrue($result->isSuccess());
-        $this->assertStringContainsString('"type":"products"', $output);
-        $this->assertStringContainsString('Love & Relationships Two Question Email Reading', $output);
+        $products = $result->emittedChunk['products'] ?? [];
+        $this->assertCount(2, $products);
+    }
 
-        // Reading should be ranked first in the carousel products payload
+    public function test_hybrid_query_crystals_for_love_prioritizes_physical_goods(): void
+    {
+        $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
+        $storefrontApi->expects($this->once())
+            ->method('query')
+            ->with('storefront/products/get_all_products', $this->anything())
+            ->willReturn([
+                'data' => [
+                    'products' => [
+                        'edges' => [
+                            ['node' => ['id' => 'gid://shopify/Product/1', 'title' => 'Love & Relationships Two Question Email Reading', 'productType' => 'Email Reading', 'tags' => ['Love'], 'handle' => 'love-relationships', 'variants' => ['edges' => [['node' => ['id' => 'v1', 'price' => ['amount' => '35.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]]]],
+                            ['node' => ['id' => 'gid://shopify/Product/2', 'title' => 'Rose Quartz Love Crystal', 'productType' => 'Crystals', 'tags' => ['Crystal', 'Love'], 'handle' => 'rose-quartz-love-crystal', 'variants' => ['edges' => [['node' => ['id' => 'v2', 'price' => ['amount' => '18.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]]]],
+                        ],
+                    ],
+                ],
+            ]);
+        $this->app->instance(StorefrontApiClientInterface::class, $storefrontApi);
+        $this->app->forgetInstance(ToolExecutor::class);
+
+        $executor = $this->app->make(ToolExecutor::class);
+        $ctx = new ChatSessionContext(
+            sessionId: self::SESSION_ID,
+            shopDomain: self::SHOP,
+        );
+
+        ob_start();
+        try {
+            $result = $executor->execute('search_catalog', ['query' => 'crystals for love'], $ctx);
+        } finally {
+            $output = (string) ob_get_clean();
+        }
+
+        $this->assertTrue($result->isSuccess());
         $products = $result->emittedChunk['products'] ?? [];
         $this->assertNotEmpty($products);
-        $this->assertSame('Love & Relationships Two Question Email Reading', $products[0]['title']);
+        $this->assertSame('Rose Quartz Love Crystal', $products[0]['title']);
     }
 
     public function test_catalog_search_for_future_and_heaven_generates_correct_tag_queries(): void

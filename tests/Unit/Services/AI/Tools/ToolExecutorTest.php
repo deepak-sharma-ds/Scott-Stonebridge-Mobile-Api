@@ -75,7 +75,7 @@ class ToolExecutorTest extends TestCase
             ->method('query')
             ->with('storefront/products/get_all_products', [
                 'limit' => 10,
-                'query' => 'tag:"Tarot Card" OR title:"tarot" OR tarot',
+                'query' => 'tag:"Tarot Card" OR title:"tarot"',
                 'country' => 'GB',
             ])
             ->willReturn([
@@ -161,7 +161,7 @@ class ToolExecutorTest extends TestCase
             ->method('query')
             ->with('storefront/products/get_all_products', [
                 'limit' => 10,
-                'query' => 'tag:"Tarot Card" OR title:"tarot" OR tarot',
+                'query' => 'tag:"Tarot Card" OR title:"tarot"',
                 'country' => 'GB',
             ])
             ->willReturn([
