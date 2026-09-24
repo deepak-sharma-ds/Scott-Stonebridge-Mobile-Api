@@ -610,4 +610,94 @@ class CatalogTagSearchTest extends TestCase
         $this->assertTrue($queriedCollection, 'Expected broad query to fetch meditations collection');
         $this->assertTrue($queriedCatalog, 'Expected specific query to search catalog directly');
     }
+
+    public function test_specific_product_search_isolates_exact_match_and_prunes_near_duplicate_competitor(): void
+    {
+        $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
+        $storefrontApi->expects($this->once())
+            ->method('query')
+            ->with('storefront/products/get_all_products', $this->callback(function (array $params): bool {
+                $q = (string) ($params['query'] ?? '');
+
+                return str_contains($q, 'spirit') && str_contains($q, 'guide');
+            }))
+            ->willReturn([
+                'data' => [
+                    'products' => [
+                        'edges' => [
+                            [
+                                'node' => [
+                                    'id' => 'gid://shopify/Product/15536935764351',
+                                    'title' => 'Spirit Guide Meditation',
+                                    'productType' => '',
+                                    'tags' => ['audio-login', 'custom product', 'spirit-guide-meditation'],
+                                    'handle' => 'spirit-guide-meditation',
+                                    'variants' => [
+                                        'edges' => [
+                                            ['node' => ['id' => 'v1', 'price' => ['amount' => '18.99', 'currencyCode' => 'GBP'], 'availableForSale' => true]],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                            [
+                                'node' => [
+                                    'id' => 'gid://shopify/Product/15442647646591',
+                                    'title' => 'Communicate with Spirit Meditation',
+                                    'productType' => '',
+                                    'tags' => ['audio-login', 'communication-meditation', 'custom product'],
+                                    'handle' => 'communicate-with-spirit-meditation',
+                                    'variants' => [
+                                        'edges' => [
+                                            ['node' => ['id' => 'v2', 'price' => ['amount' => '18.99', 'currencyCode' => 'GBP'], 'availableForSale' => true]],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                            [
+                                'node' => [
+                                    'id' => 'gid://shopify/Product/15536935502207',
+                                    'title' => 'Protection Meditation',
+                                    'productType' => '',
+                                    'tags' => ['audio-login', 'custom product', 'protection-meditation'],
+                                    'handle' => 'protection-meditation',
+                                    'variants' => [
+                                        'edges' => [
+                                            ['node' => ['id' => 'v3', 'price' => ['amount' => '19.99', 'currencyCode' => 'GBP'], 'availableForSale' => true]],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ]);
+
+        $this->app->instance(StorefrontApiClientInterface::class, $storefrontApi);
+        $this->app->forgetInstance(ToolExecutor::class);
+
+        $executor = $this->app->make(ToolExecutor::class);
+        $ctx = new ChatSessionContext(
+            sessionId: self::SESSION_ID,
+            shopDomain: self::SHOP,
+        );
+
+        ob_start();
+        try {
+            $result = $executor->execute('search_catalog', ['query' => 'show me the Spirit Guide Meditation'], $ctx);
+        } finally {
+            $output = (string) ob_get_clean();
+        }
+
+        $this->assertTrue($result->isSuccess());
+        $products = $result->emittedChunk['products'] ?? [];
+
+        // Exact Match Isolation: Only Spirit Guide Meditation must be returned; competitor cards pruned!
+        $this->assertCount(1, $products);
+        $this->assertSame('Spirit Guide Meditation', $products[0]['title']);
+
+        // Structured messageForAi check:
+        $this->assertStringContainsString('Found 1 exact product match: "Spirit Guide Meditation"', $result->messageForAi);
+        $this->assertStringContainsString('spirit-guide-meditation', $result->messageForAi);
+        $this->assertStringContainsString('18.99 GBP', $result->messageForAi);
+    }
 }

@@ -225,7 +225,7 @@ class PromptBuilderInjectionTest extends TestCase
             '- [policy] Shipping — '.str_repeat('Lowest ranked detail. ', 12),
         ];
 
-        config(['sales.prompt_guard.system_prompt_max_tokens' => 2970]);
+        config(['sales.prompt_guard.system_prompt_max_tokens' => 3180]);
 
         $conversations = Mockery::mock(ConversationServiceInterface::class);
         $conversations->shouldReceive('historyTailAsMessages')->andReturn([]);

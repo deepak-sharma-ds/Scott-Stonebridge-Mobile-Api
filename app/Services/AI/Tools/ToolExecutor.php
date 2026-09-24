@@ -246,8 +246,25 @@ class ToolExecutor
 
         $count = count($cards);
 
+        if ($count === 0) {
+            $messageForAi = "No products matched \"{$query}\".";
+        } elseif ($count === 1) {
+            $c = $cards[0];
+            $price = isset($c['price_minor_units']) ? number_format($c['price_minor_units'] / 100, 2).' '.($c['currency'] ?? 'GBP') : '';
+            $priceStr = $price !== '' ? " (Price: {$price})" : '';
+            $messageForAi = "Found 1 exact product match: \"{$c['title']}\" (Handle: {$c['handle']}{$priceStr}). Emitted to customer carousel.";
+        } else {
+            $summaryList = [];
+            foreach (array_slice($cards, 0, 5) as $i => $c) {
+                $price = isset($c['price_minor_units']) ? number_format($c['price_minor_units'] / 100, 2).' '.($c['currency'] ?? 'GBP') : '';
+                $priceStr = $price !== '' ? " ({$price})" : '';
+                $summaryList[] = ($i + 1).'. "'.$c['title'].'"'.$priceStr;
+            }
+            $messageForAi = "Found {$count} products for \"{$query}\" (".implode(', ', $summaryList).'). Emitted to customer carousel.';
+        }
+
         return ToolResult::success(
-            $count > 0 ? "Found {$count} products for \"{$query}\"." : "No products matched \"{$query}\".",
+            $messageForAi,
             ['type' => 'products'] + $payload,
         );
     }
@@ -635,9 +652,10 @@ class ToolExecutor
                 }
             }
 
-            // Relevance Gate Immunity & Exact Title Dominance calculation (ADR 0016)
+            // Relevance Gate Immunity & Exact Title Dominance calculation (ADR 0016, ADR 0017)
             $isImmune = false;
             $titleMatchScore = 0.0;
+            $isExactMatch = false;
 
             if (! empty($distinctiveTokens)) {
                 $matchedTokenCount = 0;
@@ -656,9 +674,13 @@ class ToolExecutor
                 // Exact Title Dominance (+20.0):
                 // Either all distinctive tokens match, or the combined search phrase is contained directly
                 $distinctivePhrase = implode(' ', $distinctiveTokens);
-                if (str_contains($title, $distinctivePhrase) || ($matchedTokenCount === $tokenCount && $tokenCount >= 2)) {
+                $hasExactPhrase = ($distinctivePhrase !== '' && (str_contains($title, $distinctivePhrase) || str_contains($handle, str_replace(' ', '-', $distinctivePhrase))));
+                $matchesAllTokens = ($tokenCount >= 2 && $matchedTokenCount === $tokenCount);
+
+                if ($hasExactPhrase || $matchesAllTokens) {
                     $titleMatchScore += 20.0;
                     $isImmune = true;
+                    $isExactMatch = true;
                 } elseif ($matchedTokenCount > 0) {
                     $titleMatchScore += ($matchedTokenCount * 4.0);
                 }
@@ -710,10 +732,24 @@ class ToolExecutor
                 }
             }
 
-            $scored[] = ['node' => $node, 'score' => $baseScore];
+            $scored[] = [
+                'node' => $node,
+                'score' => $baseScore,
+                'isExactMatch' => $isExactMatch,
+            ];
         }
 
         usort($scored, static fn ($a, $b) => $b['score'] <=> $a['score']);
+
+        // Exact Match Isolation (ADR 0017):
+        // When a specific product search (2+ distinctive tokens) yields one or more 100% exact matches,
+        // prune competitor products that lack key discriminator tokens so the customer sees only the exact requested item.
+        if (count($distinctiveTokens) >= 2) {
+            $exactMatches = array_values(array_filter($scored, static fn ($item) => ! empty($item['isExactMatch'])));
+            if (! empty($exactMatches)) {
+                $scored = $exactMatches;
+            }
+        }
 
         return array_values(array_map(static fn ($item) => $item['node'], $scored));
     }
