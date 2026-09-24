@@ -149,7 +149,7 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
         }
 
         $pageSize = (int) config('sales.knowledge.admin_page_size', 50);
-        $connection = (string) config('sales.queue.connection', 'redis');
+        $connection = (string) (config('sales.queue.connection') ?: config('queue.default', 'database'));
         $queue = (string) config('sales.queue.sync', 'sync');
 
         // Pages
@@ -727,7 +727,7 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
 
         $pageSize = (int) config('sales.knowledge.products.page_size', 50);
         $maxPages = (int) config('sales.knowledge.products.max_pages', 10);
-        $connection = (string) config('sales.queue.connection', 'redis');
+        $connection = (string) (config('sales.queue.connection') ?: config('queue.default', 'database'));
         $queue = (string) config('sales.queue.sync', 'sync');
         $cap = $limit !== null && $limit > 0 ? $limit : PHP_INT_MAX;
 
@@ -818,7 +818,7 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
         $concurrency = max(1, (int) config('sales.knowledge.urls.concurrency', 4));
         $timeout = max(1, (int) config('sales.knowledge.urls.fetch_timeout', 15));
         $userAgent = (string) config('sales.knowledge.urls.user_agent', 'ScottStonebridgeBot/1.0');
-        $connection = (string) config('sales.queue.connection', 'redis');
+        $connection = (string) (config('sales.queue.connection') ?: config('queue.default', 'database'));
         $queue = (string) config('sales.queue.sync', 'sync');
 
         $dispatched = 0;

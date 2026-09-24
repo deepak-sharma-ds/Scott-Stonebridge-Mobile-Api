@@ -12,39 +12,40 @@ Artisan::command('inspire', function () {
 
 /*
 |--------------------------------------------------------------------------
-| AI Sales Agent — Daily Knowledge Sync (Phase 2 / Phase D)
+| AI Sales Agent — Knowledge Sync (Phase 2 / Phase D)
 |--------------------------------------------------------------------------
 |
-| Walk every shop_domain known to the store_knowledge table (Phase 2 is
-| single-shop in practice but the schedule scales when more shops land)
-| and dispatch a SyncStoreKnowledgeJob. The hour is configurable via
-| KNOWLEDGE_SYNC_HOUR. SHOPIFY_STORE_DOMAIN is included so the first
-| sync still fires even before any rows exist.
+| Guarded by KNOWLEDGE_SYNC_SCHEDULE_ENABLED (ADR 0015 / Option B: Manual Admin
+| Sync Only). By default, knowledge updates run manually on demand via
+| `php artisan knowledge:sync {shop} --now`. Flip the env var to true if daily
+| cron automation is needed.
 |
 */
-Schedule::call(function (): void {
-    $hour = (int) config('sales.knowledge.sync_hour', 2);
-    if ((int) now()->format('G') !== $hour) {
-        return;
-    }
+if (filter_var(env('KNOWLEDGE_SYNC_SCHEDULE_ENABLED', false), FILTER_VALIDATE_BOOLEAN)) {
+    Schedule::call(function (): void {
+        $hour = (int) config('sales.knowledge.sync_hour', 2);
+        if ((int) now()->format('G') !== $hour) {
+            return;
+        }
 
-    $shops = StoreKnowledge::query()
-        ->select('shop_domain')
-        ->distinct()
-        ->pluck('shop_domain')
-        ->all();
+        $shops = StoreKnowledge::query()
+            ->select('shop_domain')
+            ->distinct()
+            ->pluck('shop_domain')
+            ->all();
 
-    $configured = (string) (config('shopify.store_domain') ?? '');
-    if ($configured !== '' && ! in_array($configured, $shops, true)) {
-        $shops[] = $configured;
-    }
+        $configured = (string) (config('shopify.store_domain') ?? '');
+        if ($configured !== '' && ! in_array($configured, $shops, true)) {
+            $shops[] = $configured;
+        }
 
-    foreach ($shops as $shop) {
-        SyncStoreKnowledgeJob::dispatch((string) $shop)
-            ->onConnection((string) config('sales.queue.connection', 'redis'))
-            ->onQueue((string) config('sales.queue.sync', 'sync'));
-    }
-})->dailyAt(sprintf('%02d:00', (int) env('KNOWLEDGE_SYNC_HOUR', 2)))->name('ai-knowledge-sync');
+        foreach ($shops as $shop) {
+            SyncStoreKnowledgeJob::dispatch((string) $shop)
+                ->onConnection((string) (config('sales.queue.connection') ?: config('queue.default', 'database')))
+                ->onQueue((string) config('sales.queue.sync', 'sync'));
+        }
+    })->dailyAt(sprintf('%02d:00', (int) env('KNOWLEDGE_SYNC_HOUR', 2)))->name('ai-knowledge-sync');
+}
 
 /*
 |--------------------------------------------------------------------------
