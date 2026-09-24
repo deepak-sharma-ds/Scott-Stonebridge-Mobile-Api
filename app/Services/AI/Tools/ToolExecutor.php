@@ -217,23 +217,7 @@ class ToolExecutor
                     ]);
                     $edges = $resp['data']['collectionByHandle']['products']['edges'] ?? [];
                 } else {
-                    $storefrontQuery = $this->buildStorefrontSearchQuery($query);
-                    $resp = $this->storefrontApi()->query('storefront/products/get_all_products', [
-                        'limit' => $limit,
-                        'query' => $storefrontQuery,
-                        'country' => $country,
-                    ]);
-                    $edges = $resp['data']['products']['edges'] ?? [];
-
-                    // Fallback to free-text query if tag query returned 0 items
-                    if (empty($edges) && $storefrontQuery !== $query && $query !== '') {
-                        $respFallback = $this->storefrontApi()->query('storefront/products/get_all_products', [
-                            'limit' => $limit,
-                            'query' => $query,
-                            'country' => $country,
-                        ]);
-                        $edges = $respFallback['data']['products']['edges'] ?? [];
-                    }
+                    $edges = $this->executeMultiPassSearch($query, $limit, $country);
                 }
 
                 $rawNodes = array_values(array_filter(array_map(
@@ -269,6 +253,21 @@ class ToolExecutor
     }
 
     /**
+     * Known keywords and product vocabulary in the Scott Stonebridge store
+     * used for Levenshtein typo correction on mobile search queries (ADR 0016).
+     *
+     * @var array<int, string>
+     */
+    private const STORE_SEARCH_VOCABULARY = [
+        'spirit', 'guide', 'meditation', 'meditations', 'tarot', 'reading', 'readings',
+        'crystal', 'crystals', 'candle', 'candles', 'incense', 'oil', 'oils', 'bracelet',
+        'bracelets', 'necklace', 'necklaces', 'pendant', 'pendants', 'ball', 'scrying',
+        'prosperity', 'love', 'future', 'heaven', 'angel', 'angels', 'healing',
+        'chakra', 'aura', 'energy', 'protection', 'abundance', 'psychic', 'astrology',
+        'amethyst', 'quartz', 'selenite', 'obsidian', 'rose', 'lavender', 'animal', 'higher',
+    ];
+
+    /**
      * Canonical Topic Facets on the Scott Stonebridge store and their detection keywords.
      *
      * @var array<string, array<int, string>>
@@ -276,7 +275,7 @@ class ToolExecutor
     private const TOPIC_FACETS = [
         'Love' => ['love', 'relationships?', 'soulmate', 'partner', 'romance', 'ex', 'marriage', 'twin flame'],
         'Future' => ['future', 'predictions?', 'what lies ahead', 'month ahead', 'year ahead', 'destiny', 'outlook'],
-        'Heaven' => ['heaven', 'messages? from heaven', 'spirits?', 'passed away', 'deceased', 'loved ones in heaven', 'afterlife', 'guardian angels?', 'angels?'],
+        'Heaven' => ['heaven', 'messages? from heaven', 'spirits?(?!\s+(?:guide|animal))\b', 'passed away', 'deceased', 'loved ones in heaven', 'afterlife', 'guardian angels?', 'angels?'],
         'Tarot Card' => ['tarot', 'tarot cards?', 'card reading', '3 card', '6 card', 'cards?'],
         'Crystal Ball' => ['crystal ball', 'scrying'],
         'Astrology Outlook' => ['astrology', 'horoscope', 'zodiac', 'astrological'],
@@ -294,6 +293,7 @@ class ToolExecutor
     private function mapQueryToCollection(string $query): ?string
     {
         $q = strtolower(trim($query));
+        $normalizedQ = $this->buildFuzzyNormalizedQuery($q);
 
         // In-person / Private live readings collection (contains 1-2-1 and Group Reading)
         if (preg_match('/\b(1-2-1|1\s*to\s*1|1\s*on\s*1|private\s+reading|meet\s+scott|group\s+reading|zoom\s+reading|live\s+reading|phone\s+reading)\b/i', $q)) {
@@ -303,7 +303,7 @@ class ToolExecutor
         $hasSpecificTopic = false;
         foreach (self::TOPIC_FACETS as $keywords) {
             foreach ($keywords as $kw) {
-                if (preg_match('/\b'.$kw.'\b/i', $q)) {
+                if (preg_match('/\b'.$kw.'\b/i', $q) || preg_match('/\b'.$kw.'\b/i', $normalizedQ)) {
                     $hasSpecificTopic = true;
                     break 2;
                 }
@@ -311,12 +311,20 @@ class ToolExecutor
         }
 
         // Broad/emotional reading inquiries without specific topic facet -> Diverse Best-Seller Showcase
-        if (! $hasSpecificTopic && preg_match('/\b(all\s+email\s+readings?|email\s+readings?|written\s+readings?|readings?|recommend.*reading|popular\s+readings?|suggest.*reading|what\s+reading|best\s+reading|feel\s+lost|need\s+guidance|help\s+me\s+choose)\b/i', $q)) {
+        $isBroadReading = preg_match('/\b(all\s+email\s+readings?|email\s+readings?|written\s+readings?|readings?|recommend.*reading|popular\s+readings?|suggest.*reading|what\s+reading|best\s+reading|feel\s+lost|need\s+guidance|help\s+me\s+choose)\b/i', $q)
+            || preg_match('/\b(all\s+email\s+readings?|email\s+readings?|written\s+readings?|readings?|recommend.*reading|popular\s+readings?|suggest.*reading|what\s+reading|best\s+reading|feel\s+lost|need\s+guidance|help\s+me\s+choose)\b/i', $normalizedQ);
+
+        if (! $hasSpecificTopic && $isBroadReading) {
             return 'email-readings';
         }
 
-        // Broad Meditations collection
-        if (preg_match('/\b(meditations?|guided\s+meditations?|sleep\s+meditations?|relaxation)\b/i', $q) && ! preg_match('/\b(crystal|bracelet|candle|reading)\b/i', $q)) {
+        // Broad Meditations collection (broad exploration only - ADR 0016)
+        $isMeditationQuery = preg_match('/\b(meditations?|guided\s+meditations?|sleep\s+meditations?|relaxation)\b/i', $q)
+            || preg_match('/\b(meditations?|guided\s+meditations?|sleep\s+meditations?|relaxation)\b/i', $normalizedQ);
+        $hasSpecificQualifier = preg_match('/\b(crystal|bracelet|candle|reading|spirit|guide|animal|higher|protection)\b/i', $q)
+            || preg_match('/\b(crystal|bracelet|candle|reading|spirit|guide|animal|higher|protection)\b/i', $normalizedQ);
+
+        if ($isMeditationQuery && ! $hasSpecificQualifier) {
             return 'meditations';
         }
 
@@ -354,6 +362,146 @@ class ToolExecutor
     }
 
     /**
+     * Query Shopify Storefront API for products with a specific search query.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function queryStorefrontProducts(string $searchQuery, int $limit, string $country): array
+    {
+        $resp = $this->storefrontApi()->query('storefront/products/get_all_products', [
+            'limit' => $limit,
+            'query' => $searchQuery,
+            'country' => $country,
+        ]);
+
+        return is_array($resp['data']['products']['edges'] ?? null)
+            ? $resp['data']['products']['edges']
+            : [];
+    }
+
+    /**
+     * Clean search query into clean alphanumeric words, excluding noise words (ADR 0016).
+     *
+     * @return array<int, string>
+     */
+    private function cleanSearchTerms(string $query): array
+    {
+        $noise = ['show', 'me', 'find', 'looking', 'for', 'any', 'available', 'please', 'suggest', 'recommend', 'i', 'want', 'need', 'some', 'the', 'a', 'an'];
+        $words = preg_split('/[^\p{L}\p{N}]+/u', strtolower(trim($query)), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+        return array_values(array_filter($words, static fn ($w) => ! in_array($w, $noise, true)));
+    }
+
+    /**
+     * Build prefix-wildcard search query (e.g. "spirit* meditation*") (ADR 0016).
+     */
+    private function buildWildcardSearchQuery(string $query): string
+    {
+        $terms = $this->cleanSearchTerms($query);
+        if (empty($terms)) {
+            return '*';
+        }
+
+        $wildcards = array_map(static fn ($term) => strlen($term) >= 3 ? $term.'*' : $term, $terms);
+
+        return implode(' ', $wildcards);
+    }
+
+    /**
+     * Fuzzy spelling correction using Levenshtein distance against store vocabulary (ADR 0016).
+     */
+    private function buildFuzzyNormalizedQuery(string $query): string
+    {
+        $terms = $this->cleanSearchTerms($query);
+        if (empty($terms)) {
+            return $query;
+        }
+
+        $corrected = [];
+        foreach ($terms as $term) {
+            $bestMatch = $term;
+            $bestDistance = 999;
+
+            // If term is already in vocabulary or very short, leave it
+            if (strlen($term) <= 3 || in_array($term, self::STORE_SEARCH_VOCABULARY, true)) {
+                $corrected[] = $term;
+
+                continue;
+            }
+
+            foreach (self::STORE_SEARCH_VOCABULARY as $vocabWord) {
+                $dist = levenshtein($term, $vocabWord);
+                // Allow 1 edit for 4-5 chars, 2 edits for 6+ chars
+                $maxDistance = strlen($term) <= 5 ? 1 : 2;
+                if ($dist <= $maxDistance && $dist < $bestDistance) {
+                    $bestDistance = $dist;
+                    $bestMatch = $vocabWord;
+                }
+            }
+
+            $corrected[] = $bestMatch;
+        }
+
+        return implode(' ', $corrected);
+    }
+
+    /**
+     * Execute 3-Pass Elastic Fallback Search:
+     * Pass 1: Direct query (using tag/title query or noise-stripped query terms)
+     * Pass 2: Prefix wildcards on query terms (e.g. "spirit* meditation*")
+     * Pass 3: Fuzzy typo normalization via Levenshtein distance on store vocabulary
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function executeMultiPassSearch(string $query, int $limit, string $country): array
+    {
+        // Pass 1: Direct query
+        $storefrontQuery = $this->buildStorefrontSearchQuery($query);
+        $edges = $this->queryStorefrontProducts($storefrontQuery, $limit, $country);
+
+        if (! empty($edges)) {
+            return $edges;
+        }
+
+        // Pass 1b: If storefrontQuery was tag-based and returned 0, try raw cleaned terms
+        $cleanedTerms = implode(' ', $this->cleanSearchTerms($query));
+        if ($cleanedTerms !== '' && $cleanedTerms !== $storefrontQuery) {
+            $edges = $this->queryStorefrontProducts($cleanedTerms, $limit, $country);
+            if (! empty($edges)) {
+                return $edges;
+            }
+        }
+
+        // Pass 2: Prefix wildcards
+        $wildcardQuery = $this->buildWildcardSearchQuery($query);
+        if ($wildcardQuery !== '*' && $wildcardQuery !== $cleanedTerms) {
+            $edges = $this->queryStorefrontProducts($wildcardQuery, $limit, $country);
+            if (! empty($edges)) {
+                return $edges;
+            }
+        }
+
+        // Pass 3: Fuzzy spelling correction + wildcards
+        $fuzzyNormalized = $this->buildFuzzyNormalizedQuery($query);
+        if ($fuzzyNormalized !== $query && $fuzzyNormalized !== '') {
+            $edges = $this->queryStorefrontProducts($fuzzyNormalized, $limit, $country);
+            if (! empty($edges)) {
+                return $edges;
+            }
+
+            $fuzzyWildcard = $this->buildWildcardSearchQuery($fuzzyNormalized);
+            if ($fuzzyWildcard !== '*' && $fuzzyWildcard !== $fuzzyNormalized) {
+                $edges = $this->queryStorefrontProducts($fuzzyWildcard, $limit, $country);
+                if (! empty($edges)) {
+                    return $edges;
+                }
+            }
+        }
+
+        return [];
+    }
+
+    /**
      * Build an optimized Shopify Storefront search query using tags and titles.
      */
     private function buildStorefrontSearchQuery(string $query): string
@@ -363,45 +511,50 @@ class ToolExecutor
             return '*';
         }
 
-        $matchedTags = [];
-        $matchedTopics = [];
+        // When customer searches for physical or audio products without requesting a reading,
+        // bypass topic facet tag querying and use clean query terms directly (ADR 0016)
+        $wantsPhysicalOrAudio = (bool) preg_match('/\b(meditations?|audio|candles?|bracelets?|necklaces?|oils?|pendants?|burners?|diffusers?)\b/i', $q);
+        $wantsReading = (bool) preg_match('/\b(readings?|questions?|guidance)\b/i', $q);
 
-        foreach (self::TOPIC_FACETS as $tag => $keywords) {
-            foreach ($keywords as $kw) {
-                if (preg_match('/\b'.$kw.'\b/i', $q)) {
-                    $matchedTags[] = $tag;
-                    $cleanKw = str_replace(['?', '\\s+'], '', $kw);
-                    if ($cleanKw !== 'reading' && $cleanKw !== 'cards') {
-                        $matchedTopics[] = $cleanKw;
+        if (! $wantsPhysicalOrAudio || $wantsReading) {
+            $matchedTags = [];
+            $matchedTopics = [];
+
+            foreach (self::TOPIC_FACETS as $tag => $keywords) {
+                foreach ($keywords as $kw) {
+                    if (preg_match('/\b'.$kw.'\b/i', $q)) {
+                        $matchedTags[] = $tag;
+                        $cleanKw = str_replace(['?', '\\s+'], '', $kw);
+                        if ($cleanKw !== 'reading' && $cleanKw !== 'cards') {
+                            $matchedTopics[] = $cleanKw;
+                        }
+                        break;
                     }
-                    break;
                 }
             }
-        }
 
-        if (! empty($matchedTags)) {
-            $parts = [];
-            foreach (array_unique($matchedTags) as $tag) {
-                $parts[] = "tag:\"{$tag}\"";
-            }
-            foreach (array_unique($matchedTopics) as $topic) {
-                $parts[] = "title:\"{$topic}\"";
-            }
+            if (! empty($matchedTags)) {
+                $parts = [];
+                foreach (array_unique($matchedTags) as $tag) {
+                    $parts[] = "tag:\"{$tag}\"";
+                }
+                foreach (array_unique($matchedTopics) as $topic) {
+                    $parts[] = "title:\"{$topic}\"";
+                }
 
-            return implode(' OR ', $parts);
+                return implode(' OR ', $parts);
+            }
         }
 
         // Strip pure noise words
-        $noise = ['show', 'me', 'find', 'looking', 'for', 'any', 'available', 'please', 'suggest', 'recommend', 'i', 'want', 'need', 'some', 'the', 'a', 'an'];
-        $words = preg_split('/\s+/u', $q) ?: [];
-        $clean = array_values(array_filter($words, static fn ($w) => ! in_array($w, $noise, true)));
+        $clean = $this->cleanSearchTerms($q);
 
         return ! empty($clean) ? implode(' ', $clean) : $q;
     }
 
     /**
      * Score, filter, and rank product nodes based on multi-facet intent,
-     * additive boosting, and hard relevance gating (ADR 0013).
+     * additive boosting, relevance gate immunity, and exact title dominance (ADR 0013, ADR 0016).
      *
      * @param  array<int, array<string, mixed>>  $nodes
      * @return array<int, array<string, mixed>>
@@ -425,8 +578,15 @@ class ToolExecutor
             }
         }
 
-        $wantsPhysical = (bool) preg_match('/\b(crystals?|stones?|candles?|incense|oils?|bracelets?|necklaces?|burners?|wax)\b/i', $q);
-        $wantsReading = (bool) preg_match('/\b(readings?|questions?|guidance|insight)\b/i', $q) || ! empty($requestedFacets);
+        $wantsPhysical = (bool) preg_match('/\b(crystals?|stones?|candles?|incense|oils?|bracelets?|necklaces?|burners?|wax|meditations?)\b/i', $q);
+        $wantsReading = (bool) preg_match('/\b(readings?|questions?|guidance|insight)\b/i', $q) || (! empty($requestedFacets) && ! $wantsPhysical);
+
+        // Distinctive search terms for Relevance Gate Immunity and Exact Title Dominance (ADR 0016)
+        $genericFilterWords = ['reading', 'readings', 'product', 'products', 'item', 'items', 'scott', 'stonebridge', 'show', 'me', 'find', 'looking', 'for', 'any', 'available', 'please', 'suggest', 'recommend', 'i', 'want', 'need', 'some', 'the', 'a', 'an'];
+        $rawQueryTerms = $this->cleanSearchTerms($q);
+        $normalizedQueryTerms = $this->cleanSearchTerms($this->buildFuzzyNormalizedQuery($q));
+        $distinctiveTokens = array_unique(array_merge($rawQueryTerms, $normalizedQueryTerms));
+        $distinctiveTokens = array_values(array_filter($distinctiveTokens, static fn ($w) => strlen($w) >= 3 && ! in_array($w, $genericFilterWords, true)));
 
         $scored = [];
         foreach ($nodes as $node) {
@@ -456,8 +616,10 @@ class ToolExecutor
                     $hasTitle = false;
 
                     foreach ($keywords as $kw) {
-                        $cleanKw = str_replace(['?', '\\s+'], '', $kw);
-                        if ($cleanKw !== 'reading' && $cleanKw !== 'cards' && (str_contains($title, $cleanKw) || str_contains($handle, $cleanKw))) {
+                        $baseKw = preg_replace('/s\?$/', '', $kw);
+                        $baseKw = preg_replace('/[?+*]/', '', (string) $baseKw);
+                        $baseKw = trim((string) preg_replace('/\s+/', ' ', (string) $baseKw));
+                        if ($baseKw !== 'reading' && $baseKw !== 'cards' && $baseKw !== '' && (str_contains($title, $baseKw) || str_contains($handle, $baseKw))) {
                             $hasTitle = true;
                             break;
                         }
@@ -471,19 +633,49 @@ class ToolExecutor
                         $facetMatches++;
                     }
                 }
+            }
 
-                // Hard Relevance Gate: Product must have > 0 match to at least one requested topic facet
-                if ($topicScore <= 0) {
-                    continue;
+            // Relevance Gate Immunity & Exact Title Dominance calculation (ADR 0016)
+            $isImmune = false;
+            $titleMatchScore = 0.0;
+
+            if (! empty($distinctiveTokens)) {
+                $matchedTokenCount = 0;
+                foreach ($distinctiveTokens as $token) {
+                    if (str_contains($title, $token) || str_contains($handle, $token)) {
+                        $matchedTokenCount++;
+                    }
                 }
 
-                // Multi-Topic Additive Boost: Products matching multiple requested facets rank highest
-                if ($facetMatches > 1) {
-                    $topicScore += ($facetMatches * 4.0);
+                $tokenCount = count($distinctiveTokens);
+                $threshold = $tokenCount === 1 ? 1 : ($tokenCount === 2 ? 2 : (int) ceil($tokenCount * 0.6));
+                if ($matchedTokenCount >= $threshold) {
+                    $isImmune = true;
+                }
+
+                // Exact Title Dominance (+20.0):
+                // Either all distinctive tokens match, or the combined search phrase is contained directly
+                $distinctivePhrase = implode(' ', $distinctiveTokens);
+                if (str_contains($title, $distinctivePhrase) || ($matchedTokenCount === $tokenCount && $tokenCount >= 2)) {
+                    $titleMatchScore += 20.0;
+                    $isImmune = true;
+                } elseif ($matchedTokenCount > 0) {
+                    $titleMatchScore += ($matchedTokenCount * 4.0);
                 }
             }
 
-            $baseScore = 1.0 + $topicScore;
+            // Hard Relevance Gate:
+            // When topic facets are requested, product must match at least one facet UNLESS granted Relevance Gate Immunity
+            if (! empty($requestedFacets) && $topicScore <= 0 && ! $isImmune) {
+                continue;
+            }
+
+            // Multi-Topic Additive Boost: Products matching multiple requested facets rank higher
+            if ($facetMatches > 1) {
+                $topicScore += ($facetMatches * 4.0);
+            }
+
+            $baseScore = 1.0 + $topicScore + $titleMatchScore;
 
             // Type awareness adjustments
             if ($wantsPhysical) {
@@ -500,8 +692,8 @@ class ToolExecutor
                 }
             }
 
-            // General token overlap for non-facet queries
-            if (empty($requestedFacets)) {
+            // General token overlap for non-facet queries without title dominance
+            if (empty($requestedFacets) && $titleMatchScore <= 0) {
                 $tokens = preg_split('/\s+/', $q) ?: [];
                 foreach ($tokens as $token) {
                     if (strlen($token) < 3) {

@@ -394,4 +394,220 @@ class CatalogTagSearchTest extends TestCase
         $this->assertNotEmpty($results);
         $this->assertSame('Shipping Policy', $results[0]['title']);
     }
+
+    public function test_catalog_search_for_spirit_guide_meditation_returns_meditation_product_with_immunity(): void
+    {
+        $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
+        $storefrontApi->expects($this->once())
+            ->method('query')
+            ->with('storefront/products/get_all_products', $this->callback(function (array $params): bool {
+                $q = (string) ($params['query'] ?? '');
+
+                return str_contains($q, 'spirit') && str_contains($q, 'meditation');
+            }))
+            ->willReturn([
+                'data' => [
+                    'products' => [
+                        'edges' => [
+                            [
+                                'node' => [
+                                    'id' => 'gid://shopify/Product/15536935764351',
+                                    'title' => 'Spirit Guide Meditation',
+                                    'productType' => '',
+                                    'tags' => ['audio-login', 'custom product', 'spirit-guide-meditation'],
+                                    'handle' => 'spirit-guide-meditation',
+                                    'variants' => [
+                                        'edges' => [
+                                            ['node' => ['id' => 'v99', 'price' => ['amount' => '18.99', 'currencyCode' => 'GBP'], 'availableForSale' => true]],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                            [
+                                'node' => [
+                                    'id' => 'gid://shopify/Product/100',
+                                    'title' => 'Messages From Heaven',
+                                    'productType' => 'Email Reading',
+                                    'tags' => ['Heaven'],
+                                    'handle' => 'messages-from-heaven',
+                                    'variants' => [
+                                        'edges' => [
+                                            ['node' => ['id' => 'v100', 'price' => ['amount' => '35.00', 'currencyCode' => 'GBP'], 'availableForSale' => true]],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ],
+                ],
+            ]);
+
+        $this->app->instance(StorefrontApiClientInterface::class, $storefrontApi);
+        $this->app->forgetInstance(ToolExecutor::class);
+
+        $executor = $this->app->make(ToolExecutor::class);
+        $ctx = new ChatSessionContext(
+            sessionId: self::SESSION_ID,
+            shopDomain: self::SHOP,
+        );
+
+        ob_start();
+        try {
+            $result = $executor->execute('search_catalog', ['query' => 'Spirit Guide Meditation'], $ctx);
+        } finally {
+            $output = (string) ob_get_clean();
+        }
+
+        $this->assertTrue($result->isSuccess());
+        $products = $result->emittedChunk['products'] ?? [];
+        $this->assertNotEmpty($products);
+        $this->assertSame('Spirit Guide Meditation', $products[0]['title']);
+    }
+
+    public function test_catalog_search_with_mobile_typo_recovers_via_fuzzy_fallback(): void
+    {
+        $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
+        $storefrontApi->expects($this->atLeast(2))
+            ->method('query')
+            ->willReturnCallback(function (string $path, array $params) {
+                $q = (string) ($params['query'] ?? '');
+
+                // Pass 1: "spirite meditation" -> 0 items
+                // Pass 2: "spirite* meditation*" -> 0 items
+                // Pass 3: "spirit" / "spirit* meditation*" -> 1 item (recovered)
+                if (str_contains($q, 'spirit*') || (str_contains($q, 'spirit') && ! str_contains($q, 'spirite'))) {
+                    return [
+                        'data' => [
+                            'products' => [
+                                'edges' => [
+                                    [
+                                        'node' => [
+                                            'id' => 'gid://shopify/Product/15536935764351',
+                                            'title' => 'Spirit Guide Meditation',
+                                            'productType' => '',
+                                            'tags' => ['audio-login', 'custom product', 'spirit-guide-meditation'],
+                                            'handle' => 'spirit-guide-meditation',
+                                            'variants' => [
+                                                'edges' => [
+                                                    ['node' => ['id' => 'v99', 'price' => ['amount' => '18.99', 'currencyCode' => 'GBP'], 'availableForSale' => true]],
+                                                ],
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ];
+                }
+
+                return ['data' => ['products' => ['edges' => []]]];
+            });
+
+        $this->app->instance(StorefrontApiClientInterface::class, $storefrontApi);
+        $this->app->forgetInstance(ToolExecutor::class);
+
+        $executor = $this->app->make(ToolExecutor::class);
+        $ctx = new ChatSessionContext(
+            sessionId: self::SESSION_ID,
+            shopDomain: self::SHOP,
+        );
+
+        ob_start();
+        try {
+            $result = $executor->execute('search_catalog', ['query' => 'spirite meditation'], $ctx);
+        } finally {
+            $output = (string) ob_get_clean();
+        }
+
+        $this->assertTrue($result->isSuccess());
+        $products = $result->emittedChunk['products'] ?? [];
+        $this->assertNotEmpty($products);
+        $this->assertSame('Spirit Guide Meditation', $products[0]['title']);
+    }
+
+    public function test_broad_meditation_query_maps_to_meditations_collection_while_specific_meditation_searches_catalog(): void
+    {
+        $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
+        $queriedCollection = false;
+        $queriedCatalog = false;
+
+        $storefrontApi->expects($this->exactly(2))
+            ->method('query')
+            ->willReturnCallback(function (string $path, array $params) use (&$queriedCollection, &$queriedCatalog) {
+                if ($path === 'storefront/collection/collection_products') {
+                    $queriedCollection = true;
+                    $this->assertSame('meditations', $params['handle']);
+
+                    return [
+                        'data' => [
+                            'collectionByHandle' => [
+                                'products' => [
+                                    'edges' => [
+                                        [
+                                            'node' => [
+                                                'id' => 'gid://shopify/Product/1',
+                                                'title' => 'Sleep Meditation',
+                                                'productType' => '',
+                                                'tags' => ['sleep-meditation'],
+                                                'handle' => 'sleep-meditation',
+                                                'variants' => ['edges' => [['node' => ['id' => 'v1', 'price' => ['amount' => '18.99', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]],
+                                            ],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ];
+                }
+
+                if ($path === 'storefront/products/get_all_products') {
+                    $queriedCatalog = true;
+
+                    return [
+                        'data' => [
+                            'products' => [
+                                'edges' => [
+                                    [
+                                        'node' => [
+                                            'id' => 'gid://shopify/Product/2',
+                                            'title' => 'Spirit Guide Meditation',
+                                            'productType' => '',
+                                            'tags' => ['spirit-guide-meditation'],
+                                            'handle' => 'spirit-guide-meditation',
+                                            'variants' => ['edges' => [['node' => ['id' => 'v2', 'price' => ['amount' => '18.99', 'currencyCode' => 'GBP'], 'availableForSale' => true]]]],
+                                        ],
+                                    ],
+                                ],
+                            ],
+                        ],
+                    ];
+                }
+
+                return ['data' => []];
+            });
+
+        $this->app->instance(StorefrontApiClientInterface::class, $storefrontApi);
+        $this->app->forgetInstance(ToolExecutor::class);
+
+        $executor = $this->app->make(ToolExecutor::class);
+        $ctx = new ChatSessionContext(
+            sessionId: self::SESSION_ID,
+            shopDomain: self::SHOP,
+        );
+
+        ob_start();
+        try {
+            // Broad browsing query -> maps to 'meditations' collection
+            $resBroad = $executor->execute('search_catalog', ['query' => 'show me meditations'], $ctx);
+            // Specific product query -> maps to catalog search
+            $resSpecific = $executor->execute('search_catalog', ['query' => 'Spirit Guide Meditation'], $ctx);
+        } finally {
+            $output = (string) ob_get_clean();
+        }
+
+        $this->assertTrue($resBroad->isSuccess());
+        $this->assertTrue($resSpecific->isSuccess());
+        $this->assertTrue($queriedCollection, 'Expected broad query to fetch meditations collection');
+        $this->assertTrue($queriedCatalog, 'Expected specific query to search catalog directly');
+    }
 }
