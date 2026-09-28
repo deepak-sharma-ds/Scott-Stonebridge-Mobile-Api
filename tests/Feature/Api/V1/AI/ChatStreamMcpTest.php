@@ -70,18 +70,16 @@ class ChatStreamMcpTest extends TestCase
         $storefrontApi = $this->createMock(StorefrontApiClientInterface::class);
         $storefrontApi->method('query')->willReturn([
             'data' => [
-                'collectionByHandle' => [
-                    'products' => [
-                        'edges' => [
-                            [
-                                'node' => [
-                                    'id' => 'gid://shopify/Product/1',
-                                    'title' => 'The Fool Tarot',
-                                    'handle' => 'the-fool-tarot',
-                                    'variants' => [
-                                        'edges' => [
-                                            ['node' => ['id' => 'gid://shopify/Variant/11', 'price' => ['amount' => '24.99', 'currencyCode' => 'GBP'], 'availableForSale' => true]],
-                                        ],
+                'products' => [
+                    'edges' => [
+                        [
+                            'node' => [
+                                'id' => 'gid://shopify/Product/1',
+                                'title' => 'The Fool Tarot',
+                                'handle' => 'the-fool-tarot',
+                                'variants' => [
+                                    'edges' => [
+                                        ['node' => ['id' => 'gid://shopify/Variant/11', 'price' => ['amount' => '24.99', 'currencyCode' => 'GBP'], 'availableForSale' => true]],
                                     ],
                                 ],
                             ],
@@ -91,6 +89,7 @@ class ChatStreamMcpTest extends TestCase
             ],
         ]);
         $this->app->instance(StorefrontApiClientInterface::class, $storefrontApi);
+        $this->app->forgetInstance(ToolExecutor::class);
 
         $body = $this->stream($convo->session_id, 'show me tarot decks');
 

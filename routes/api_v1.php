@@ -114,7 +114,7 @@ Route::prefix('v1')->middleware([
      * POST /api/v1/cart/items/add - Add item to cart (cartId in body)
      * PUT /api/v1/cart/items/update - Update cart item (cartId and lineId in body)
      * DELETE /api/v1/cart/items/remove - Remove cart item (cartId and lineId in body)
-     * PUT /api/v1/cart/{cartId}/buyer - Update buyer identity (authenticated)
+     * PUT /api/v1/cart/buyer - Update buyer identity (authenticated, cartId in body)
      */
     Route::prefix('cart')->group(function () {
         Route::post('/', [CartController::class, 'store'])->name('api.v1.cart.store');
@@ -126,8 +126,7 @@ Route::prefix('v1')->middleware([
 
         // Protected cart routes
         Route::middleware(['shopify.auth'])->group(function () {
-            Route::put('/{cartId}/buyer', [CartController::class, 'updateBuyerIdentity'])
-                ->where('cartId', '.*')
+            Route::put('/buyer', [CartController::class, 'updateBuyerIdentity'])
                 ->name('api.v1.cart.updateBuyer');
         });
     });

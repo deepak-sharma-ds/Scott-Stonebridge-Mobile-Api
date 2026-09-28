@@ -27,7 +27,7 @@ return [
     |
     */
     'queue' => [
-        'connection' => env('CHATBOT_SALES_QUEUE_CONNECTION', env('CHATBOT_QUEUE_CONNECTION', 'redis')),
+        'connection' => env('CHATBOT_SALES_QUEUE_CONNECTION', env('CHATBOT_QUEUE_CONNECTION', env('QUEUE_CONNECTION', 'database'))),
         'sales' => env('CHATBOT_SALES_QUEUE', 'sales'),
         'recovery' => env('CHATBOT_RECOVERY_QUEUE', 'recovery'),
         'sync' => env('CHATBOT_SYNC_QUEUE', 'sync'),
@@ -281,7 +281,7 @@ return [
     |
     */
     'prompt_guard' => [
-        'system_prompt_max_tokens' => (int) env('SALES_SYSTEM_PROMPT_MAX_TOKENS', 1200),
+        'system_prompt_max_tokens' => (int) env('SALES_SYSTEM_PROMPT_MAX_TOKENS', 3000),
     ],
 
 ];

@@ -114,7 +114,7 @@ return [
     |--------------------------------------------------------------------------
     */
     'recommendation' => [
-        'limit' => (int) env('CHATBOT_RECOMMENDATION_LIMIT', 6),
+        'limit' => (int) env('CHATBOT_RECOMMENDATION_LIMIT', 10),
     ],
 
     /*

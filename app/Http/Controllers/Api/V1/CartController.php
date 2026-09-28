@@ -237,12 +237,14 @@ class CartController extends BaseApiController
     /**
      * Update cart buyer identity
      */
-    public function updateBuyerIdentity(string $cartId, UpdateBuyerIdentityRequest $request): JsonResponse
+    public function updateBuyerIdentity(UpdateBuyerIdentityRequest $request): JsonResponse
     {
         try {
+            $cartId = $request->validated('cart_id');
             $email = $request->validated('email');
+            $accessToken = $request->input('access_token') ?? $request->bearerToken();
 
-            $cart = $this->cartService->updateBuyerIdentity($cartId, $email);
+            $cart = $this->cartService->associateCustomer($cartId, $accessToken, $email);
 
             return $this->success(
                 'Buyer identity updated successfully',
