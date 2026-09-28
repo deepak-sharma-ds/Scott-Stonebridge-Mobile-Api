@@ -331,17 +331,24 @@ class CartService extends BaseService implements CartServiceInterface
      *
      * @param  string  $cartId  Cart identifier
      * @param  string  $accessToken  Customer access token
+     * @param  string|null  $email  Customer email (optional, sent alongside the token)
      */
-    public function associateCustomer(string $cartId, string $accessToken): CartDTO
+    public function associateCustomer(string $cartId, string $accessToken, ?string $email = null): CartDTO
     {
         try {
             $this->logPerformanceStart('associateCustomer');
 
+            $buyerIdentity = [
+                'customerAccessToken' => $accessToken,
+            ];
+
+            if ($email !== null) {
+                $buyerIdentity['email'] = $email;
+            }
+
             $variables = [
                 'cartId' => $cartId,
-                'buyerIdentity' => [
-                    'customerAccessToken' => $accessToken,
-                ],
+                'buyerIdentity' => $buyerIdentity,
                 'country' => $this->getCurrencyCountryCode(),
             ];
 

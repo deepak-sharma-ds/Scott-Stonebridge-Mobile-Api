@@ -201,7 +201,13 @@ class ChatController extends BaseApiController
         }
 
         try {
-            $this->escalation->trigger($conversation, $data['reason'], $data['customer_email'] ?? null);
+            $this->escalation->trigger(
+                $conversation,
+                $data['reason'],
+                $data['customer_email'] ?? null,
+                $data['customer_name'],
+                $data['customer_phone'] ?? null,
+            );
         } catch (Throwable $e) {
             report($e);
 

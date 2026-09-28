@@ -33,6 +33,8 @@ class OrderTrackingDTO extends BaseDTO
         public readonly ?string $carrier,
         public readonly ?string $estimatedDelivery, // ISO 8601 date or null
         public readonly ?string $shipToCity,
+        public readonly array $lineItems = [],
+        public readonly ?string $shippingTitle = null,
     ) {
         $this->validate();
     }
@@ -63,6 +65,49 @@ class OrderTrackingDTO extends BaseDTO
         $firstFulfilment = $node['fulfillments'][0] ?? null;
         $firstTracking = $firstFulfilment['trackingInfo'][0] ?? null;
 
+        $lineItems = [];
+        $rawLines = $node['lineItems']['edges'] ?? $node['lineItems'] ?? [];
+        if (is_array($rawLines)) {
+            foreach ($rawLines as $edge) {
+                $itemNode = is_array($edge) && isset($edge['node']) ? $edge['node'] : $edge;
+                if (! is_array($itemNode)) {
+                    continue;
+                }
+                $price = $itemNode['originalUnitPriceSet']['presentmentMoney']['amount']
+                    ?? $itemNode['originalUnitPriceSet']['shopMoney']['amount']
+                    ?? $itemNode['discountedUnitPriceSet']['presentmentMoney']['amount']
+                    ?? $itemNode['price']
+                    ?? null;
+                $currency = $itemNode['originalUnitPriceSet']['presentmentMoney']['currencyCode']
+                    ?? $itemNode['originalUnitPriceSet']['shopMoney']['currencyCode']
+                    ?? 'GBP';
+
+                $customAttrs = [];
+                $rawAttrs = $itemNode['customAttributes'] ?? [];
+                if (is_array($rawAttrs)) {
+                    foreach ($rawAttrs as $attr) {
+                        if (is_array($attr) && isset($attr['key'])) {
+                            $customAttrs[$attr['key']] = $attr['value'] ?? '';
+                        }
+                    }
+                }
+
+                $lineItems[] = [
+                    'title' => (string) ($itemNode['title'] ?? ''),
+                    'quantity' => (int) ($itemNode['quantity'] ?? 1),
+                    'variant_title' => self::stringOrNull($itemNode['variantTitle'] ?? $itemNode['variant']['title'] ?? null),
+                    'price' => self::stringOrNull($price),
+                    'currency' => (string) $currency,
+                    'custom_attributes' => $customAttrs,
+                ];
+            }
+        }
+
+        $shippingTitle = $node['shippingLine']['title']
+            ?? $node['shippingLines']['edges'][0]['node']['title']
+            ?? $node['shippingLines'][0]['title']
+            ?? null;
+
         return new self(
             orderNumber: $orderNumber,
             status: $status,
@@ -71,6 +116,8 @@ class OrderTrackingDTO extends BaseDTO
             carrier: self::stringOrNull($firstTracking['company'] ?? null),
             estimatedDelivery: self::stringOrNull($firstFulfilment['estimatedDeliveryAt'] ?? null),
             shipToCity: self::stringOrNull($node['shippingAddress']['city'] ?? null),
+            lineItems: $lineItems,
+            shippingTitle: self::stringOrNull($shippingTitle),
         );
     }
 
@@ -91,6 +138,8 @@ class OrderTrackingDTO extends BaseDTO
             'carrier' => $this->carrier,
             'estimated_delivery' => $this->estimatedDelivery,
             'ship_to_city' => $this->shipToCity,
+            'line_items' => $this->lineItems,
+            'shipping_title' => $this->shippingTitle,
         ];
     }
 

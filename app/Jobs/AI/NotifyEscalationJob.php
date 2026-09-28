@@ -37,6 +37,8 @@ class NotifyEscalationJob implements ShouldQueue
         public readonly int $conversationId,
         public readonly string $reason,
         public readonly ?string $customerEmail = null,
+        public readonly ?string $customerName = null,
+        public readonly ?string $customerPhone = null,
     ) {}
 
     public function handle(): void
@@ -74,10 +76,12 @@ class NotifyEscalationJob implements ShouldQueue
             try {
                 Http::timeout(5)->post($slack, [
                     'text' => sprintf(
-                        ":rotating_light: AI chat escalation\nSession: `%s`\nReason: %s\nCustomer: %s",
+                        ":rotating_light: AI chat escalation\nSession: `%s`\nReason: %s\nCustomer: %s (%s)\nPhone: %s",
                         $conversation->session_id,
                         $this->reason,
+                        $this->customerName ?? 'unknown',
                         $this->customerEmail ?? 'unknown',
+                        $this->customerPhone ?? 'not provided',
                     ),
                 ]);
             } catch (Throwable $e) {
@@ -94,7 +98,9 @@ class NotifyEscalationJob implements ShouldQueue
         return implode("\n", [
             'Session: '.$conversation->session_id,
             'Shop: '.$conversation->shop_domain,
+            'Customer name: '.($this->customerName ?? 'guest'),
             'Customer: '.($this->customerEmail ?? $conversation->shopify_customer_id ?? 'guest'),
+            'Phone: '.($this->customerPhone ?? 'not provided'),
             'Reason: '.$this->reason,
             'Page: '.($conversation->page_type ?? 'unknown'),
             '',

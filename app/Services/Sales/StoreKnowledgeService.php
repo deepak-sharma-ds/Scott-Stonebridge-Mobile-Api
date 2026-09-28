@@ -149,7 +149,7 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
         }
 
         $pageSize = (int) config('sales.knowledge.admin_page_size', 50);
-        $connection = (string) config('sales.queue.connection', 'redis');
+        $connection = (string) (config('sales.queue.connection') ?: config('queue.default', 'database'));
         $queue = (string) config('sales.queue.sync', 'sync');
 
         // Pages
@@ -438,6 +438,13 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
         $intentSet = array_flip($intentTypes);
         $scored = [];
 
+        $qLower = strtolower($userQuery);
+        $wantsShipping = (bool) preg_match('/\b(shipping|delivery|dispatch|postage|tracking|courier|transit|arrive)\b/i', $qLower);
+        $wantsRefund = (bool) preg_match('/\b(refunds?|returns?|cancellations?|cancel|money back|exchanges?)\b/i', $qLower);
+        $wantsTerms = (bool) preg_match('/\b(terms|tos|conditions?|legal|agreement)\b/i', $qLower);
+        $wantsPrivacy = (bool) preg_match('/\b(privacy|data|gdpr|cookies?|personal info)\b/i', $qLower);
+        $wantsBio = (bool) preg_match('/\b(who is scott|about scott|scott\'?s story|biography|background|about us|who is he)\b/i', $qLower);
+
         foreach ($candidates as $row) {
             $ftScore = (float) ($row->ft_score ?? 0.0) / $maxFt;
 
@@ -458,10 +465,31 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
 
             $boost = isset($intentSet[$row->content_type]) ? $intentBoost : 0.0;
 
+            $handleLower = strtolower((string) ($row->handle ?? ''));
+            $titleLower = strtolower((string) ($row->title ?? ''));
+
+            $policyBoost = 0.0;
+            if ($wantsShipping && (str_contains($handleLower, 'shipping') || str_contains($titleLower, 'shipping') || str_contains($titleLower, 'delivery'))) {
+                $policyBoost += 0.4;
+            }
+            if ($wantsRefund && (str_contains($handleLower, 'refund') || str_contains($titleLower, 'refund') || str_contains($titleLower, 'return'))) {
+                $policyBoost += 0.4;
+            }
+            if ($wantsTerms && (str_contains($handleLower, 'terms') || str_contains($titleLower, 'terms') || str_contains($titleLower, 'conditions'))) {
+                $policyBoost += 0.4;
+            }
+            if ($wantsPrivacy && (str_contains($handleLower, 'privacy') || str_contains($titleLower, 'privacy') || str_contains($titleLower, 'data'))) {
+                $policyBoost += 0.4;
+            }
+            if ($wantsBio && (str_contains($handleLower, 'about') || str_contains($handleLower, 'bio') || str_contains($titleLower, 'about') || str_contains($titleLower, 'scott'))) {
+                $policyBoost += 0.4;
+            }
+
             $score = ($wFulltext * $ftScore)
                 + ($wSemantic * $semScore)
                 + ($wRecency * $recency)
-                + $boost;
+                + $boost
+                + $policyBoost;
 
             if ($score < $minScore) {
                 continue;
@@ -534,7 +562,8 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
             ->where(function ($q) use ($tokens): void {
                 foreach ($tokens as $token) {
                     $q->orWhere('title', 'like', '%'.$token.'%')
-                        ->orWhere('summary', 'like', '%'.$token.'%');
+                        ->orWhere('summary', 'like', '%'.$token.'%')
+                        ->orWhere('handle', 'like', '%'.$token.'%');
                 }
             })
             ->limit($candidateLimit)
@@ -544,10 +573,12 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
             $score = 0;
             $titleLc = mb_strtolower((string) $row->title);
             $summaryLc = mb_strtolower((string) $row->summary);
+            $handleLc = mb_strtolower((string) $row->handle);
             foreach ($tokens as $token) {
                 $tLc = mb_strtolower((string) $token);
                 $score += substr_count($titleLc, $tLc) * 2;
                 $score += substr_count($summaryLc, $tLc);
+                $score += substr_count($handleLc, $tLc);
             }
             $row->ft_score = $score > 0 ? (float) $score : 0.0;
         }
@@ -696,7 +727,7 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
 
         $pageSize = (int) config('sales.knowledge.products.page_size', 50);
         $maxPages = (int) config('sales.knowledge.products.max_pages', 10);
-        $connection = (string) config('sales.queue.connection', 'redis');
+        $connection = (string) (config('sales.queue.connection') ?: config('queue.default', 'database'));
         $queue = (string) config('sales.queue.sync', 'sync');
         $cap = $limit !== null && $limit > 0 ? $limit : PHP_INT_MAX;
 
@@ -787,7 +818,7 @@ class StoreKnowledgeService extends BaseService implements StoreKnowledgeService
         $concurrency = max(1, (int) config('sales.knowledge.urls.concurrency', 4));
         $timeout = max(1, (int) config('sales.knowledge.urls.fetch_timeout', 15));
         $userAgent = (string) config('sales.knowledge.urls.user_agent', 'ScottStonebridgeBot/1.0');
-        $connection = (string) config('sales.queue.connection', 'redis');
+        $connection = (string) (config('sales.queue.connection') ?: config('queue.default', 'database'));
         $queue = (string) config('sales.queue.sync', 'sync');
 
         $dispatched = 0;

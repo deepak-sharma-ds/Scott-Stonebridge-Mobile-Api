@@ -12,5 +12,11 @@ interface EscalationServiceInterface
      * Hand off to human support. Marks conversation status + dispatches a
      * NotifyEscalationJob (email + optional Slack).
      */
-    public function trigger(AiConversation $conversation, string $reason, ?string $customerEmail = null): void;
+    public function trigger(
+        AiConversation $conversation,
+        string $reason,
+        ?string $customerEmail = null,
+        ?string $customerName = null,
+        ?string $customerPhone = null,
+    ): void;
 }

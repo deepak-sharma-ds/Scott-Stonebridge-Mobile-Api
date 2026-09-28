@@ -25,17 +25,24 @@ class EscalationService extends BaseService implements EscalationServiceInterfac
         parent::__construct();
     }
 
-    public function trigger(AiConversation $conversation, string $reason, ?string $customerEmail = null): void
-    {
+    public function trigger(
+        AiConversation $conversation,
+        string $reason,
+        ?string $customerEmail = null,
+        ?string $customerName = null,
+        ?string $customerPhone = null,
+    ): void {
         $this->conversations->escalate($conversation);
 
-        NotifyEscalationJob::dispatch($conversation->id, $reason, $customerEmail)
+        NotifyEscalationJob::dispatch($conversation->id, $reason, $customerEmail, $customerName, $customerPhone)
             ->onConnection((string) config('chatbot.queue.connection', 'redis'))
             ->onQueue((string) config('chatbot.queue.name', 'ai'));
 
         $this->analytics->record(AnalyticsServiceInterface::EVENT_ESCALATION_TRIGGERED, $conversation->session_id, [
             'reason' => $reason,
             'customer_email' => $customerEmail,
+            'customer_name' => $customerName,
+            'customer_phone' => $customerPhone,
         ]);
 
         $this->logInfo('Conversation escalated', [

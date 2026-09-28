@@ -59,8 +59,9 @@ interface CartServiceInterface
      *
      * @param  string  $cartId  Cart identifier
      * @param  string  $accessToken  Customer access token
+     * @param  string|null  $email  Customer email (optional, sent alongside the token)
      */
-    public function associateCustomer(string $cartId, string $accessToken): CartDTO;
+    public function associateCustomer(string $cartId, string $accessToken, ?string $email = null): CartDTO;
 
     /**
      * Update buyer identity with email
