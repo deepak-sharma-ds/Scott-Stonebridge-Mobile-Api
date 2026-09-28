@@ -39,7 +39,19 @@ class ShopifyWebhookController extends Controller
             $channel = $consentUpdate['channel'];
             $state = $consentUpdate['state'];
 
+            if ($identifier && $channel === 'sms') {
+                $identifier = $klaviyo->normalizePhoneNumber($identifier) ?? $identifier;
+            }
+
             if (! $identifier || ! $state) {
+                continue;
+            }
+
+            if (
+                ! app()->environment('production')
+                && $channel === 'email'
+                && ! str_ends_with(strtolower($identifier), '@dotsquares.com')
+            ) {
                 continue;
             }
 

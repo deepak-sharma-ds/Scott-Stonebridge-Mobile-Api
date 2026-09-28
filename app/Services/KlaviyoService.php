@@ -37,42 +37,56 @@ class KlaviyoService
      * that list. If you only want a scoped unsubscribe, check list
      * membership first (GET /api/lists/{id}/relationships/profiles).
      */
-    public function unsubscribe(string $email, string $channel = 'email'): bool
+    public function unsubscribe(string $identifier, string $channel = 'email'): bool
     {
-        $subscriptions = $channel === 'sms'
-            ? ['sms' => ['marketing' => ['consent' => 'UNSUBSCRIBED']]]
-            : ['email' => ['marketing' => ['consent' => 'UNSUBSCRIBED']]];
+        if (! in_array($channel, ['email', 'sms'], true)) {
+            Log::warning('Unsupported Klaviyo subscription channel', ['channel' => $channel]);
+
+            return false;
+        }
+
+        if ($channel === 'sms') {
+            $identifier = $this->normalizePhoneNumber($identifier);
+
+            if ($identifier === null) {
+                Log::warning('Invalid phone number for Klaviyo SMS unsubscribe');
+
+                return false;
+            }
+        }
+
+        $identifierAttribute = $channel === 'sms' ? 'phone_number' : 'email';
 
         $response = $this->client()->post('/profile-subscription-bulk-delete-jobs/', [
             'data' => [
                 'type' => 'profile-subscription-bulk-delete-job',
                 'attributes' => [
                     'profiles' => [
-                        'data' => [[
-                            'type' => 'profile',
-                            'attributes' => [
-                                'email' => $email,
-                                'subscriptions' => $subscriptions,
+                        'data' => [
+                            [
+                                'type' => 'profile',
+                                'attributes' => [
+                                    $identifierAttribute => $identifier,
+                                ],
                             ],
-                        ]],
-                    ],
-                ],
-                'relationships' => [
-                    'list' => [
-                        'data' => ['type' => 'list', 'id' => $this->listId],
+                        ],
                     ],
                 ],
             ],
         ]);
 
         if ($response->failed()) {
-            Log::error('Klaviyo unsubscribe failed', [
-                'email' => $email, 'status' => $response->status(), 'body' => $response->body(),
+            Log::error('Klaviyo unsubscribe request failed', [
+                'channel' => $channel,
+                'status' => $response->status(),
+                'response' => $response->json(),
             ]);
+
             return false;
         }
 
-        SyncEvent::record($email, $channel, 'unsubscribed', 'klaviyo');
+        SyncEvent::record($identifier, $channel, 'unsubscribed', 'klaviyo');
+
         return true;
     }
 
@@ -80,42 +94,77 @@ class KlaviyoService
      * (Re)subscribe a profile - useful if you also want to sync opt-ins,
      * not just unsubscribes.
      */
-    public function subscribe(string $email, string $channel = 'email'): bool
+    public function subscribe(string $identifier, string $channel = 'email'): bool
     {
-        $subscriptions = $channel === 'sms'
-            ? ['sms' => ['marketing' => ['consent' => 'SUBSCRIBED']]]
-            : ['email' => ['marketing' => ['consent' => 'SUBSCRIBED']]];
+        if (! in_array($channel, ['email', 'sms'], true)) {
+            Log::warning('Unsupported Klaviyo subscription channel', ['channel' => $channel]);
+
+            return false;
+        }
+
+        if ($channel === 'sms') {
+            $identifier = $this->normalizePhoneNumber($identifier);
+
+            if ($identifier === null) {
+                Log::warning('Invalid phone number for Klaviyo SMS subscribe');
+
+                return false;
+            }
+        }
+
+        $identifierAttribute = $channel === 'sms' ? 'phone_number' : 'email';
 
         $response = $this->client()->post('/profile-subscription-bulk-create-jobs/', [
             'data' => [
                 'type' => 'profile-subscription-bulk-create-job',
                 'attributes' => [
                     'profiles' => [
-                        'data' => [[
-                            'type' => 'profile',
-                            'attributes' => [
-                                'email' => $email,
-                                'subscriptions' => $subscriptions,
+                        'data' => [
+                            [
+                                'type' => 'profile',
+                                'attributes' => [
+                                    $identifierAttribute => $identifier,
+                                    'subscriptions' => [
+                                        $channel => [
+                                            'marketing' => [
+                                                'consent' => 'SUBSCRIBED',
+                                            ],
+                                        ],
+                                    ],
+                                ],
                             ],
-                        ]],
-                    ],
-                ],
-                'relationships' => [
-                    'list' => [
-                        'data' => ['type' => 'list', 'id' => $this->listId],
+                        ],
                     ],
                 ],
             ],
         ]);
 
         if ($response->failed()) {
-            Log::error('Klaviyo subscribe failed', [
-                'email' => $email, 'status' => $response->status(), 'body' => $response->body(),
+            Log::error('Klaviyo subscribe request failed', [
+                'channel' => $channel,
+                'status' => $response->status(),
+                'response' => $response->json(),
             ]);
+
             return false;
         }
 
-        SyncEvent::record($email, $channel, 'subscribed', 'klaviyo');
+        SyncEvent::record($identifier, $channel, 'subscribed', 'klaviyo');
+
         return true;
+    }
+
+    public function normalizePhoneNumber(string $phoneNumber): ?string
+    {
+        $normalizedPhoneNumber = preg_replace('/[\s()-]+/', '', $phoneNumber);
+
+        if (
+            ! is_string($normalizedPhoneNumber)
+            || ! preg_match('/^\+[1-9]\d{1,14}$/', $normalizedPhoneNumber)
+        ) {
+            return null;
+        }
+
+        return $normalizedPhoneNumber;
     }
 }
