@@ -132,6 +132,11 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
         // Reading Products (email reading templates)
         Route::post('email-reading-products/test', [EmailReadingProductController::class, 'test'])->name('email-reading-products.test');
         Route::post('email-reading-products/{emailReadingProduct}/toggle', [EmailReadingProductController::class, 'toggleActive'])->name('email-reading-products.toggle');
+        // Reading Catalog Sync picker (collections -> products, no local mirror table — ADR 0018)
+        Route::get('email-reading-products/sync', [EmailReadingProductController::class, 'syncForm'])->name('email-reading-products.sync.form');
+        Route::get('email-reading-products/sync/collections', [EmailReadingProductController::class, 'syncCollections'])->name('email-reading-products.sync.collections');
+        Route::get('email-reading-products/sync/products', [EmailReadingProductController::class, 'syncProducts'])->name('email-reading-products.sync.products');
+        Route::post('email-reading-products/sync', [EmailReadingProductController::class, 'syncStore'])->name('email-reading-products.sync.store');
         Route::resource('email-reading-products', EmailReadingProductController::class)->except(['show']);
 
         // Unlisted Products (local catalog synced from Shopify — feeds the campaign product picker)

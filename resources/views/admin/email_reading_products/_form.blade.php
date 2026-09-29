@@ -2,11 +2,12 @@
     $p = $product ?? null;
     $initialSchema = old(
         'questions_schema',
-        $p?->questions_schema ?? [['key' => '', 'label' => '', 'required' => true]],
+        $p?->questions_schema ?? [['key' => '', 'label' => '', 'type' => 'text', 'required' => true]],
     );
 @endphp
 
-<div x-data="productForm(@js(array_values($initialSchema)), @js(route('admin.email-reading-products.test')))">
+<div x-data="productForm(@js(array_values($initialSchema)), @js(route('admin.email-reading-products.test')))"
+     x-init="hookActivationGuard($el)">
     @csrf
     @if ($p)
         @method('PUT')
@@ -60,10 +61,15 @@
         </div>
     </div>
 
-    <div class="mb-3">
+    <div class="mb-3" style="display:flex;gap:1.5rem;">
         <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
             <input type="checkbox" name="is_active" value="1" @checked(old('is_active', $p->is_active ?? true))>
             <span class="form-label" style="margin:0;">Active</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
+            <input type="checkbox" name="is_automation_enabled" value="1" @checked(old('is_automation_enabled', $p->is_automation_enabled ?? false))>
+            <span class="form-label" style="margin:0;">Automation Enabled</span>
+            <small style="color:var(--text-muted);">(auto-generate &amp; send the AI email on purchase; off = Scott handles it manually)</small>
         </label>
     </div>
 
@@ -104,11 +110,15 @@
         </div>
         <template x-for="(slot, i) in schema" :key="i">
             <div
-                style="display:grid;grid-template-columns:1fr 2fr auto auto;gap:0.5rem;align-items:center;margin-bottom:0.5rem;">
+                style="display:grid;grid-template-columns:1fr 2fr auto auto auto;gap:0.5rem;align-items:center;margin-bottom:0.5rem;">
                 <input type="text" class="form-control" placeholder="key (e.g. future_q1)"
                     :name="'questions_schema[' + i + '][key]'" x-model="slot.key">
                 <input type="text" class="form-control" placeholder="Customer-facing label"
                     :name="'questions_schema[' + i + '][label]'" x-model="slot.label">
+                <select class="form-control" :name="'questions_schema[' + i + '][type]'" x-model="slot.type">
+                    <option value="text">Text</option>
+                    <option value="textarea">Long Text</option>
+                </select>
                 <label style="display:flex;align-items:center;gap:0.375rem;font-size:0.8125rem;white-space:nowrap;">
                     <input type="checkbox" value="1" :name="'questions_schema[' + i + '][required]'"
                         x-model="slot.required">
@@ -179,11 +189,13 @@
                 initialSchema.map(s => ({
                     key: s.key || '',
                     label: s.label || '',
+                    type: (s.type === 'textarea') ? 'textarea' : 'text',
                     required: !!s.required
                 })) :
                 [{
                     key: '',
                     label: '',
+                    type: 'text',
                     required: true
                 }],
             promptTemplate: @js(old('prompt_template', $p->prompt_template ?? '')),
@@ -198,11 +210,30 @@
                 this.schema.push({
                     key: '',
                     label: '',
+                    type: 'text',
                     required: false
                 });
             },
             removeRow(i) {
                 this.schema.splice(i, 1);
+            },
+            // Mistake-guard only: an active product with no questions is a
+            // legitimate final state (some readings need no
+            // personalization), so this never blocks the save — it only
+            // asks for confirmation first.
+            hookActivationGuard(el) {
+                const form = el.closest('form');
+                if (!form) return;
+                form.addEventListener('submit', (e) => {
+                    const activeInput = form.querySelector('[name="is_active"]');
+                    const isActive = !!(activeInput && activeInput.checked);
+                    const hasQuestions = this.schema.some(s => s.key && s.key.trim() !== '');
+                    if (isActive && !hasQuestions) {
+                        if (!confirm('No questions have been added for this product. Activate anyway?')) {
+                            e.preventDefault();
+                        }
+                    }
+                });
             },
             async runTest() {
                 this.testLoading = true;

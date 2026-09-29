@@ -1,0 +1,13 @@
+query listProductsByIds($ids: [ID!]!) {
+  nodes(ids: $ids) {
+    ... on Product {
+      id
+      title
+      status
+      featuredImage {
+        url
+        altText
+      }
+    }
+  }
+}

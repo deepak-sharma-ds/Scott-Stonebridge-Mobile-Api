@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\Push\DeviceTokenController;
 use App\Http\Controllers\Api\V1\Push\NotificationController;
+use App\Http\Controllers\Api\V1\ReadingProductQuestionsController;
 use App\Http\Controllers\Api\V1\Sales\ConversionEventController as AIConversionEventController;
 use App\Http\Controllers\Api\V1\Sales\KnowledgeController as AIKnowledgeController;
 use App\Http\Controllers\Api\V1\Sales\LeadController as AILeadController;
@@ -182,6 +183,19 @@ Route::prefix('v1')->middleware([
      * POST /api/v1/free-reading - Submit the free email reading form
      */
     Route::post('/free-reading', [FreeReadingController::class, 'store'])->name('api.v1.free-reading.store');
+
+    /**
+     * Reading Product Checkout Questions (Public — checkout extension consumes this)
+     *
+     * GET /api/v1/reading-products/{shopify_product_id}/questions - Question
+     *     schema for a Checkout-Registered reading product. Unauthenticated
+     *     by design (checkout-extension client code cannot hold a real
+     *     secret — see ADR 0019); protected by rate-limiting only.
+     */
+    Route::get('/reading-products/{shopify_product_id}/questions', [ReadingProductQuestionsController::class, 'show'])
+        ->middleware('throttle:reading-checkout-questions')
+        ->where('shopify_product_id', '[0-9]+')
+        ->name('api.v1.reading-products.questions');
 
     /**
      * Shop & Currency Routes (Public - Guest Friendly)

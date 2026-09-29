@@ -8,7 +8,8 @@
     @include('admin.components.page-header', [
         'title'    => 'Reading Products',
         'subtitle' => 'Email reading templates — questions, prompts and email settings',
-        'action'   => '<a href="' . route('admin.email-reading-products.create') . '" class="btn btn-primary">+ New Product</a>',
+        'action'   => '<a href="' . route('admin.email-reading-products.sync.form') . '" class="btn btn-secondary" style="margin-right:0.5rem;">↻ Sync from Shopify</a>'
+            . '<a href="' . route('admin.email-reading-products.create') . '" class="btn btn-primary">+ New Product</a>',
     ])
 
     <div class="card p-4">

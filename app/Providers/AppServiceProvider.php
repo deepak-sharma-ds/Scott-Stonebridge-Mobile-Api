@@ -423,6 +423,14 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perMinute($chatbotConfig->rateLimitMcpPerMinute())->by($session !== '' ? 'mcp:'.$session : 'mcp-ip:'.$request->ip()),
             ];
         });
+
+        // Checkout-extension questions lookup — public/unauthenticated by
+        // design (see ADR 0019), so rate-limiting is the only protection.
+        // 60/min/IP is a starting placeholder, not a measured figure — tune
+        // once real checkout traffic patterns are known.
+        RateLimiter::for('reading-checkout-questions', fn (Request $request) => [
+            Limit::perMinute(60)->by('reading-questions-ip:'.$request->ip()),
+        ]);
     }
 
     /*
