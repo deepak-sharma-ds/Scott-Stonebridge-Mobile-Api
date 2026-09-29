@@ -35,8 +35,8 @@ return [
         ],
     ],
     'shopify' => [
-        'shop_domain' => env('SHOPIFY_SHOP_DOMAIN'),
-        'admin_token' => env('SHOPIFY_ADMIN_TOKEN'),
+        'shop_domain' => env('SHOPIFY_STORE_DOMAIN'),
+        'admin_token' => env('SHOPIFY_ACCESS_TOKEN'),
         'api_version' => env('SHOPIFY_API_VERSION', '2025-10'),
         'webhook_secret' => env('SHOPIFY_WEBHOOK_SECRET'),
     ],
