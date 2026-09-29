@@ -2,105 +2,34 @@
 
 namespace App\Console\Commands;
 
+use App\Services\Shopify\MarketingConsentSyncService;
 use Illuminate\Console\Command;
 
 class SyncShopifyMarketingConsent extends Command
 {
-    protected $signature = 'shopify:sync-marketing-consent';
+    protected $signature = 'shopify:sync-marketing-consent
+        {--fresh : Ignore the last-synced watermark and cursor, and re-pull every customer}
+        {--resume : Continue from the last saved page cursor instead of starting over}';
 
-    protected $description = 'Sync existing Shopify marketing consent to Klaviyo';
+    protected $description = 'Fan out queued jobs that sync Shopify customer marketing consent to Klaviyo';
 
-    public function handle(KlaviyoService $klaviyo)
+    public function handle(MarketingConsentSyncService $sync): int
     {
-        $shop = config('services.shopify.shop_domain');
-        $token = config('services.shopify.admin_token');
+        $result = $sync->dispatch(
+            resume: (bool) $this->option('resume'),
+            fresh: (bool) $this->option('fresh'),
+        );
 
-        $url = "https://{$shop}/admin/api/2025-01/customers.json?limit=250";
+        $queue = (string) config('shopify.queue.marketing_consent_sync', 'klaviyo-marketing-consent-sync');
 
-        do {
+        $this->info(
+            "Fetched {$result['pages']} page(s), {$result['customers']} customer(s), ".
+            "dispatched {$result['jobs_dispatched']} job(s) to the '{$queue}' queue.".
+            ($result['query_filter'] ? " Filter: {$result['query_filter']}" : ' Full resync.')
+        );
 
-            $response = Http::withHeaders([
-                'X-Shopify-Access-Token' => $token,
-            ])->get($url);
+        $this->comment("Run 'php artisan queue:work --queue={$queue}' if a worker isn't already processing it.");
 
-            if ($response->failed()) {
-                $this->error('Failed fetching customers');
-                return Command::FAILURE;
-            }
-
-            $customers = $response->json('customers', []);
-
-            foreach ($customers as $customer) {
-
-                /*
-                 * EMAIL CONSENT
-                 */
-                $email = $customer['email'] ?? null;
-
-                $emailState =
-                    $customer['email_marketing_consent']['state']
-                    ?? null;
-
-                if ($email && $emailState) {
-
-                    if ($emailState === 'subscribed') {
-                        $klaviyo->subscribe($email, 'email');
-                    }
-
-                    if ($emailState === 'unsubscribed') {
-                        $klaviyo->unsubscribe($email, 'email');
-                    }
-
-                    $this->info(
-                        "Email {$email} => {$emailState}"
-                    );
-                }
-
-                /*
-                 * SMS CONSENT
-                 */
-                $phone =
-                    $customer['phone']
-                    ?? $customer['default_address']['phone']
-                    ?? null;
-
-                $smsState =
-                    $customer['sms_marketing_consent']['state']
-                    ?? null;
-
-                if ($phone && $smsState) {
-
-                    if ($smsState === 'subscribed') {
-                        $klaviyo->subscribe($phone, 'sms');
-                    }
-
-                    if ($smsState === 'unsubscribed') {
-                        $klaviyo->unsubscribe($phone, 'sms');
-                    }
-
-                    $this->info(
-                        "SMS {$phone} => {$smsState}"
-                    );
-                }
-            }
-
-            $link = $response->header('Link');
-
-            $nextPage = null;
-
-            if (
-                $link &&
-                preg_match('/<([^>]+)>; rel="next"/', $link, $matches)
-            ) {
-                $nextPage = $matches[1];
-            }
-
-            $url = $nextPage;
-
-        } while ($url);
-
-        $this->info('Marketing consent sync completed.');
-
-        return Command::SUCCESS;
+        return self::SUCCESS;
     }
 }

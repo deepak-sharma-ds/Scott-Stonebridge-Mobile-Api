@@ -108,4 +108,16 @@ return [
         'max_attempts' => env('SHOPIFY_RATE_LIMIT_MAX_ATTEMPTS', 60),
         'decay_minutes' => env('SHOPIFY_RATE_LIMIT_DECAY_MINUTES', 1),
     ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Queue Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Named queues for Shopify-related background jobs.
+    |
+    */
+    'queue' => [
+        'marketing_consent_sync' => env('SHOPIFY_QUEUE_MARKETING_CONSENT_SYNC', 'klaviyo-marketing-consent-sync'),
+    ],
 ];
