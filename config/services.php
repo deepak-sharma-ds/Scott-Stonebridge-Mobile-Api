@@ -35,15 +35,15 @@ return [
         ],
     ],
     'shopify' => [
-    'shop_domain' => env('SHOPIFY_SHOP_DOMAIN'),
-    'admin_token' => env('SHOPIFY_ADMIN_TOKEN'),
-    'api_version' => env('SHOPIFY_API_VERSION', '2025-10'),
-    'webhook_secret' => env('SHOPIFY_WEBHOOK_SECRET'),
+        'shop_domain' => env('SHOPIFY_STORE_DOMAIN'),
+        'admin_token' => env('SHOPIFY_ACCESS_TOKEN'),
+        'api_version' => env('SHOPIFY_API_VERSION', '2025-10'),
+        'webhook_secret' => env('SHOPIFY_WEBHOOK_SECRET'),
     ],
 
     'klaviyo' => [
         'api_key' => env('KLAVIYO_API_KEY'),
-        'list_id' => env('KLAVIYO_LIST_ID'),
         'webhook_secret' => env('KLAVIYO_WEBHOOK_SECRET'), // shared secret you invent yourself
+        'revision' => env('KLAVIYO_API_REVISION', '2025-04-15'),
     ],
 ];
