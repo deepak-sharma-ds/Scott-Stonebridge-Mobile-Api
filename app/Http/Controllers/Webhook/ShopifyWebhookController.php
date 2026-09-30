@@ -11,9 +11,9 @@ class ShopifyWebhookController extends Controller
 {
     public function consentUpdate(Request $request): Response
     {
-        if (app()->environment('production')) {
-            return response()->noContent();
-        }
+        // if (app()->environment('production')) {
+        //     return response()->noContent();
+        // }
 
         ProcessShopifyConsentUpdateWebhookJob::dispatch($request->all())
             ->onQueue((string) config('shopify.queue.marketing_consent_sync', 'klaviyo-marketing-consent-sync'));
