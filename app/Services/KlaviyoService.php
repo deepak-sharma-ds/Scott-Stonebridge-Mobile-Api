@@ -17,7 +17,7 @@ class KlaviyoService
      */
     private const MAX_SUBSCRIBE_BATCH = 1000;
 
-    private const MAX_UNSUBSCRIBE_BATCH = 100;
+    private const MAX_UNSUBSCRIBE_BATCH = 1000;
 
     protected string $baseUrl = 'https://a.klaviyo.com/api';
 
