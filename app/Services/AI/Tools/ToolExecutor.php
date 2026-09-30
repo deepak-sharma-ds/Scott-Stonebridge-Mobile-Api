@@ -24,6 +24,7 @@ use App\Services\AI\MCP\Mappers\ProductMapper;
 use App\Services\AI\MCP\StorefrontMcpClient;
 use App\Services\AI\Streaming\ChunkEmitter;
 use App\Services\Shopify\AdminService;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -787,8 +788,12 @@ class ToolExecutor
             $payload = ['order_tracking' => $dto->toArray()];
             $this->emitter->emit('order_tracking', $payload);
 
+            $placedDate = $dto->createdAt ? ' Placed on: '.Carbon::parse($dto->createdAt)->format('j M Y').'.' : '';
+            $shippingText = $dto->shippingTitle ? " Delivery option: {$dto->shippingTitle}." : '';
+            $estDelivery = $dto->estimatedDelivery ? " Expected delivery: {$dto->estimatedDelivery}." : '';
+
             return ToolResult::success(
-                "Order {$dto->orderNumber} status: {$dto->status}.",
+                "Order #{$dto->orderNumber} status: {$dto->status}.{$placedDate}{$shippingText}{$estDelivery}",
                 ['type' => 'order_tracking'] + $payload,
             );
         }
@@ -869,8 +874,12 @@ class ToolExecutor
         $payload = ['order_tracking' => $dto->toArray()];
         $this->emitter->emit('order_tracking', $payload);
 
+        $placedDate = $dto->createdAt ? ' Placed on: '.Carbon::parse($dto->createdAt)->format('j M Y').'.' : '';
+        $shippingText = $dto->shippingTitle ? " Delivery option: {$dto->shippingTitle}." : '';
+        $estDelivery = $dto->estimatedDelivery ? " Expected delivery: {$dto->estimatedDelivery}." : '';
+
         return ToolResult::success(
-            "Order {$dto->orderNumber} status: {$dto->status}.",
+            "Order #{$dto->orderNumber} status: {$dto->status}.{$placedDate}{$shippingText}{$estDelivery}",
             ['type' => 'order_tracking'] + $payload,
         );
     }
@@ -1228,11 +1237,12 @@ class ToolExecutor
         }
 
         $itemsText = ! empty($itemSummaries) ? ' Items: '.implode('; ', $itemSummaries).'.' : '';
+        $placedDate = $dto->createdAt ? ' Placed on: '.Carbon::parse($dto->createdAt)->format('j M Y').'.' : '';
         $shippingText = $dto->shippingTitle ? " Delivery option: {$dto->shippingTitle}." : '';
-        $estDelivery = $dto->estimatedDelivery ? " Estimated delivery: {$dto->estimatedDelivery}." : '';
+        $estDelivery = $dto->estimatedDelivery ? " Expected delivery: {$dto->estimatedDelivery}." : '';
 
         return ToolResult::success(
-            "Order #{$dto->orderNumber} status: {$dto->status}.{$itemsText}{$shippingText}{$estDelivery}",
+            "Order #{$dto->orderNumber} status: {$dto->status}.{$placedDate}{$shippingText}{$estDelivery}{$itemsText}",
             ['type' => 'order_tracking'] + $payload,
         );
     }
@@ -1252,6 +1262,7 @@ class ToolExecutor
                   legacyResourceId
                   name
                   processedAt
+                  createdAt
                   displayFulfillmentStatus
                   displayFinancialStatus
                   totalPriceSet {
@@ -1300,6 +1311,7 @@ class ToolExecutor
                 legacyResourceId
                 name
                 processedAt
+                createdAt
                 displayFulfillmentStatus
                 displayFinancialStatus
                 totalPriceSet {
@@ -1346,6 +1358,7 @@ class ToolExecutor
             ToolDefinitions::TOOL_SUGGEST_UPSELL => $this->handleUpsell($ctx),
             ToolDefinitions::TOOL_START_CHECKOUT => $this->handleStartCheckout(),
             ToolDefinitions::TOOL_SEARCH_KNOWLEDGE => $this->handleSearchKnowledge($args, $ctx),
+            ToolDefinitions::TOOL_GET_SHIPPING_OPTIONS => $this->handleShippingOptions($args, $ctx),
             default => ToolResult::error("Unknown internal tool: {$toolName}"),
         };
     }
@@ -1399,6 +1412,201 @@ class ToolExecutor
                 'results' => $results,
             ],
         );
+    }
+
+    /**
+     * Retrieve active store shipping options and rates dynamically from Shopify
+     * GraphQL Admin deliveryProfiles (ADR 0021).
+     *
+     * @param  array<string, mixed>  $args
+     */
+    private function handleShippingOptions(array $args, ChatSessionContext $ctx): ToolResult
+    {
+        $shopDomain = (string) ($ctx->shopDomain ?? config('shopify.store_domain'));
+        $cacheKey = "ai:shipping_profiles:{$shopDomain}";
+
+        $profiles = Cache::remember($cacheKey, 3600, function () use ($shopDomain): array {
+            try {
+                $query = <<<'GRAPHQL'
+                query StoreDeliveryProfiles {
+                  deliveryProfiles(first: 10) {
+                    edges {
+                      node {
+                        id
+                        name
+                        default
+                        profileLocationGroups {
+                          locationGroupZones(first: 10) {
+                            edges {
+                              node {
+                                zone {
+                                  name
+                                }
+                                methodDefinitions(first: 15) {
+                                  edges {
+                                    node {
+                                      name
+                                      description
+                                      active
+                                      rateProvider {
+                                        ... on DeliveryRateDefinition {
+                                          price {
+                                            amount
+                                            currencyCode
+                                          }
+                                        }
+                                      }
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                GRAPHQL;
+
+                $response = $this->adminApi()->request($query);
+                $profileEdges = $response['data']['deliveryProfiles']['edges'] ?? [];
+                $out = [];
+
+                foreach ($profileEdges as $pEdge) {
+                    $pNode = $pEdge['node'] ?? [];
+                    $pName = trim((string) ($pNode['name'] ?? 'General'));
+                    $methods = [];
+
+                    foreach ($pNode['profileLocationGroups'] ?? [] as $group) {
+                        foreach ($group['locationGroupZones']['edges'] ?? [] as $zEdge) {
+                            $zoneName = trim((string) ($zEdge['node']['zone']['name'] ?? 'General'));
+                            foreach ($zEdge['node']['methodDefinitions']['edges'] ?? [] as $mEdge) {
+                                $mNode = $mEdge['node'] ?? [];
+                                if (! ($mNode['active'] ?? true)) {
+                                    continue;
+                                }
+
+                                $name = (string) ($mNode['name'] ?? '');
+                                if ($name === '') {
+                                    continue;
+                                }
+
+                                $rawPrice = $mNode['rateProvider']['price'] ?? null;
+                                $formattedPrice = 'Free';
+                                if ($rawPrice && (float) ($rawPrice['amount'] ?? 0) > 0) {
+                                    $formattedPrice = $rawPrice['amount'].' '.($rawPrice['currencyCode'] ?? 'GBP');
+                                }
+
+                                $timeframe = $this->extractTimeframeFromShippingTitle($name);
+                                $desc = ! empty($mNode['description']) ? trim((string) $mNode['description']) : null;
+
+                                $methods[] = [
+                                    'name' => $name,
+                                    'price' => $formattedPrice,
+                                    'timeframe' => $timeframe,
+                                    'description' => $desc,
+                                    'zone' => $zoneName,
+                                ];
+                            }
+                        }
+                    }
+
+                    if (! empty($methods)) {
+                        $uniqueMethods = [];
+                        $seen = [];
+                        foreach ($methods as $item) {
+                            $dedupeKey = strtolower($item['name']).'|'.$item['price'];
+                            if (! isset($seen[$dedupeKey])) {
+                                $seen[$dedupeKey] = true;
+                                $uniqueMethods[] = $item;
+                            }
+                        }
+
+                        $out[] = [
+                            'profile' => $pName,
+                            'methods' => $uniqueMethods,
+                        ];
+                    }
+                }
+
+                return $out;
+            } catch (Throwable $e) {
+                Log::channel('ai')->warning('tool.shipping_profiles_query_failed', [
+                    'shop_domain' => $shopDomain,
+                    'error' => $e->getMessage(),
+                ]);
+
+                return [
+                    [
+                        'profile' => 'Email Readings',
+                        'methods' => [
+                            [
+                                'name' => 'Standard 7 - 10 days - Via Email',
+                                'price' => 'Free',
+                                'timeframe' => '7–10 days',
+                                'description' => 'Delivered to your email inbox',
+                                'zone' => 'Email Reading',
+                            ],
+                            [
+                                'name' => 'SAME DAY GUARANTEE - Via Email',
+                                'price' => '8.99 GBP',
+                                'timeframe' => 'Within 24 hours',
+                                'description' => 'Within 24hrs or Your Money Back!',
+                                'zone' => 'Email Reading',
+                            ],
+                        ],
+                    ],
+                    [
+                        'profile' => 'General Store / Physical Products',
+                        'methods' => [
+                            [
+                                'name' => 'Free Shipping',
+                                'price' => 'Free',
+                                'timeframe' => '3–7 days',
+                                'description' => 'Tracked shipping across UK & Worldwide',
+                                'zone' => 'United Kingdom & Worldwide',
+                            ],
+                        ],
+                    ],
+                ];
+            }
+        });
+
+        $this->emitter->emit('shipping_options', ['profiles' => $profiles]);
+
+        $lines = ['Available Store Shipping & Delivery Options from Shopify:'];
+        foreach ($profiles as $prof) {
+            $lines[] = "- {$prof['profile']}:";
+            foreach ($prof['methods'] as $m) {
+                $descPart = $m['description'] ? " — \"{$m['description']}\"" : '';
+                $lines[] = "  * {$m['name']} ({$m['price']}) — Timeframe: {$m['timeframe']}{$descPart}";
+            }
+        }
+        $lines[] = '';
+        $lines[] = 'Answer the customer with clear, structured points quoting the live delivery speeds and rates above.';
+
+        $messageForAi = implode("\n", $lines);
+
+        return ToolResult::success($messageForAi, ['type' => 'shipping_options', 'profiles' => $profiles]);
+    }
+
+    private function extractTimeframeFromShippingTitle(string $title): string
+    {
+        $lower = strtolower($title);
+        if (str_contains($lower, 'same day') || str_contains($lower, '24hr') || str_contains($lower, '24 hour')) {
+            return 'Within 24 hours';
+        }
+
+        if (preg_match('/(\d+)\s*(?:-|to)\s*(\d+)\s*days?/i', $title, $m)) {
+            return "{$m[1]}–{$m[2]} days";
+        }
+
+        if (preg_match('/(\d+)\s*days?/i', $title, $m)) {
+            return "{$m[1]} days";
+        }
+
+        return '3–7 days';
     }
 
     /**
@@ -1841,6 +2049,7 @@ class ToolExecutor
     private function handlePolicy(array $mcpResult, string $query, ChatSessionContext $ctx): ToolResult
     {
         $mapped = PolicyMapper::fromAnswer($mcpResult);
+        $isShipping = $this->isShippingQuery($query);
 
         // Shopify's `search_shop_policies_and_faqs` only returns the FAQ Q&A
         // dataset (returns, shipping). Full policy bodies — privacy, terms,
@@ -1879,6 +2088,12 @@ class ToolExecutor
             return ToolResult::success($forAi, ['type' => 'policy_answer'] + $mapped);
         }
 
+        // Policy Domain Affinity: If this is a shipping query and no dedicated shipping policy was found,
+        // seamlessly fall back to live dynamic shipping options from Shopify delivery profiles (ADR 0021).
+        if ($isShipping) {
+            return $this->handleShippingOptions([], $ctx);
+        }
+
         if ($mapped['answer'] === '') {
             $this->emitter->emit('text', ['content' => "I couldn't find anything on that in our policies."]);
 
@@ -1908,8 +2123,20 @@ class ToolExecutor
             return null;
         }
 
+        $isShipping = $this->isShippingQuery($query);
+        $isPrivacy = $this->isPrivacyQuery($query);
+
         $best = null; // [score, policyKey, blockIndex, blocks[]]
         foreach ($policies as $key => $policy) {
+            // Policy Domain Affinity (ADR 0021): Strictly exclude privacy & terms for shipping queries
+            if ($isShipping && in_array($key, ['privacyPolicy', 'termsOfService'], true)) {
+                continue;
+            }
+            // Strictly exclude shipping policy for privacy queries
+            if ($isPrivacy && $key === 'shippingPolicy') {
+                continue;
+            }
+
             if (empty($policy['body'])) {
                 continue;
             }
@@ -1948,6 +2175,32 @@ class ToolExecutor
             'url' => (string) ($policy['url'] ?? ''),
             'excerpt' => $excerpt,
         ];
+    }
+
+    private function isShippingQuery(string $query): bool
+    {
+        $keywords = ['shipping', 'delivery', 'dispatch', 'postage', 'ship', 'deliver', 'carrier', 'courier', 'freight', 'transit', 'how long to arrive'];
+        $q = strtolower($query);
+        foreach ($keywords as $kw) {
+            if (str_contains($q, $kw)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isPrivacyQuery(string $query): bool
+    {
+        $keywords = ['privacy', 'gdpr', 'data', 'cookie', 'cookies', 'personal', 'retention', 'deletion'];
+        $q = strtolower($query);
+        foreach ($keywords as $kw) {
+            if (str_contains($q, $kw)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -1990,6 +2243,9 @@ class ToolExecutor
     private function topLevelPolicyFallback(string $query, array $policies): ?array
     {
         $q = strtolower($query);
+        $isShipping = $this->isShippingQuery($query);
+        $isPrivacy = $this->isPrivacyQuery($query);
+
         $map = [
             'privacyPolicy' => ['privacy', 'data', 'cookie', 'gdpr', 'personal', 'account', 'delete'],
             'termsOfService' => ['terms', 'tos', 'service', 'agreement', 'condition'],
@@ -1998,6 +2254,14 @@ class ToolExecutor
         ];
 
         foreach ($map as $field => $keywords) {
+            // Policy Domain Affinity (ADR 0021)
+            if ($isShipping && in_array($field, ['privacyPolicy', 'termsOfService'], true)) {
+                continue;
+            }
+            if ($isPrivacy && $field === 'shippingPolicy') {
+                continue;
+            }
+
             foreach ($keywords as $kw) {
                 if (str_contains($q, $kw) && ! empty($policies[$field]['body'])) {
                     $text = $this->htmlToText((string) $policies[$field]['body']);

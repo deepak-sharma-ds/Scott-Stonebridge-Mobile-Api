@@ -35,24 +35,44 @@ final class OrderMapper
             $tracking = [];
         }
 
+        $shippingTitle = self::stringOrNull(
+            $order['shipping_line']['title']
+            ?? $order['shippingLine']['title']
+            ?? $order['shipping_lines'][0]['title']
+            ?? $order['shippingLines'][0]['title']
+            ?? null,
+        );
+
+        $createdAt = self::stringOrNull(
+            $order['created_at']
+            ?? $order['createdAt']
+            ?? $order['processed_at']
+            ?? $order['processedAt']
+            ?? null,
+        );
+
+        $estimatedDelivery = self::stringOrNull(
+            $order['estimated_delivery']
+            ?? $order['fulfillments'][0]['estimated_delivery_at']
+            ?? $order['fulfillments'][0]['estimatedDeliveryAt']
+            ?? null,
+        ) ?? OrderTrackingDTO::calculateExpectedDelivery($shippingTitle, $createdAt, $status);
+
         return new OrderTrackingDTO(
             orderNumber: $orderNumber,
             status: $status,
             trackingNumber: self::stringOrNull($tracking['number'] ?? $tracking['tracking_number'] ?? null),
             trackingUrl: self::stringOrNull($tracking['url'] ?? $tracking['tracking_url'] ?? null),
             carrier: self::stringOrNull($tracking['company'] ?? $tracking['carrier'] ?? null),
-            estimatedDelivery: self::stringOrNull(
-                $order['estimated_delivery']
-                ?? $order['fulfillments'][0]['estimated_delivery_at']
-                ?? $order['fulfillments'][0]['estimatedDeliveryAt']
-                ?? null,
-            ),
+            estimatedDelivery: $estimatedDelivery,
             shipToCity: self::stringOrNull(
                 $order['ship_to']['city']
                 ?? $order['shipping_address']['city']
                 ?? $order['shippingAddress']['city']
                 ?? null,
             ),
+            shippingTitle: $shippingTitle,
+            createdAt: $createdAt,
         );
     }
 

@@ -97,20 +97,24 @@ final class CustomerGraphOrderMapper
             ?? $node['shippingLines'][0]['title']
             ?? null;
 
+        $createdAt = self::stringOrNull($node['createdAt'] ?? $node['processedAt'] ?? null);
+        $estimatedDelivery = self::stringOrNull(
+            $fulfillment['estimatedDeliveryAt']
+            ?? $fulfillment['estimated_delivery_at']
+            ?? null,
+        ) ?? OrderTrackingDTO::calculateExpectedDelivery($shippingTitle, $createdAt, $status);
+
         return new OrderTrackingDTO(
             orderNumber: $orderNumber,
             status: $status,
             trackingNumber: self::stringOrNull($tracking['number'] ?? null),
             trackingUrl: self::stringOrNull($tracking['url'] ?? null),
             carrier: self::stringOrNull($tracking['company'] ?? null),
-            estimatedDelivery: self::stringOrNull(
-                $fulfillment['estimatedDeliveryAt']
-                ?? $fulfillment['estimated_delivery_at']
-                ?? null,
-            ),
+            estimatedDelivery: $estimatedDelivery,
             shipToCity: self::stringOrNull($node['shippingAddress']['city'] ?? null),
             lineItems: $lineItems,
             shippingTitle: self::stringOrNull($shippingTitle),
+            createdAt: $createdAt,
         );
     }
 

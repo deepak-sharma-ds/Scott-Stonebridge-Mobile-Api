@@ -36,6 +36,8 @@ final class ToolDefinitions
 
     public const TOOL_SEARCH_KNOWLEDGE = 'search_knowledge_base';
 
+    public const TOOL_GET_SHIPPING_OPTIONS = 'get_shipping_options';
+
     /** @var list<string> */
     public const STOREFRONT_MCP_TOOLS = [
         self::TOOL_SEARCH_CATALOG,
@@ -68,6 +70,7 @@ final class ToolDefinitions
         self::TOOL_SUGGEST_UPSELL,
         self::TOOL_START_CHECKOUT,
         self::TOOL_SEARCH_KNOWLEDGE,
+        self::TOOL_GET_SHIPPING_OPTIONS,
     ];
 
     /**
@@ -226,6 +229,16 @@ final class ToolDefinitions
                 [
                     'type' => 'object',
                     'properties' => new \stdClass,
+                    'additionalProperties' => false,
+                ],
+            ),
+            $this->fn(self::TOOL_GET_SHIPPING_OPTIONS,
+                'Use when the user asks about shipping options, delivery methods, shipping costs, delivery times, or same-day options across the store. Fetches live shipping profiles and rates dynamically from Shopify.',
+                [
+                    'type' => 'object',
+                    'properties' => [
+                        'country' => ['type' => 'string', 'description' => 'Optional country name or code to filter shipping zones.'],
+                    ],
                     'additionalProperties' => false,
                 ],
             ),

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\DTOs\AI;
 
 use App\DTOs\Base\BaseDTO;
+use Illuminate\Support\Carbon;
 
 /**
  * Trimmed order-status payload returned by OrderTrackingService. Maps the
@@ -35,6 +36,7 @@ class OrderTrackingDTO extends BaseDTO
         public readonly ?string $shipToCity,
         public readonly array $lineItems = [],
         public readonly ?string $shippingTitle = null,
+        public readonly ?string $createdAt = null,
     ) {
         $this->validate();
     }
@@ -108,17 +110,76 @@ class OrderTrackingDTO extends BaseDTO
             ?? $node['shippingLines'][0]['title']
             ?? null;
 
+        $createdAt = self::stringOrNull($node['createdAt'] ?? $node['processedAt'] ?? null);
+        $estimatedDelivery = self::stringOrNull($firstFulfilment['estimatedDeliveryAt'] ?? null)
+            ?? self::calculateExpectedDelivery($shippingTitle, $createdAt, $status);
+
         return new self(
             orderNumber: $orderNumber,
             status: $status,
             trackingNumber: self::stringOrNull($firstTracking['number'] ?? null),
             trackingUrl: self::stringOrNull($firstTracking['url'] ?? null),
             carrier: self::stringOrNull($firstTracking['company'] ?? null),
-            estimatedDelivery: self::stringOrNull($firstFulfilment['estimatedDeliveryAt'] ?? null),
+            estimatedDelivery: $estimatedDelivery,
             shipToCity: self::stringOrNull($node['shippingAddress']['city'] ?? null),
             lineItems: $lineItems,
             shippingTitle: self::stringOrNull($shippingTitle),
+            createdAt: $createdAt,
         );
+    }
+
+    /**
+     * Compute a human-readable expected delivery window from the order's
+     * purchase date, shipping method title, and fulfillment status (ADR 0021).
+     */
+    public static function calculateExpectedDelivery(?string $shippingTitle, ?string $createdAt, string $status): ?string
+    {
+        if ($status === 'delivered') {
+            return 'Delivered';
+        }
+
+        if ($status === 'cancelled') {
+            return null;
+        }
+
+        try {
+            $created = $createdAt !== null ? Carbon::parse($createdAt) : Carbon::now();
+        } catch (\Throwable) {
+            $created = Carbon::now();
+        }
+
+        $title = strtolower(trim((string) $shippingTitle));
+
+        // Same-day / 24-hour delivery
+        if (str_contains($title, 'same day') || str_contains($title, '24hr') || str_contains($title, '24 hour')) {
+            $target = $created->copy()->addHours(24);
+
+            return sprintf('Within 24 hours (by %s at %s)', $target->format('D, j M'), $target->format('g:i A'));
+        }
+
+        // Explicit day range in title (e.g. "7 - 10 days", "3-7 days")
+        if (preg_match('/(\d+)\s*(?:-|to)\s*(\d+)\s*days?/i', (string) $shippingTitle, $matches)) {
+            $minDays = (int) $matches[1];
+            $maxDays = (int) $matches[2];
+            $minDate = $created->copy()->addDays($minDays);
+            $maxDate = $created->copy()->addDays($maxDays);
+
+            return sprintf('%d–%d days (%s – %s)', $minDays, $maxDays, $minDate->format('j M'), $maxDate->format('j M Y'));
+        }
+
+        // Single number of days (e.g. "5 days")
+        if (preg_match('/(\d+)\s*days?/i', (string) $shippingTitle, $matches)) {
+            $days = (int) $matches[1];
+            $date = $created->copy()->addDays($days);
+
+            return sprintf('By %s', $date->format('j M Y'));
+        }
+
+        // Default baseline (3-7 calendar days)
+        $minDate = $created->copy()->addDays(3);
+        $maxDate = $created->copy()->addDays(7);
+
+        return sprintf('3–7 days (%s – %s)', $minDate->format('j M'), $maxDate->format('j M Y'));
     }
 
     /**
@@ -140,6 +201,7 @@ class OrderTrackingDTO extends BaseDTO
             'ship_to_city' => $this->shipToCity,
             'line_items' => $this->lineItems,
             'shipping_title' => $this->shippingTitle,
+            'created_at' => $this->createdAt,
         ];
     }
 
