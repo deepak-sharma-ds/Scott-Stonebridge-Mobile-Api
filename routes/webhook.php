@@ -8,7 +8,6 @@ use App\Http\Controllers\Webhook\KlaviyoFlowWebhookController;
 use App\Http\Controllers\Webhook\ShopifyReadingOrderCancelledWebhookController;
 use App\Http\Controllers\Webhook\ShopifyReadingOrderUpdatedWebhookController;
 use App\Http\Controllers\Webhook\ShopifyReadingWebhookController;
-use App\Http\Controllers\KlaviyoWebhookController;
 use App\Http\Controllers\Webhook\ShopifyWebhookController;
 use Illuminate\Support\Facades\Route;
 
