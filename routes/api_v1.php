@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AI\ChatController as AIChatController;
 use App\Http\Controllers\Api\V1\AI\CustomerOAuthController as AICustomerOAuthController;
 use App\Http\Controllers\Api\V1\AI\StreamController as AIStreamController;
+use App\Http\Controllers\Api\V1\AppVersionController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\CartController;
 use App\Http\Controllers\Api\V1\ContactController;
@@ -229,6 +230,15 @@ Route::prefix('v1')->middleware([
      */
     Route::prefix('navigation')->group(function () {
         Route::get('/{handle}', [NavigationController::class, 'show'])->name('api.v1.navigation.show');
+    });
+
+    /**
+     * App Version & Update Routes (Public - Startup Update Check)
+     *
+     * GET /api/v1/app/version - Check mobile app version and compulsory update status
+     */
+    Route::prefix('app')->group(function () {
+        Route::get('/version', [AppVersionController::class, 'show'])->name('api.v1.app.version');
     });
 
     /**

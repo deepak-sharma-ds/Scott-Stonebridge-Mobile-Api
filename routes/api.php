@@ -1,5 +1,7 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AppVersionController;
+
 /**
  * SHOPIFY Website APIs
  * This file contains all the apis related to the Shopify website APIs which are callled in Shopify website.
@@ -30,3 +32,18 @@ require __DIR__.'/mobile.php';
  */
 require __DIR__.'/api_v1.php';
 require __DIR__.'/api_v2.php';
+
+/**
+ * Public Mobile App Update Route (Unversioned Alias)
+ *
+ * GET /api/app/version - Check mobile app version and compulsory update status
+ */
+Route::prefix('app')->middleware([
+    'correlation.id',
+    'currency',
+    'api.logging',
+    'rate.limit',
+])->group(function () {
+    Route::get('/version', [AppVersionController::class, 'show'])
+        ->name('api.app.version');
+});
