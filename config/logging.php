@@ -206,6 +206,16 @@ return [
             'processors' => [CorrelationIdProcessor::class],
         ],
 
+        // Shopify -> Klaviyo marketing consent sync (webhook + backfill command/jobs)
+        'klaviyo_marketing_consent' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/klaviyo_marketing_consent.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'days' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+            'processors' => [CorrelationIdProcessor::class],
+        ],
+
         // AI chatbot logging (prompts, intents, OpenAI calls, safety hits)
         'ai' => [
             'driver' => 'daily',
