@@ -13,7 +13,7 @@ class ToolDefinitionsTest extends TestCase
     {
         $tools = (new ToolDefinitions)->all();
 
-        $this->assertCount(12, $tools);
+        $this->assertCount(13, $tools);
         foreach ($tools as $tool) {
             $this->assertSame('function', $tool['type']);
             $this->assertArrayHasKey('function', $tool);
@@ -41,6 +41,7 @@ class ToolDefinitionsTest extends TestCase
             ToolDefinitions::TOOL_START_CHECKOUT,
             ToolDefinitions::TOOL_SUGGEST_QUICK_REPLIES,
             ToolDefinitions::TOOL_SUGGEST_UPSELL,
+            ToolDefinitions::TOOL_GET_SHIPPING_OPTIONS,
         ], $names);
     }
 

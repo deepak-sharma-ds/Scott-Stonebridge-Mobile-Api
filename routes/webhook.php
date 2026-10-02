@@ -8,6 +8,7 @@ use App\Http\Controllers\Webhook\KlaviyoFlowWebhookController;
 use App\Http\Controllers\Webhook\ShopifyReadingOrderCancelledWebhookController;
 use App\Http\Controllers\Webhook\ShopifyReadingOrderUpdatedWebhookController;
 use App\Http\Controllers\Webhook\ShopifyReadingWebhookController;
+use App\Http\Controllers\Webhook\ShopifyWebhookController;
 use Illuminate\Support\Facades\Route;
 
 /**
@@ -48,4 +49,6 @@ Route::prefix('webhook')->group(function () {
     Route::post('/klaviyo-flow-email', [KlaviyoFlowWebhookController::class, 'handle'])
         ->middleware('klaviyo.secret')
         ->name('webhook.klaviyo.flow');
+
+    Route::post('/shopify/consent-update', [ShopifyWebhookController::class, 'consentUpdate']);
 });

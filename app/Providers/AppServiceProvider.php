@@ -18,6 +18,7 @@ use App\Contracts\Services\AI\PromptBuilderServiceInterface;
 use App\Contracts\Services\AI\SafetyServiceInterface;
 use App\Contracts\Services\AI\ShopifyContextServiceInterface;
 use App\Contracts\Services\AI\StreamingServiceInterface;
+use App\Contracts\Services\AppVersionServiceInterface;
 use App\Contracts\Services\AuthServiceInterface;
 use App\Contracts\Services\CartServiceInterface;
 use App\Contracts\Services\ContactServiceInterface;
@@ -61,6 +62,7 @@ use App\Services\AI\Streaming\ChunkEmitter;
 use App\Services\AI\StreamingService;
 use App\Services\AI\Tools\ToolDefinitions;
 use App\Services\AI\Tools\ToolExecutor;
+use App\Services\AppVersionService;
 use App\Services\Cache\ShopifyCacheStrategy;
 use App\Services\FreeReadingService;
 use App\Services\Push\PushNotificationService;
@@ -297,6 +299,11 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(
             PushNotificationServiceInterface::class,
             PushNotificationService::class
+        );
+
+        $this->app->bind(
+            AppVersionServiceInterface::class,
+            AppVersionService::class
         );
     }
 
