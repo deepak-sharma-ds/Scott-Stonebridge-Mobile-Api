@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Sales;
 
+use App\Contracts\Services\Sales\DeliveryUpgradeServiceInterface;
 use App\Contracts\Services\Sales\UpsellServiceInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\Sales\UpsellSuggestionDTO;
@@ -20,12 +21,20 @@ use Throwable;
  * hits Shopify N times on first request, then 0 for subsequent views
  * during the cache window.
  *
- * Surfaces a product grid only — no free-shipping / threshold logic.
+ * Surfaces a product grid only — no free-shipping / threshold logic. When
+ * the cart holds an eligible reading, Delivery Upgrade Products lead the
+ * grid, marked `type: delivery_upgrade` (ADR 0022).
  */
 class UpsellService extends BaseService implements UpsellServiceInterface
 {
+    /**
+     * `$deliveryUpgrade` is injected by the container. It is optional so
+     * direct constructions (older tests) keep the original behaviour: no
+     * Delivery Upgrade Products are ever added without it.
+     */
     public function __construct(
         private readonly StorefrontApiClientInterface $storefront,
+        private readonly ?DeliveryUpgradeServiceInterface $deliveryUpgrade = null,
     ) {
         parent::__construct();
     }
@@ -42,10 +51,25 @@ class UpsellService extends BaseService implements UpsellServiceInterface
         }
 
         $maxResults = (int) config('sales.upsell.max_results', 3);
+
+        // Delivery Upgrade Products go first and take slots out of the cap
+        // (ADR 0022); the Shopify recommendations fill whatever is left.
+        $upgrades = $this->deliveryUpgradeSuggestions($cartItems, $cartIds, $shopDomain, $currency, $maxResults);
+        $maxResults -= count($upgrades);
+        if ($maxResults <= 0) {
+            return $upgrades;
+        }
+
         $country = $this->countryFromCurrency($currency);
 
         $suggestions = [];
         $seen = $cartIds; // dedupe vs cart + against itself
+        foreach ($upgrades as $upgrade) {
+            $seen[$upgrade->id] = true; // never also recommend an upgrade as a "related" product
+            if ($upgrade->variantId !== null) {
+                $seen[$upgrade->variantId] = true;
+            }
+        }
 
         foreach (array_keys($cartIds) as $productId) {
             try {
@@ -75,12 +99,76 @@ class UpsellService extends BaseService implements UpsellServiceInterface
                 $seen[$id] = true;
 
                 if (count($suggestions) >= $maxResults) {
-                    return $suggestions;
+                    return [...$upgrades, ...$suggestions];
                 }
             }
         }
 
-        return $suggestions;
+        return [...$upgrades, ...$suggestions];
+    }
+
+    /**
+     * Delivery Upgrade Products to lead the list when the cart holds an
+     * eligible reading (ADR 0022). Always leaves at least one slot for a
+     * regular recommendation when the cap allows it. Any failure degrades to
+     * an empty list so the existing recommendations are unaffected.
+     *
+     * @param  list<array{product_id?: string, id?: string, quantity?: int}>  $cartItems
+     * @param  array<string, true>  $cartIds
+     * @return list<UpsellSuggestionDTO>
+     */
+    private function deliveryUpgradeSuggestions(array $cartItems, array $cartIds, string $shopDomain, ?string $currency, int $maxResults): array
+    {
+        if ($this->deliveryUpgrade === null || $maxResults <= 0) {
+            return [];
+        }
+
+        try {
+            if (! $this->deliveryUpgrade->cartHasEligibleReading($cartItems, $shopDomain)) {
+                return [];
+            }
+
+            $products = $this->deliveryUpgrade->getUpgradeProducts($shopDomain, $currency);
+        } catch (Throwable $e) {
+            $this->logWarning('Delivery upgrade recommendation failed', [
+                'shop' => $shopDomain,
+                'error' => $e->getMessage(),
+            ], 'ai');
+
+            return [];
+        }
+
+        $inCart = [];
+        foreach (array_keys($cartIds) as $cartId) {
+            $inCart[$this->numericProductId((string) $cartId)] = true;
+        }
+
+        $limit = max(1, $maxResults - 1);
+        $upgrades = [];
+        foreach ($products as $product) {
+            if (isset($inCart[$this->numericProductId($product->id)])) {
+                continue;
+            }
+            if ($product->variantId !== null && isset($inCart[$this->numericProductId($product->variantId)])) {
+                continue;
+            }
+
+            $upgrades[] = $product;
+            if (count($upgrades) >= $limit) {
+                break;
+            }
+        }
+
+        return $upgrades;
+    }
+
+    /**
+     * Cart items carry bare numeric product ids; Storefront returns GIDs.
+     * Compare on the trailing numeric part.
+     */
+    private function numericProductId(string $productId): string
+    {
+        return (string) preg_replace('~^.*/~', '', trim($productId));
     }
 
     public function getCrossSells(string $productId, string $shopDomain, ?string $currency = null): array
@@ -232,6 +320,10 @@ class UpsellService extends BaseService implements UpsellServiceInterface
             $id = (string) ($item['product_id'] ?? $item['id'] ?? '');
             if ($id !== '') {
                 $ids[$id] = true;
+            }
+            $variantId = (string) ($item['variant_id'] ?? '');
+            if ($variantId !== '') {
+                $ids[$variantId] = true;
             }
         }
 

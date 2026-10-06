@@ -129,11 +129,14 @@ class PromptBuilderService extends BaseService implements PromptBuilderServiceIn
         $productLines = [];
         foreach ($upsells as $u) {
             $productLines[] = sprintf(
-                '- %s (handle: %s, price: %s %s)',
+                '- %s (handle: %s, price: %s %s)%s',
                 $u->title,
                 $u->handle,
                 $u->price ?? '?',
                 $u->currency,
+                $u->type === UpsellSuggestionDTO::TYPE_DELIVERY_UPGRADE
+                    ? ' [delivery upgrade: speeds up delivery of an email reading; can be added to the cart alongside it]'
+                    : '',
             );
         }
 

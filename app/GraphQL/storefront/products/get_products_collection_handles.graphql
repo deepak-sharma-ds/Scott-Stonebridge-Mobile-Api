@@ -1,0 +1,15 @@
+query getProductsCollectionHandles($ids: [ID!]!) {
+  nodes(ids: $ids) {
+    ... on Product {
+      id
+      tags
+      collections(first: 50) {
+        edges {
+          node {
+            handle
+          }
+        }
+      }
+    }
+  }
+}

@@ -18,6 +18,8 @@ interface UpsellServiceInterface
      * Top-N upsell candidates for the given cart. Calls Shopify
      * productRecommendations per cart product, dedupes against cart
      * product IDs, then caps to config('sales.upsell.max_results').
+     * When the cart contains an eligible reading, Delivery Upgrade Products
+     * (`type: delivery_upgrade`) come first and count towards the cap.
      *
      * @param  list<array{product_id?: string, id?: string, quantity?: int}>  $cartItems
      * @return list<UpsellSuggestionDTO>

@@ -15,6 +15,12 @@ use App\DTOs\Base\BaseDTO;
  */
 class UpsellSuggestionDTO extends BaseDTO
 {
+    /** An ordinary Shopify product recommendation. */
+    public const TYPE_RECOMMENDATION = 'recommendation';
+
+    /** A Delivery Upgrade Product (ADR 0022). */
+    public const TYPE_DELIVERY_UPGRADE = 'delivery_upgrade';
+
     public function __construct(
         public readonly string $id,
         public readonly string $title,
@@ -25,6 +31,7 @@ class UpsellSuggestionDTO extends BaseDTO
         public readonly ?string $price,
         public readonly string $currency,
         public readonly bool $available,
+        public readonly string $type = self::TYPE_RECOMMENDATION,
     ) {
         $this->validate();
     }
@@ -41,7 +48,7 @@ class UpsellSuggestionDTO extends BaseDTO
      *
      * @param  array<string, mixed>  $node
      */
-    public static function fromShopifyNode(array $node, string $fallbackCurrency = 'GBP'): ?self
+    public static function fromShopifyNode(array $node, string $fallbackCurrency = 'GBP', string $type = self::TYPE_RECOMMENDATION): ?self
     {
         $id = (string) ($node['id'] ?? '');
         $title = (string) ($node['title'] ?? '');
@@ -67,6 +74,7 @@ class UpsellSuggestionDTO extends BaseDTO
             price: $variantPrice !== null ? (string) $variantPrice : ($minPrice !== null ? (string) $minPrice : null),
             currency: (string) ($variantCurrency ?? $minCurrency ?? $fallbackCurrency),
             available: (bool) ($firstVariant['availableForSale'] ?? $node['availableForSale'] ?? true),
+            type: $type,
         );
     }
 

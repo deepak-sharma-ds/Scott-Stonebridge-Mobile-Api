@@ -233,7 +233,7 @@ final class ToolDefinitions
                 ],
             ),
             $this->fn(self::TOOL_GET_SHIPPING_OPTIONS,
-                'Use when the user asks about shipping options, delivery methods, shipping costs, delivery times, or same-day options across the store. Fetches live shipping profiles and rates dynamically from Shopify.',
+                'Use when the user asks about shipping options, delivery methods, shipping costs, delivery times, or same-day options across the store, or wants a reading or order sooner (e.g. "faster", "urgent", "rush", "expedite", "speed up my order") or asks about a 24 hour / 48 hour / same day guarantee. Fetches live shipping profiles and rates dynamically from Shopify and also shows any delivery upgrade products the customer can add to their cart.',
                 [
                     'type' => 'object',
                     'properties' => [
