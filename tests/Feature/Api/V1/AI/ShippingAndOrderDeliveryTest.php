@@ -438,6 +438,122 @@ class ShippingAndOrderDeliveryTest extends TestCase
         $this->assertStringContainsString('personal information in accordance with GDPR', $body);
     }
 
+    public function test_shipping_options_are_followed_by_delivery_upgrade_products_card(): void
+    {
+        $convo = $this->makeConversation();
+
+        OpenAI::fake([
+            $this->streamedToolCall('call_ship_up', 'get_shipping_options', '{}'),
+            $this->streamedText('Here are your options.'),
+        ]);
+
+        $this->fakeEmailReadingShippingProfile();
+        $this->shopify->mockResponse('storefront/products/get_delivery_upgrade_products', [
+            'data' => ['products' => ['edges' => [['node' => [
+                'id' => 'gid://shopify/Product/9001',
+                'title' => 'Add SAME DAY Guarantee',
+                'handle' => 'add-same-day-guarantee',
+                'tags' => ['delivery-upgrade'],
+                'availableForSale' => true,
+                'featuredImage' => ['url' => 'https://cdn.example.com/same-day.png', 'altText' => null],
+                'priceRange' => ['minVariantPrice' => ['amount' => '8.99', 'currencyCode' => 'GBP']],
+                'variants' => ['edges' => [['node' => [
+                    'id' => 'gid://shopify/ProductVariant/9101',
+                    'availableForSale' => true,
+                    'price' => ['amount' => '8.99', 'currencyCode' => 'GBP'],
+                ]]]],
+            ]]]]],
+        ]);
+
+        // Uses a keyword the intent fast-path recognises so the faked OpenAI
+        // responses are consumed by the tool call, not an LLM intent classifier.
+        $body = $this->stream($convo->session_id, 'what shipping options do you have?');
+
+        $shippingPos = strpos($body, '"type":"shipping_options"');
+        $productsPos = strpos($body, '"type":"products"');
+
+        $this->assertNotFalse($shippingPos);
+        $this->assertNotFalse($productsPos);
+        $this->assertLessThan($productsPos, $shippingPos, 'Upgrade products card must follow the shipping card.');
+        $this->assertStringContainsString('Add SAME DAY Guarantee', $body);
+        $this->assertStringContainsString('gid://shopify/ProductVariant/9101', $body);
+        $this->assertStringContainsString('"price_minor_units":899', $body);
+        $this->assertStringContainsString('SAME DAY GUARANTEE - Via Email', $body);
+    }
+
+    public function test_shipping_options_are_unchanged_when_no_delivery_upgrade_products_exist(): void
+    {
+        $convo = $this->makeConversation();
+
+        OpenAI::fake([
+            $this->streamedToolCall('call_ship_none', 'get_shipping_options', '{}'),
+            $this->streamedText('Here are our shipping options.'),
+        ]);
+
+        $this->fakeEmailReadingShippingProfile();
+        $this->shopify->mockResponse('storefront/products/get_delivery_upgrade_products', [
+            'data' => ['products' => ['edges' => []]],
+        ]);
+
+        $body = $this->stream($convo->session_id, 'what shipping options do you have?');
+
+        $this->assertStringContainsString('"type":"shipping_options"', $body);
+        $this->assertStringContainsString('SAME DAY GUARANTEE - Via Email', $body);
+        $this->assertStringNotContainsString('"type":"products"', $body);
+    }
+
+    public function test_shipping_options_survive_a_delivery_upgrade_lookup_failure(): void
+    {
+        $convo = $this->makeConversation();
+
+        OpenAI::fake([
+            $this->streamedToolCall('call_ship_fail', 'get_shipping_options', '{}'),
+            $this->streamedText('Here are our shipping options.'),
+        ]);
+
+        $this->fakeEmailReadingShippingProfile();
+        // No mock for the upgrade query: MockShopifyClient throws, which the
+        // service must swallow.
+
+        $body = $this->stream($convo->session_id, 'what shipping options do you have?');
+
+        $this->assertStringContainsString('"type":"shipping_options"', $body);
+        $this->assertStringNotContainsString('"type":"products"', $body);
+    }
+
+    private function fakeEmailReadingShippingProfile(): void
+    {
+        $adminMock = Mockery::mock(AdminService::class);
+        $adminMock->shouldReceive('request')->andReturn([
+            'data' => ['deliveryProfiles' => ['edges' => [['node' => [
+                'id' => 'gid://shopify/DeliveryProfile/1',
+                'name' => 'Email Readings',
+                'default' => false,
+                'profileLocationGroups' => [[
+                    'locationGroupZones' => ['edges' => [['node' => [
+                        'zone' => ['name' => 'Worldwide'],
+                        'methodDefinitions' => ['edges' => [
+                            ['node' => [
+                                'name' => 'Standard 7 - 10 days - Via Email',
+                                'description' => 'Delivery via email',
+                                'active' => true,
+                                'rateProvider' => ['price' => ['amount' => '0.0', 'currencyCode' => 'GBP']],
+                            ]],
+                            ['node' => [
+                                'name' => 'SAME DAY GUARANTEE - Via Email',
+                                'description' => 'Within 24hrs or Your Money Back!',
+                                'active' => true,
+                                'rateProvider' => ['price' => ['amount' => '8.99', 'currencyCode' => 'GBP']],
+                            ]],
+                        ]],
+                    ]]]],
+                ]],
+            ]]]]],
+        ]);
+        $this->app->instance(AdminService::class, $adminMock);
+        $this->app->forgetInstance(ToolExecutor::class);
+    }
+
     private function makeConversation(): AiConversation
     {
         return AiConversation::factory()->create([

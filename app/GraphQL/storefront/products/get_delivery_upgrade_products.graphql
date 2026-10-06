@@ -1,0 +1,38 @@
+query getDeliveryUpgradeProducts(
+  $query: String!
+  $country: CountryCode
+) @inContext(country: $country) {
+  products(first: 10, query: $query, sortKey: TITLE) {
+    edges {
+      node {
+        id
+        title
+        handle
+        tags
+        availableForSale
+        featuredImage {
+          url
+          altText
+        }
+        priceRange {
+          minVariantPrice {
+            amount
+            currencyCode
+          }
+        }
+        variants(first: 1) {
+          edges {
+            node {
+              id
+              availableForSale
+              price {
+                amount
+                currencyCode
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -35,6 +35,7 @@ class UpsellSuggestionResource extends BaseApiResource
             'price' => $dto->price,
             'currency' => $dto->currency,
             'available' => $dto->available,
+            'type' => $dto->type,
         ];
     }
 }

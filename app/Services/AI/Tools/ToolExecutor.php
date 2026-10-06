@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Services\AI\Tools;
 
+use App\Contracts\Services\Sales\DeliveryUpgradeServiceInterface;
 use App\Contracts\Services\Sales\StoreKnowledgeServiceInterface;
 use App\Contracts\Services\Sales\UpsellServiceInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\AI\CustomerOrderSummaryDTO;
 use App\DTOs\Chat\ProductRecommendationDTO;
+use App\DTOs\Sales\UpsellSuggestionDTO;
 use App\Exceptions\AI\AIServiceUnavailableException;
 use App\Exceptions\AI\AuthRequiredException;
 use App\Exceptions\AI\McpToolException;
@@ -23,6 +25,7 @@ use App\Services\AI\MCP\Mappers\PolicyMapper;
 use App\Services\AI\MCP\Mappers\ProductMapper;
 use App\Services\AI\MCP\StorefrontMcpClient;
 use App\Services\AI\Streaming\ChunkEmitter;
+use App\Services\Sales\DeliveryUpgradeService;
 use App\Services\Shopify\AdminService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -48,6 +51,8 @@ class ToolExecutor
 
     private ?AdminService $adminApi;
 
+    private ?DeliveryUpgradeServiceInterface $deliveryUpgrade;
+
     public function __construct(
         private readonly StorefrontMcpClient $storefront,
         private readonly CustomerMcpClient $customer,
@@ -57,11 +62,22 @@ class ToolExecutor
         ?CustomerAccountGraphClient $customerGraph = null,
         ?ChatbotConfigRepository $chatbotConfig = null,
         ?AdminService $adminApi = null,
+        ?DeliveryUpgradeServiceInterface $deliveryUpgrade = null,
     ) {
         $this->storefrontApi = $storefrontApi;
         $this->customerGraph = $customerGraph;
         $this->chatbotConfig = $chatbotConfig;
         $this->adminApi = $adminApi;
+        $this->deliveryUpgrade = $deliveryUpgrade;
+    }
+
+    /**
+     * Lazily resolved like the other optional collaborators so existing
+     * constructions of this class keep working unchanged.
+     */
+    public function deliveryUpgrade(): DeliveryUpgradeServiceInterface
+    {
+        return $this->deliveryUpgrade ??= app(DeliveryUpgradeServiceInterface::class);
     }
 
     /**
@@ -1575,6 +1591,8 @@ class ToolExecutor
 
         $this->emitter->emit('shipping_options', ['profiles' => $profiles]);
 
+        $upgradeCards = $this->emitDeliveryUpgradeProducts($ctx);
+
         $lines = ['Available Store Shipping & Delivery Options from Shopify:'];
         foreach ($profiles as $prof) {
             $lines[] = "- {$prof['profile']}:";
@@ -1583,12 +1601,80 @@ class ToolExecutor
                 $lines[] = "  * {$m['name']} ({$m['price']}) — Timeframe: {$m['timeframe']}{$descPart}";
             }
         }
+
+        if ($upgradeCards !== []) {
+            $lines[] = '';
+            $lines[] = 'Delivery Upgrade Products (already shown to the customer as product cards below the shipping options). These are separate from the shipping methods above: the customer can add one to their cart to speed up an email reading, including one they have already ordered; the store team matches it to the reading order by email or order number.';
+            foreach ($upgradeCards as $card) {
+                $price = isset($card['price_minor_units']) ? ', Price: '.number_format($card['price_minor_units'] / 100, 2).' '.($card['currency'] ?? 'GBP') : '';
+                $lines[] = "  * \"{$card['title']}\" (Handle: {$card['handle']}{$price})";
+            }
+        }
+
         $lines[] = '';
         $lines[] = 'Answer the customer with clear, structured points quoting the live delivery speeds and rates above.';
 
         $messageForAi = implode("\n", $lines);
 
-        return ToolResult::success($messageForAi, ['type' => 'shipping_options', 'profiles' => $profiles]);
+        $data = ['type' => 'shipping_options', 'profiles' => $profiles];
+        if ($upgradeCards !== []) {
+            $data['upgrade_products'] = $upgradeCards;
+        }
+
+        return ToolResult::success($messageForAi, $data);
+    }
+
+    /**
+     * Emits a `products` event with the Delivery Upgrade Products (ADR 0022)
+     * right after the `shipping_options` card, reusing the same card shape
+     * `search_catalog` emits. Returns the emitted cards; an empty list means
+     * nothing was emitted — kill switch off, no tagged products, or a lookup
+     * failure — and the turn behaves exactly as it did before.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function emitDeliveryUpgradeProducts(ChatSessionContext $ctx): array
+    {
+        try {
+            $suggestions = $this->deliveryUpgrade()->getUpgradeProducts($ctx->shopDomain, $ctx->currency);
+        } catch (Throwable $e) {
+            $this->logToolError('shipping_options.delivery_upgrade', $ctx, $e);
+
+            return [];
+        }
+
+        $cards = array_map(
+            fn (UpsellSuggestionDTO $dto): array => $this->deliveryUpgradeCard($dto, $ctx),
+            $suggestions,
+        );
+
+        if ($cards !== []) {
+            $this->emitter->emit('products', ['products' => $cards]);
+        }
+
+        return $cards;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function deliveryUpgradeCard(UpsellSuggestionDTO $dto, ChatSessionContext $ctx): array
+    {
+        $node = [
+            'id' => $dto->id,
+            'title' => $dto->title,
+            'handle' => $dto->handle,
+            'availableForSale' => $dto->available,
+            'tags' => [DeliveryUpgradeService::UPGRADE_TAG],
+            'featuredImage' => $dto->imageUrl !== null ? ['url' => $dto->imageUrl, 'altText' => $dto->imageAlt] : null,
+            'variants' => ['edges' => $dto->variantId !== null ? [['node' => [
+                'id' => $dto->variantId,
+                'availableForSale' => $dto->available,
+                'price' => ['amount' => $dto->price, 'currencyCode' => $dto->currency],
+            ]]] : []],
+        ];
+
+        return ProductRecommendationDTO::fromShopifyNode($node, $ctx->shopDomain)->toMcpChunk();
     }
 
     private function extractTimeframeFromShippingTitle(string $title): string
@@ -1659,9 +1745,20 @@ class ToolExecutor
         }
 
         $cartItems = array_values(array_filter(array_map(
-            static fn ($line): ?array => is_array($line) && ! empty($line['product_id'])
-                ? ['product_id' => (string) $line['product_id'], 'quantity' => (int) ($line['quantity'] ?? 0)]
-                : null,
+            static function ($line): ?array {
+                if (! is_array($line) || (empty($line['product_id']) && empty($line['id']) && empty($line['variant_id']))) {
+                    return null;
+                }
+                $item = [
+                    'product_id' => (string) ($line['product_id'] ?? $line['id'] ?? ''),
+                    'quantity' => (int) ($line['quantity'] ?? 0),
+                ];
+                if (! empty($line['variant_id'])) {
+                    $item['variant_id'] = (string) $line['variant_id'];
+                }
+
+                return $item;
+            },
             $cart->items,
         )));
 
