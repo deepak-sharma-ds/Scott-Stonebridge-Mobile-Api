@@ -279,6 +279,10 @@ class StreamingService extends BaseService implements StreamingServiceInterface
                     // then update_cart in the same response — so the guard in
                     // handleUpdateCart() isn't limited to prior-turn history.
                     $ctx = $ctx->withAdditionalShownVariantIds($this->variantIdsFromShownEntities($shownEntities));
+                    // The cart snapshot only refreshes on the next request, so
+                    // remember what this turn already added for later tools
+                    // (e.g. suggest_upsell must not re-offer it).
+                    $ctx = $ctx->withPendingCartAdds($this->addedVariantIdsFromChunk($result->emittedChunk));
 
                     if ($result->emittedChunk !== null && ($result->emittedChunk['type'] ?? '') === 'cart_action') {
                         $ctx = $this->applyCartActionToContext($ctx, (array) ($result->emittedChunk['items'] ?? []));
@@ -470,6 +474,28 @@ class StreamingService extends BaseService implements StreamingServiceInterface
                 if (is_string($variantId) && $variantId !== '') {
                     $ids[$variantId] = true;
                 }
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
+     * Variant ids an `update_cart` chunk asked the storefront to add.
+     *
+     * @param  array<string, mixed>  $chunk
+     * @return array<string, true>
+     */
+    private function addedVariantIdsFromChunk(array $chunk): array
+    {
+        if (($chunk['type'] ?? null) !== 'cart_action') {
+            return [];
+        }
+
+        $ids = [];
+        foreach ((array) ($chunk['items'] ?? []) as $row) {
+            if (is_array($row) && ($row['action'] ?? null) === 'add' && is_string($row['variant_id'] ?? null) && $row['variant_id'] !== '') {
+                $ids[$row['variant_id']] = true;
             }
         }
 
