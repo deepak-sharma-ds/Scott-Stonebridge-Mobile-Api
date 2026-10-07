@@ -209,6 +209,27 @@ class ChatbotConfigRepository
         return $this->int('Personalization.recent_orders_limit', 3);
     }
 
+    // -- Delivery ------------------------------------------------------------------
+
+    /**
+     * Kill switch for Delivery Upgrade Product recommendations (ADR 0022).
+     */
+    public function deliveryUpgradeEnabled(): bool
+    {
+        return $this->bool('Delivery.upgrade_enabled', true);
+    }
+
+    /**
+     * Handles of the Upgrade-Eligible Collections. Stored as a JSON array
+     * (`["email-readings","readings"]`) or a comma-separated list.
+     *
+     * @return list<string>
+     */
+    public function deliveryUpgradeEligibleCollectionHandles(): array
+    {
+        return $this->stringList('Delivery.eligible_collection_handles', ['email-readings', 'readings']);
+    }
+
     // -- casting helpers -----------------------------------------------------------
 
     /**
@@ -244,6 +265,41 @@ class ChatbotConfigRepository
         $raw = $this->raw($key);
 
         return $raw === null ? $default : (float) $raw;
+    }
+
+    private function bool(string $key, bool $default): bool
+    {
+        $raw = $this->raw($key);
+
+        return $raw === null ? $default : filter_var($raw, FILTER_VALIDATE_BOOLEAN);
+    }
+
+    /**
+     * Accepts a JSON array or a comma-separated string. Values are trimmed,
+     * lower-cased and de-duplicated; an empty result falls back to the default.
+     *
+     * @param  list<string>  $default
+     * @return list<string>
+     */
+    private function stringList(string $key, array $default): array
+    {
+        $raw = $this->raw($key);
+        if ($raw === null) {
+            return $default;
+        }
+
+        $decoded = json_decode($raw, true);
+        $items = is_array($decoded) ? $decoded : explode(',', $raw);
+
+        $normalized = [];
+        foreach ($items as $item) {
+            $value = strtolower(trim((string) $item));
+            if ($value !== '') {
+                $normalized[$value] = $value;
+            }
+        }
+
+        return $normalized === [] ? $default : array_values($normalized);
     }
 
     /**

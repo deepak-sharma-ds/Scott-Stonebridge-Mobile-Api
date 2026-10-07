@@ -8,6 +8,7 @@ use App\Contracts\Services\Sales\UpsellServiceInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
 use App\DTOs\Chat\CartContextDTO;
 use App\DTOs\Chat\CustomerContextDTO;
+use App\DTOs\Sales\UpsellSuggestionDTO;
 use App\Exceptions\AI\AuthRequiredException;
 use App\Models\AiConversation;
 use App\Models\AiCustomerSession;
@@ -851,6 +852,88 @@ class ToolExecutorTest extends TestCase
         $output = $this->invoke('suggest_upsell', [], $this->ctx(cart: $cart));
 
         $this->assertStringContainsString('"type":"upsell_offer"', $output);
+    }
+
+    public function test_suggest_upsell_does_not_re_offer_a_variant_added_earlier_in_the_same_turn(): void
+    {
+        $cart = CartContextDTO::fromArray([
+            'id' => null,
+            'item_count' => 1,
+            'total_price' => '46.00',
+            'currency' => 'GBP',
+            'items' => [['product_id' => '8441359368366', 'quantity' => 1]],
+        ]);
+
+        $suggestion = static fn (string $productId, string $variantId, string $title, string $type): UpsellSuggestionDTO => new UpsellSuggestionDTO(
+            id: "gid://shopify/Product/{$productId}",
+            title: $title,
+            handle: strtolower(str_replace(' ', '-', $title)),
+            imageUrl: null,
+            imageAlt: null,
+            variantId: "gid://shopify/ProductVariant/{$variantId}",
+            price: '8.99',
+            currency: 'GBP',
+            available: true,
+            type: $type,
+        );
+
+        $this->upsell->method('getUpsells')->willReturn([
+            $suggestion('900', '9001', 'Add SAME DAY Guarantee', UpsellSuggestionDTO::TYPE_DELIVERY_UPGRADE),
+            $suggestion('101', '1011', '6 Card Future Reading', UpsellSuggestionDTO::TYPE_RECOMMENDATION),
+        ]);
+
+        // The storefront was just asked (earlier this turn) to add variant 9001,
+        // but the cart snapshot still predates it.
+        $ctx = $this->ctx(cart: $cart)->withPendingCartAdds(['gid://shopify/ProductVariant/9001' => true]);
+
+        $output = $this->invoke('suggest_upsell', [], $ctx);
+
+        $this->assertStringContainsString('6 Card Future Reading', $output);
+        $this->assertStringNotContainsString('Add SAME DAY Guarantee', $output);
+    }
+
+    public function test_suggest_upsell_keeps_everything_when_nothing_was_added_this_turn(): void
+    {
+        $cart = CartContextDTO::fromArray([
+            'id' => null,
+            'item_count' => 1,
+            'total_price' => '46.00',
+            'currency' => 'GBP',
+            'items' => [['product_id' => '8441359368366', 'quantity' => 1]],
+        ]);
+
+        $this->upsell->method('getUpsells')->willReturn([
+            new UpsellSuggestionDTO(
+                id: 'gid://shopify/Product/900',
+                title: 'Add SAME DAY Guarantee',
+                handle: 'add-same-day-guarantee',
+                imageUrl: null,
+                imageAlt: null,
+                variantId: 'gid://shopify/ProductVariant/9001',
+                price: '8.99',
+                currency: 'GBP',
+                available: true,
+                type: UpsellSuggestionDTO::TYPE_DELIVERY_UPGRADE,
+            ),
+        ]);
+
+        $output = $this->invoke('suggest_upsell', [], $this->ctx(cart: $cart));
+
+        $this->assertStringContainsString('Add SAME DAY Guarantee', $output);
+        $this->assertStringContainsString('"type":"delivery_upgrade"', $output);
+    }
+
+    public function test_session_context_keeps_pending_cart_adds_across_copies(): void
+    {
+        $ctx = $this->ctx()->withPendingCartAdds(['v1' => true]);
+
+        $this->assertSame(['v1' => true], $ctx->pendingCartVariantIds);
+        $this->assertSame(['v1' => true], $ctx->withCartId('c1')->pendingCartVariantIds);
+        $this->assertSame(['v1' => true], $ctx->withCustomerAccessToken('t')->pendingCartVariantIds);
+        $this->assertSame(['v1' => true], $ctx->withCartSnapshot(null)->pendingCartVariantIds);
+        $this->assertSame(['v1' => true], $ctx->withAdditionalShownVariantIds(['v2' => true])->pendingCartVariantIds);
+        $this->assertSame(['v1' => true, 'v3' => true], $ctx->withPendingCartAdds(['v3' => true])->pendingCartVariantIds);
+        $this->assertSame($ctx, $ctx->withPendingCartAdds([]));
     }
 
     public function test_suggest_upsell_errors_on_empty_cart(): void

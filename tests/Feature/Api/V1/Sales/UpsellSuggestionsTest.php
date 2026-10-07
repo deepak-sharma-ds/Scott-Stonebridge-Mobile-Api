@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api\V1\Sales;
 
+use App\Contracts\Services\Sales\DeliveryUpgradeServiceInterface;
 use App\Contracts\Shopify\StorefrontApiClientInterface;
+use App\DTOs\Sales\UpsellSuggestionDTO;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Cache;
+use Mockery;
 use Tests\Mocks\MockShopifyClient;
 use Tests\TestCase;
 
@@ -92,6 +95,57 @@ class UpsellSuggestionsTest extends TestCase
         $response->assertJsonPath('data.upsells.0.available', true);
         $response->assertJsonMissingPath('data.free_shipping_gap');
         $response->assertJsonMissingPath('data.threshold');
+    }
+
+    public function test_delivery_upgrade_leads_the_grid_with_type_for_a_cart_with_an_eligible_reading(): void
+    {
+        $upgrades = Mockery::mock(DeliveryUpgradeServiceInterface::class);
+        $upgrades->shouldReceive('cartHasEligibleReading')->once()->andReturn(true);
+        $upgrades->shouldReceive('getUpgradeProducts')->once()->andReturn([
+            new UpsellSuggestionDTO(
+                id: 'gid://shopify/Product/900',
+                title: 'Add SAME DAY Guarantee',
+                handle: 'add-same-day-guarantee',
+                imageUrl: 'https://cdn/same-day.png',
+                imageAlt: null,
+                variantId: 'gid://shopify/ProductVariant/900-1',
+                price: '8.99',
+                currency: 'GBP',
+                available: true,
+                type: UpsellSuggestionDTO::TYPE_DELIVERY_UPGRADE,
+            ),
+        ]);
+        $this->app->instance(DeliveryUpgradeServiceInterface::class, $upgrades);
+
+        $this->shopify->mockResponse('storefront/products/get_product_recommendations', [
+            'data' => ['productRecommendations' => [[
+                'id' => 'gid://shopify/Product/100',
+                'title' => 'Wireless Charger',
+                'handle' => 'wireless-charger',
+                'availableForSale' => true,
+                'featuredImage' => null,
+                'priceRange' => ['minVariantPrice' => ['amount' => '19.99', 'currencyCode' => 'GBP']],
+                'variants' => ['edges' => [['node' => [
+                    'id' => 'gid://shopify/ProductVariant/100-1',
+                    'availableForSale' => true,
+                    'price' => ['amount' => '19.99', 'currencyCode' => 'GBP'],
+                ]]]],
+            ]]],
+        ]);
+
+        $response = $this->postJson('/api/v1/ai/upsell/suggestions', [
+            'session_id' => 'sess-up-du',
+            'shop_domain' => 'demo.myshopify.com',
+            'cart_items' => [['product_id' => 'gid://shopify/Product/1', 'quantity' => 1]],
+            'currency' => 'GBP',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonCount(2, 'data.upsells');
+        $response->assertJsonPath('data.upsells.0.title', 'Add SAME DAY Guarantee');
+        $response->assertJsonPath('data.upsells.0.type', 'delivery_upgrade');
+        $response->assertJsonPath('data.upsells.1.title', 'Wireless Charger');
+        $response->assertJsonPath('data.upsells.1.type', 'recommendation');
     }
 
     public function test_dedupes_upsells_against_cart_product_ids(): void

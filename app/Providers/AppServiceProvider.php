@@ -33,6 +33,7 @@ use App\Contracts\Services\OrderServiceInterface;
 use App\Contracts\Services\ProductServiceInterface;
 use App\Contracts\Services\ProfileServiceInterface;
 use App\Contracts\Services\PushNotificationServiceInterface;
+use App\Contracts\Services\Sales\DeliveryUpgradeServiceInterface;
 use App\Contracts\Services\Sales\LeadCaptureServiceInterface;
 use App\Contracts\Services\Sales\ProactiveTriggerServiceInterface;
 use App\Contracts\Services\Sales\StoreKnowledgeServiceInterface;
@@ -66,6 +67,7 @@ use App\Services\AppVersionService;
 use App\Services\Cache\ShopifyCacheStrategy;
 use App\Services\FreeReadingService;
 use App\Services\Push\PushNotificationService;
+use App\Services\Sales\DeliveryUpgradeService;
 use App\Services\Sales\LeadCaptureService;
 use App\Services\Sales\ProactiveTriggerService;
 use App\Services\Sales\StoreKnowledgeService;
@@ -271,6 +273,11 @@ class AppServiceProvider extends ServiceProvider
         $this->app->bind(
             UpsellServiceInterface::class,
             UpsellService::class
+        );
+
+        $this->app->bind(
+            DeliveryUpgradeServiceInterface::class,
+            DeliveryUpgradeService::class
         );
 
         $this->app->bind(

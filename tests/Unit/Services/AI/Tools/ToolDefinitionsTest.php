@@ -57,6 +57,20 @@ class ToolDefinitionsTest extends TestCase
         $this->assertStringContainsString('ALWAYS', $byName[ToolDefinitions::TOOL_SUGGEST_QUICK_REPLIES]);
     }
 
+    public function test_shipping_options_description_covers_speed_up_and_guarantee_phrasing(): void
+    {
+        $description = '';
+        foreach ((new ToolDefinitions)->all() as $tool) {
+            if ($tool['function']['name'] === ToolDefinitions::TOOL_GET_SHIPPING_OPTIONS) {
+                $description = strtolower($tool['function']['description']);
+            }
+        }
+
+        foreach (['faster', 'urgent', 'rush', 'expedite', 'speed up my order', '24 hour', '48 hour', 'same day'] as $phrase) {
+            $this->assertStringContainsString($phrase, $description);
+        }
+    }
+
     public function test_dispatch_buckets_have_no_overlap(): void
     {
         $overlap = array_intersect(

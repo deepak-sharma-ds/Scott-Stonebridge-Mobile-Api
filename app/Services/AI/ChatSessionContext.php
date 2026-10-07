@@ -18,6 +18,11 @@ final class ChatSessionContext
      *                                                visible to the model this session — seeded from persisted
      *                                                history at turn start, extended as this turn's own tool
      *                                                results are collected. See ADR 0010.
+     * @param  array<string, true>  $pendingCartVariantIds  Variant ids an `update_cart`
+     *                                                      "add" already asked the storefront to put in the cart earlier
+     *                                                      in this same turn. The cart snapshot is only refreshed on
+     *                                                      the next request, so this is how later tool calls in the
+     *                                                      turn (e.g. `suggest_upsell`) learn about the add.
      */
     public function __construct(
         public readonly string $sessionId,
@@ -32,6 +37,7 @@ final class ChatSessionContext
         public readonly string $currency = 'GBP',
         public readonly string $country = 'GB',
         public readonly ?CustomerContextDTO $customer = null,
+        public readonly array $pendingCartVariantIds = [],
     ) {}
 
     public function withCustomerAccessToken(?string $token): self
@@ -49,6 +55,7 @@ final class ChatSessionContext
             currency: $this->currency,
             country: $this->country,
             customer: $this->customer,
+            pendingCartVariantIds: $this->pendingCartVariantIds,
         );
     }
 
@@ -67,6 +74,7 @@ final class ChatSessionContext
             currency: $this->currency,
             country: $this->country,
             customer: $this->customer,
+            pendingCartVariantIds: $this->pendingCartVariantIds,
         );
     }
 
@@ -85,6 +93,7 @@ final class ChatSessionContext
             currency: $this->currency,
             country: $this->country,
             customer: $this->customer,
+            pendingCartVariantIds: $this->pendingCartVariantIds,
         );
     }
 
@@ -110,6 +119,33 @@ final class ChatSessionContext
             currency: $this->currency,
             country: $this->country,
             customer: $this->customer,
+            pendingCartVariantIds: $this->pendingCartVariantIds,
+        );
+    }
+
+    /**
+     * @param  array<string, true>  $additional
+     */
+    public function withPendingCartAdds(array $additional): self
+    {
+        if ($additional === []) {
+            return $this;
+        }
+
+        return new self(
+            sessionId: $this->sessionId,
+            shopDomain: $this->shopDomain,
+            cartId: $this->cartId,
+            customerAccessToken: $this->customerAccessToken,
+            locale: $this->locale,
+            pageType: $this->pageType,
+            cartSnapshot: $this->cartSnapshot,
+            shownVariantIds: $this->shownVariantIds,
+            isGuest: $this->isGuest,
+            currency: $this->currency,
+            country: $this->country,
+            customer: $this->customer,
+            pendingCartVariantIds: $this->pendingCartVariantIds + $additional,
         );
     }
 }

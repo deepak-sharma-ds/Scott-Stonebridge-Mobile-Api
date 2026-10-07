@@ -92,6 +92,43 @@ class PromptBuilderInjectionTest extends TestCase
         $this->assertStringNotContainsString('free shipping', strtolower($block));
     }
 
+    public function test_inject_upsell_context_marks_delivery_upgrade_products(): void
+    {
+        $intent = new IntentDTO(IntentDTO::INTENT_UPSELL_OPPORTUNITY, 0.8, [], 'regex');
+        $ctx = $this->context(cartTotal: '42.00');
+        $upsells = [
+            new UpsellSuggestionDTO(
+                id: 'gid://shopify/Product/900',
+                title: 'Add SAME DAY Guarantee',
+                handle: 'add-same-day-guarantee',
+                imageUrl: null,
+                imageAlt: null,
+                variantId: 'v900',
+                price: '8.99',
+                currency: 'GBP',
+                available: true,
+                type: UpsellSuggestionDTO::TYPE_DELIVERY_UPGRADE,
+            ),
+            new UpsellSuggestionDTO(
+                id: 'gid://shopify/Product/1',
+                title: 'Wireless Charger',
+                handle: 'wireless-charger',
+                imageUrl: null,
+                imageAlt: null,
+                variantId: 'v1',
+                price: '19.99',
+                currency: 'GBP',
+                available: true,
+            ),
+        ];
+
+        $block = $this->builder->injectUpsellContext($intent, $ctx, $upsells);
+
+        $this->assertStringContainsString('Add SAME DAY Guarantee (handle: add-same-day-guarantee, price: 8.99 GBP) [delivery upgrade:', $block);
+        $this->assertStringContainsString('- Wireless Charger (handle: wireless-charger, price: 19.99 GBP)', $block);
+        $this->assertStringNotContainsString('Wireless Charger (handle: wireless-charger, price: 19.99 GBP) [delivery upgrade', $block);
+    }
+
     public function test_inject_upsell_context_returns_empty_when_no_products(): void
     {
         $intent = new IntentDTO(IntentDTO::INTENT_UPSELL_OPPORTUNITY, 0.8, [], 'regex');
@@ -225,7 +262,10 @@ class PromptBuilderInjectionTest extends TestCase
             '- [policy] Shipping — '.str_repeat('Lowest ranked detail. ', 12),
         ];
 
-        config(['sales.prompt_guard.system_prompt_max_tokens' => 3500]);
+        // Retuned 3500 -> 3560 when the shipping tool-usage line in system.blade.php
+        // grew by ~63 estimated tokens (ADR 0022); the window that keeps exactly
+        // one row is ~3540-3580, so 3560 sits in the middle.
+        config(['sales.prompt_guard.system_prompt_max_tokens' => 3560]);
 
         $conversations = Mockery::mock(ConversationServiceInterface::class);
         $conversations->shouldReceive('historyTailAsMessages')->andReturn([]);

@@ -12,6 +12,7 @@ use App\Contracts\Services\AI\SafetyServiceInterface;
 use App\Contracts\Services\AI\ShopifyContextServiceInterface;
 use App\Contracts\Services\AI\StreamingServiceInterface;
 use App\DTOs\Chat\AIResponseDTO;
+use App\DTOs\Chat\CartContextDTO;
 use App\DTOs\Chat\ChatContextDTO;
 use App\DTOs\Chat\ChatRequestDTO;
 use App\DTOs\Chat\IntentDTO;
@@ -278,6 +279,14 @@ class StreamingService extends BaseService implements StreamingServiceInterface
                     // then update_cart in the same response — so the guard in
                     // handleUpdateCart() isn't limited to prior-turn history.
                     $ctx = $ctx->withAdditionalShownVariantIds($this->variantIdsFromShownEntities($shownEntities));
+                    // The cart snapshot only refreshes on the next request, so
+                    // remember what this turn already added for later tools
+                    // (e.g. suggest_upsell must not re-offer it).
+                    $ctx = $ctx->withPendingCartAdds($this->addedVariantIdsFromChunk($result->emittedChunk));
+
+                    if ($result->emittedChunk !== null && ($result->emittedChunk['type'] ?? '') === 'cart_action') {
+                        $ctx = $this->applyCartActionToContext($ctx, (array) ($result->emittedChunk['items'] ?? []));
+                    }
 
                     $messages[] = [
                         'role' => 'tool',
@@ -472,6 +481,28 @@ class StreamingService extends BaseService implements StreamingServiceInterface
     }
 
     /**
+     * Variant ids an `update_cart` chunk asked the storefront to add.
+     *
+     * @param  array<string, mixed>  $chunk
+     * @return array<string, true>
+     */
+    private function addedVariantIdsFromChunk(array $chunk): array
+    {
+        if (($chunk['type'] ?? null) !== 'cart_action') {
+            return [];
+        }
+
+        $ids = [];
+        foreach ((array) ($chunk['items'] ?? []) as $row) {
+            if (is_array($row) && ($row['action'] ?? null) === 'add' && is_string($row['variant_id'] ?? null) && $row['variant_id'] !== '') {
+                $ids[$row['variant_id']] = true;
+            }
+        }
+
+        return $ids;
+    }
+
+    /**
      * @return array<string, true>
      */
     private function extractInboundVariantIds(string $message, ChatContextDTO $context): array
@@ -622,6 +653,14 @@ class StreamingService extends BaseService implements StreamingServiceInterface
 
                 return $items === [] ? null : ['type' => 'product', 'items' => $items];
 
+            case 'shipping_options':
+                // Delivery Upgrade Product cards ride along on the shipping
+                // tool's result so their variants count as "shown" for the
+                // update_cart guard (ADR 0022). Absent when none were emitted.
+                $cards = $chunk['upgrade_products'] ?? [];
+
+                return $cards === [] ? null : $this->summariseShownChunk(['type' => 'products', 'products' => $cards]);
+
             case 'cart_action':
                 $items = [];
                 foreach ((array) ($chunk['items'] ?? []) as $row) {
@@ -668,5 +707,113 @@ class StreamingService extends BaseService implements StreamingServiceInterface
             default:
                 return null;
         }
+    }
+
+    /**
+     * @param  list<array<string, mixed>>  $items
+     */
+    private function applyCartActionToContext(ChatSessionContext $ctx, array $items): ChatSessionContext
+    {
+        if ($items === []) {
+            return $ctx;
+        }
+
+        $cart = $ctx->cartSnapshot ?? new CartContextDTO(
+            id: $ctx->cartId,
+            itemCount: 0,
+            totalPrice: null,
+            currency: $ctx->currency,
+            items: [],
+        );
+
+        $lines = $cart->items;
+
+        foreach ($items as $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+            $action = (string) ($item['action'] ?? 'add');
+            $vid = (string) ($item['variant_id'] ?? '');
+            $qty = (int) ($item['quantity'] ?? 1);
+
+            if ($action === 'clear') {
+                $lines = [];
+
+                continue;
+            }
+
+            if ($action === 'remove' || $qty <= 0) {
+                $lines = array_values(array_filter(
+                    $lines,
+                    static function ($line) use ($vid): bool {
+                        if (! is_array($line)) {
+                            return false;
+                        }
+                        $lineVid = (string) ($line['variant_id'] ?? $line['id'] ?? '');
+
+                        return $lineVid !== $vid && basename($lineVid) !== basename($vid);
+                    }
+                ));
+
+                continue;
+            }
+
+            if ($action === 'add' || $action === 'update') {
+                $found = false;
+                foreach ($lines as &$line) {
+                    if (! is_array($line)) {
+                        continue;
+                    }
+                    $lineVid = (string) ($line['variant_id'] ?? $line['id'] ?? '');
+                    if ($lineVid === $vid || basename($lineVid) === basename($vid)) {
+                        $line['quantity'] = $action === 'add' ? ((int) ($line['quantity'] ?? 0)) + $qty : $qty;
+                        $found = true;
+                        break;
+                    }
+                }
+                unset($line);
+
+                if (! $found) {
+                    $productId = $this->resolveProductIdForVariant($vid, $ctx);
+                    $lines[] = [
+                        'product_id' => $productId,
+                        'variant_id' => $vid,
+                        'id' => $productId,
+                        'quantity' => $qty,
+                    ];
+                }
+            }
+        }
+
+        $updatedCart = new CartContextDTO(
+            id: $cart->id,
+            itemCount: count($lines),
+            totalPrice: $cart->totalPrice,
+            currency: $cart->currency,
+            items: $lines,
+        );
+
+        return $ctx->withCartSnapshot($updatedCart);
+    }
+
+    private function resolveProductIdForVariant(string $variantId, ChatSessionContext $ctx): string
+    {
+        $bare = basename($variantId);
+
+        try {
+            $upgrades = $this->toolExecutor->deliveryUpgrade()->getUpgradeProducts($ctx->shopDomain, $ctx->currency);
+            foreach ($upgrades as $up) {
+                if ($up->variantId !== null && (basename($up->variantId) === $bare || $up->variantId === $variantId)) {
+                    return $up->id;
+                }
+                if (basename($up->id) === $bare || $up->id === $variantId) {
+                    return $up->id;
+                }
+            }
+        } catch (Throwable) {
+            // Degrade gracefully
+        }
+
+        return $variantId;
     }
 }
