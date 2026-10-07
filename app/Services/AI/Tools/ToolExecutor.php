@@ -1766,7 +1766,10 @@ class ToolExecutor
             return ToolResult::error('Empty cart — nothing to upsell against.');
         }
 
-        $suggestions = $this->upsell->getUpsells($cartItems, $ctx->shopDomain, $cart->currency ?? $ctx->currency);
+        $suggestions = $this->withoutPendingCartAdds(
+            $this->upsell->getUpsells($cartItems, $ctx->shopDomain, $cart->currency ?? $ctx->currency),
+            $ctx,
+        );
 
         $payload = [
             'upsells' => array_map(static fn ($dto) => $dto->toArray(), $suggestions),
@@ -1779,6 +1782,34 @@ class ToolExecutor
             $count > 0 ? "Suggested {$count} upsells." : 'No upsell candidates available.',
             ['type' => 'upsell_offer'] + $payload,
         );
+    }
+
+    /**
+     * Drops suggestions whose variant an `update_cart` already added earlier
+     * in this turn. The cart snapshot predates that add, so without this the
+     * product the customer just added (e.g. a Delivery Upgrade Product) would
+     * be recommended straight back to them.
+     *
+     * @param  list<UpsellSuggestionDTO>  $suggestions
+     * @return list<UpsellSuggestionDTO>
+     */
+    private function withoutPendingCartAdds(array $suggestions, ChatSessionContext $ctx): array
+    {
+        if ($ctx->pendingCartVariantIds === []) {
+            return $suggestions;
+        }
+
+        $tail = static fn (string $id): string => (string) preg_replace('~^.*/~', '', trim($id));
+
+        $pending = [];
+        foreach (array_keys($ctx->pendingCartVariantIds) as $variantId) {
+            $pending[$tail((string) $variantId)] = true;
+        }
+
+        return array_values(array_filter(
+            $suggestions,
+            static fn (UpsellSuggestionDTO $s): bool => $s->variantId === null || ! isset($pending[$tail($s->variantId)]),
+        ));
     }
 
     /**
