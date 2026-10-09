@@ -38,17 +38,24 @@ class EmailReadingProductRequest extends FormRequest
             'model' => ['nullable', 'string', 'max:255'],
             'max_tokens' => ['nullable', 'integer', 'min:1', 'max:8000'],
             'is_active' => ['nullable', 'boolean'],
+            'is_automation_enabled' => ['nullable', 'boolean'],
             'prompt_template' => ['required', 'string'],
-            'questions_schema' => ['required', 'array', 'min:1'],
+            // An active product with zero questions is a legitimate final
+            // state (some readings need no personalization) — not every
+            // reading product requires a question schema, so this is
+            // intentionally not `required`/`min:1`.
+            'questions_schema' => ['nullable', 'array'],
             'questions_schema.*.key' => ['required', 'string', 'max:255'],
             'questions_schema.*.label' => ['required', 'string', 'max:1000'],
+            'questions_schema.*.type' => ['nullable', 'string', Rule::in(['text', 'textarea'])],
             'questions_schema.*.required' => ['nullable', 'boolean'],
         ];
     }
 
     /**
-     * Normalise the schema repeater (drop blank rows, cast flags) and derive a
-     * slug from the name when none was supplied.
+     * Normalise the schema repeater (drop blank rows, cast flags, default a
+     * missing type to text) and derive a slug from the name when none was
+     * supplied.
      */
     protected function prepareForValidation(): void
     {
@@ -57,6 +64,7 @@ class EmailReadingProductRequest extends FormRequest
             ->map(fn ($row) => [
                 'key' => trim((string) $row['key']),
                 'label' => trim((string) ($row['label'] ?? '')),
+                'type' => in_array($row['type'] ?? null, ['text', 'textarea'], true) ? $row['type'] : 'text',
                 'required' => filter_var($row['required'] ?? false, FILTER_VALIDATE_BOOLEAN),
             ])
             ->values()
@@ -66,6 +74,7 @@ class EmailReadingProductRequest extends FormRequest
             'questions_schema' => $schema,
             'slug' => Str::slug($this->input('slug') ?: $this->input('name', '')),
             'is_active' => filter_var($this->input('is_active', false), FILTER_VALIDATE_BOOLEAN),
+            'is_automation_enabled' => filter_var($this->input('is_automation_enabled', false), FILTER_VALIDATE_BOOLEAN),
         ]);
     }
 
@@ -77,8 +86,6 @@ class EmailReadingProductRequest extends FormRequest
         return [
             'shopify_product_id.unique' => 'A reading product with this Shopify product ID already exists.',
             'slug.unique' => 'This slug is already in use.',
-            'questions_schema.required' => 'Add at least one question slot.',
-            'questions_schema.min' => 'Add at least one question slot.',
             'header_image.max' => 'The header image must not be greater than 15MB.',
         ];
     }

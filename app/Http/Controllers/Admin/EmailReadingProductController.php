@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\EmailReadingProductRequest;
 use App\Models\EmailReadingProduct;
 use App\Services\EmailReading\EmailReadingGenerationService;
+use App\Services\EmailReading\ReadingCatalogSyncService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,7 +18,8 @@ class EmailReadingProductController extends Controller
     use StoresHeaderImages;
 
     public function __construct(
-        private readonly EmailReadingGenerationService $generation
+        private readonly EmailReadingGenerationService $generation,
+        private readonly ReadingCatalogSyncService $catalogSync
     ) {}
 
     public function index()
@@ -101,6 +103,77 @@ class EmailReadingProductController extends Controller
         $emailReadingProduct->forceFill(['is_active' => ! $emailReadingProduct->is_active])->save();
 
         return back()->with('success', 'Product '.($emailReadingProduct->is_active ? 'activated' : 'deactivated').'.');
+    }
+
+    /**
+     * The Reading Catalog Sync picker page itself (collections/products are
+     * loaded client-side from the AJAX endpoints below).
+     */
+    public function syncForm()
+    {
+        return view('admin.email_reading_products.sync');
+    }
+
+    /**
+     * AJAX: first dropdown of the Reading Catalog Sync picker — live list of
+     * Shopify collections.
+     */
+    public function syncCollections(): JsonResponse
+    {
+        try {
+            return response()->json(['collections' => $this->catalogSync->collections()]);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Failed to load collections: '.$e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * AJAX: dependent dropdown of the Reading Catalog Sync picker — products
+     * belonging to the selected collection(s).
+     */
+    public function syncProducts(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'collection_ids' => ['required', 'array', 'min:1'],
+            'collection_ids.*' => ['integer'],
+        ]);
+
+        try {
+            return response()->json([
+                'products' => $this->catalogSync->productsForCollections($validated['collection_ids']),
+            ]);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json(['message' => 'Failed to load products: '.$e->getMessage()], 502);
+        }
+    }
+
+    /**
+     * Reading Catalog Sync submit: re-fetch the checked product ids from
+     * Shopify server-side and upsert them. Runs synchronously in the
+     * request — no queue job, same pattern as UnlistedProductController::sync().
+     */
+    public function syncStore(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'shopify_product_ids' => ['required', 'array', 'min:1'],
+            'shopify_product_ids.*' => ['integer'],
+        ]);
+
+        try {
+            $result = $this->catalogSync->syncSelected($validated['shopify_product_ids']);
+
+            return redirect()
+                ->route('admin.email-reading-products.index')
+                ->with('success', "Synced {$result['synced']} reading product(s) from Shopify.");
+        } catch (Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'Sync failed: '.$e->getMessage());
+        }
     }
 
     /**

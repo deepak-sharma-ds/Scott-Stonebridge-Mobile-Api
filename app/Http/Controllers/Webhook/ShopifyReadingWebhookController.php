@@ -124,6 +124,7 @@ class ShopifyReadingWebhookController extends Controller
         }
 
         $matched = EmailReadingProduct::active()
+            ->automationEnabled()
             ->whereIn('shopify_product_id', $productIds)
             ->get()
             ->keyBy('shopify_product_id');

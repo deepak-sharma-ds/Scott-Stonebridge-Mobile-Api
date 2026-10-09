@@ -1,0 +1,15 @@
+query listCollections($first: Int!, $after: String) {
+  collections(first: $first, after: $after, sortKey: TITLE) {
+    edges {
+      node {
+        id
+        title
+        handle
+      }
+    }
+    pageInfo {
+      hasNextPage
+      endCursor
+    }
+  }
+}
