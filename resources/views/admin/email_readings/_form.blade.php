@@ -58,6 +58,17 @@
         <small style="color:var(--text-muted);margin-left:0.5rem;">Preview only — review &amp; edit below, then Save to persist.</small>
     </div>
 
+    <template x-if="problems && problems.length > 0">
+        <div class="alert alert-warning" style="margin:0.75rem 0;">
+            <div style="font-weight:600;margin-bottom:0.25rem;">Validation issues detected (preview only, nothing saved):</div>
+            <ul style="margin:0;padding-left:1.25rem;">
+                <template x-for="(p, index) in problems" :key="index">
+                    <li x-text="p"></li>
+                </template>
+            </ul>
+        </div>
+    </template>
+
     <label for="ai_response" class="form-label">Response</label>
     <textarea name="ai_response" id="ai_response" class="form-control" rows="16" data-rich-text>{{ old('ai_response', $delivery->ai_response ?? '') }}</textarea>
 </div>

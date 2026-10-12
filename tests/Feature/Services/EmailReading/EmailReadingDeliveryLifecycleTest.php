@@ -385,7 +385,7 @@ class EmailReadingDeliveryLifecycleTest extends TestCase
         $this->assertSame(1, $this->lifecycle()->expediteOrder(9001, now()->subMinute()));
         $this->assertNotNull($delivery->fresh()->expedited_at);
 
-        OpenAI::fake([CreateResponse::fake(['choices' => [['message' => ['role' => 'assistant', 'content' => 'Generated reading.']]]])]);
+        OpenAI::fake([CreateResponse::fake(['choices' => [['message' => ['role' => 'assistant', 'content' => "## Reading\n\nGenerated reading.\n\n### From My Heart to Yours\n\nBlessings."]]]])]);
         $this->assertTrue(app(EmailReadingGenerationService::class)->generate($delivery->fresh()->load('product')));
 
         // The new (expedited) time is on the live row, so the dispatcher claims it now.
@@ -411,7 +411,7 @@ class EmailReadingDeliveryLifecycleTest extends TestCase
 
     public function test_generation_never_resurrects_a_delivery_cancelled_mid_flight(): void
     {
-        OpenAI::fake([CreateResponse::fake(['choices' => [['message' => ['role' => 'assistant', 'content' => 'Late reading.']]]])]);
+        OpenAI::fake([CreateResponse::fake(['choices' => [['message' => ['role' => 'assistant', 'content' => "## Reading\n\nLate reading.\n\n### From My Heart to Yours\n\nBlessings."]]]])]);
         $delivery = $this->delivery(['status' => EmailReadingDelivery::STATUS_PENDING, 'ai_response' => null]);
         $loaded = $delivery->load('product');
 
@@ -429,12 +429,12 @@ class EmailReadingDeliveryLifecycleTest extends TestCase
     {
         Mail::fake();
         Queue::fake();
-        OpenAI::fake([CreateResponse::fake(['choices' => [['message' => ['role' => 'assistant', 'content' => 'Fresh reading.']]]])]);
+        OpenAI::fake([CreateResponse::fake(['choices' => [['message' => ['role' => 'assistant', 'content' => "## Reading\n\nFresh reading.\n\n### From My Heart to Yours\n\nBlessings."]]]])]);
         $delivery = $this->delivery(['status' => EmailReadingDelivery::STATUS_PENDING, 'ai_response' => null]);
 
         $this->lifecycle()->sendNow($delivery);
 
-        $this->assertSame('<p>Fresh reading.</p>', $delivery->fresh()->ai_response);
+        $this->assertStringContainsString('Fresh reading.', $delivery->fresh()->ai_response);
         $this->assertSame(EmailReadingDelivery::STATUS_SENDING, $delivery->fresh()->status);
 
         $this->runSendJob($delivery);
@@ -461,7 +461,7 @@ class EmailReadingDeliveryLifecycleTest extends TestCase
     public function test_process_job_generates_but_never_queues_a_send(): void
     {
         Queue::fake();
-        OpenAI::fake([CreateResponse::fake(['choices' => [['message' => ['role' => 'assistant', 'content' => 'Reading body.']]]])]);
+        OpenAI::fake([CreateResponse::fake(['choices' => [['message' => ['role' => 'assistant', 'content' => "## Reading\n\nReading body.\n\n### From My Heart to Yours\n\nBlessings."]]]])]);
         $delivery = $this->delivery(['status' => EmailReadingDelivery::STATUS_PENDING, 'ai_response' => null]);
 
         (new ProcessEmailReadingOrderJob($delivery->id))->handle(app(EmailReadingGenerationService::class));

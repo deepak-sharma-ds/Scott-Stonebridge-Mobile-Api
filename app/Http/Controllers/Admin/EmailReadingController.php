@@ -110,6 +110,8 @@ class EmailReadingController extends Controller
                 'content' => $result['content'],
                 'model' => $result['model'],
                 'completion_tokens' => $result['completion_tokens'],
+                'problems' => $result['problems'],
+                'is_valid' => $result['is_valid'],
             ]);
         } catch (Throwable $e) {
             report($e);

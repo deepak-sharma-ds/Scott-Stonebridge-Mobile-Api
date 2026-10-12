@@ -36,9 +36,11 @@
             instruction: '',
             loading: false,
             info: '',
+            problems: [],
             async regenerate() {
                 this.loading = true;
                 this.info = '';
+                this.problems = [];
                 try {
                     const res = await fetch(this.url, {
                         method: 'POST',
@@ -59,8 +61,13 @@
                     } else {
                         field.value = data.content;
                     }
+                    this.problems = Array.isArray(data.problems) ? data.problems : [];
                     this.info = 'Preview generated · ' + (data.model || '') + ' · ' + (data.completion_tokens || 0) + ' tokens';
-                    if (window.adminNotify) window.adminNotify('Response regenerated — review and Save to persist.', 'success');
+                    if (this.problems.length > 0) {
+                        if (window.adminNotify) window.adminNotify('Response regenerated with validation issues — please review before saving.', 'warning');
+                    } else {
+                        if (window.adminNotify) window.adminNotify('Response regenerated — review and Save to persist.', 'success');
+                    }
                 } catch (e) {
                     this.info = e.message;
                     if (window.adminNotify) window.adminNotify(e.message, 'error');

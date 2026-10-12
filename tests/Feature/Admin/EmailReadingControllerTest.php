@@ -8,6 +8,7 @@ use App\Models\EmailReadingDelivery;
 use App\Models\EmailReadingProduct;
 use App\Models\ShopifyWebhookEvent;
 use App\Models\User;
+use App\Support\GeneratedBodyValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use OpenAI\Laravel\Facades\OpenAI;
@@ -256,6 +257,29 @@ class EmailReadingControllerTest extends TestCase
         $this->actingAs($this->admin())->postJson(route('admin.email_readings.regenerate', $delivery))
             ->assertOk()
             ->assertJsonPath('content', "<p>One.</p>\n<p>Two.</p>");
+    }
+
+    public function test_regenerate_returns_validation_problems_and_leaves_delivery_untouched(): void
+    {
+        OpenAI::fake([CreateResponse::fake(['choices' => [['message' => ['role' => 'assistant', 'content' => "Dear Jane,\n\nOne.\n\nTwo."]]]])]);
+        $delivery = $this->delivery(['ai_response' => '<p>Original.</p>']);
+
+        $response = $this->actingAs($this->admin())->postJson(route('admin.email_readings.regenerate', $delivery));
+
+        $response->assertOk()
+            ->assertJsonPath('is_valid', false)
+            ->assertJsonStructure(['content', 'model', 'completion_tokens', 'problems', 'is_valid']);
+
+        $this->assertContains(
+            GeneratedBodyValidator::PROBLEM_DUPLICATED_GREETING,
+            $response->json('problems')
+        );
+        $this->assertContains(
+            GeneratedBodyValidator::PROBLEM_MISSING_CLOSING_SECTION,
+            $response->json('problems')
+        );
+
+        $this->assertSame('<p>Original.</p>', $delivery->fresh()->ai_response);
     }
 
     public function test_saving_without_touching_the_schedule_never_counts_as_a_reschedule(): void

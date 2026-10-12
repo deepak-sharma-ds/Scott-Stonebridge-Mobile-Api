@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Services\EmailReading;
 
+use App\Jobs\EmailReading\NotifyReadingFailureJob;
 use App\Models\EmailReadingDelivery;
 use App\Models\EmailReadingProduct;
+use App\Support\GeneratedBodyValidationResult;
+use App\Support\GeneratedBodyValidator;
 use App\Support\MarkdownMailBody;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Log;
@@ -44,21 +47,47 @@ class EmailReadingGenerationService
         $maxTokens = (int) ($product->max_tokens ?: config('email_reading.max_tokens', 1500));
 
         $prompt = $this->renderPrompt($product->prompt_template, $delivery);
+        $systemPrompt = $this->buildSystemPrompt($product);
+        $contract = $this->resolveFormattingContract($product);
+        $expectedClosing = $this->resolveExpectedClosingSection($contract);
 
         $start = microtime(true);
 
-        try {
-            $result = $this->complete($this->buildSystemPrompt($product), $prompt, $model, $maxTokens);
-        } catch (Throwable $e) {
-            Log::channel('shopify_webhooks')->error('Email reading OpenAI call failed', [
+        $attempt = $this->generateAndValidate($delivery, $systemPrompt, $prompt, $model, $maxTokens, $expectedClosing);
+
+        if ($attempt['validation']->isInvalid()) {
+            Log::channel('shopify_webhooks')->warning('Email reading generation validation failed; retrying once', [
                 'delivery_id' => $delivery->id,
-                'model' => $model,
-                'error' => $e->getMessage(),
+                'finish_reason' => $attempt['result']['finish_reason'],
+                'problems' => $attempt['validation']->problems(),
             ]);
 
-            throw $e;
+            $retryMaxTokens = $attempt['validation']->isTruncated()
+                ? min(8000, max($maxTokens + 500, (int) round($maxTokens * 1.5)))
+                : $maxTokens;
+
+            $attempt = $this->generateAndValidate($delivery, $systemPrompt, $prompt, $model, $retryMaxTokens, $expectedClosing);
         }
 
+        if ($attempt['validation']->isInvalid()) {
+            Log::channel('shopify_webhooks')->error('Email reading generation validation failed after retry', [
+                'delivery_id' => $delivery->id,
+                'finish_reason' => $attempt['result']['finish_reason'],
+                'problems' => $attempt['validation']->problems(),
+            ]);
+
+            $reasonMessage = 'Validation failed: '.implode('; ', $attempt['validation']->problems());
+            if ($delivery->markFailed($reasonMessage)) {
+                NotifyReadingFailureJob::dispatch($delivery->id, $reasonMessage)
+                    ->onConnection(config('email_reading.queue.connection'))
+                    ->onQueue(config('email_reading.queue.mail'));
+            }
+
+            return false;
+        }
+
+        $result = $attempt['result'];
+        $html = $attempt['html'];
         $latencyMs = (int) round((microtime(true) - $start) * 1000);
 
         $saved = EmailReadingDelivery::query()
@@ -69,7 +98,7 @@ class EmailReadingGenerationService
                 EmailReadingDelivery::STATUS_GENERATED,
             ])
             ->update([
-                'ai_response' => MarkdownMailBody::toHtml($result['content']),
+                'ai_response' => $html,
                 'prompt_tokens' => $result['prompt_tokens'],
                 'completion_tokens' => $result['completion_tokens'],
                 'model_used' => $result['model'],
@@ -90,11 +119,47 @@ class EmailReadingGenerationService
         Log::channel('shopify_webhooks')->info('Email reading generated', [
             'delivery_id' => $delivery->id,
             'model' => $result['model'],
+            'finish_reason' => $result['finish_reason'],
             'latency_ms' => $latencyMs,
             'completion_tokens' => $delivery->completion_tokens,
         ]);
 
         return true;
+    }
+
+    /**
+     * Executes OpenAI completion, converts markdown to HTML, and validates the output.
+     *
+     * @return array{result:array{content:string,prompt_tokens:int,completion_tokens:int,model:string,finish_reason:string},html:string,validation:GeneratedBodyValidationResult}
+     */
+    private function generateAndValidate(
+        EmailReadingDelivery $delivery,
+        string $systemPrompt,
+        string $prompt,
+        string $model,
+        int $maxTokens,
+        ?string $expectedClosing
+    ): array {
+        try {
+            $result = $this->complete($systemPrompt, $prompt, $model, $maxTokens);
+        } catch (Throwable $e) {
+            Log::channel('shopify_webhooks')->error('Email reading OpenAI call failed', [
+                'delivery_id' => $delivery->id,
+                'model' => $model,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw $e;
+        }
+
+        $html = MarkdownMailBody::toHtml($result['content']);
+        $validation = GeneratedBodyValidator::validate($html, $result['finish_reason'], $expectedClosing);
+
+        return [
+            'result' => $result,
+            'html' => $html,
+            'validation' => $validation,
+        ];
     }
 
     /**
@@ -104,7 +169,7 @@ class EmailReadingGenerationService
      * admin can review/edit before saving. When $adminInstruction is given it
      * is appended as an extra user turn so the model revises accordingly.
      *
-     * @return array{content:string,prompt_tokens:int,completion_tokens:int,model:string}
+     * @return array{content:string,prompt_tokens:int,completion_tokens:int,model:string,finish_reason:string,problems:list<string>,is_valid:bool}
      */
     public function previewForDelivery(EmailReadingDelivery $delivery, ?string $adminInstruction = null): array
     {
@@ -120,9 +185,20 @@ class EmailReadingGenerationService
         $prompt = $this->renderPrompt($product->prompt_template, $delivery);
 
         $result = $this->complete($this->buildSystemPrompt($product), $prompt, $model, $maxTokens, $adminInstruction);
-        $result['content'] = MarkdownMailBody::toHtml($result['content']);
+        $html = MarkdownMailBody::toHtml($result['content']);
+        $contract = $this->resolveFormattingContract($product);
+        $expectedClosing = $this->resolveExpectedClosingSection($contract);
+        $validation = GeneratedBodyValidator::validate($html, $result['finish_reason'], $expectedClosing);
 
-        return $result;
+        return [
+            'content' => $html,
+            'prompt_tokens' => $result['prompt_tokens'],
+            'completion_tokens' => $result['completion_tokens'],
+            'model' => $result['model'],
+            'finish_reason' => $result['finish_reason'],
+            'problems' => $validation->problems(),
+            'is_valid' => $validation->isValid(),
+        ];
     }
 
     /**
@@ -154,7 +230,7 @@ class EmailReadingGenerationService
      * Single OpenAI call shared by generate/preview/test. Returns the trimmed
      * content + usage; never touches the database.
      *
-     * @return array{content:string,prompt_tokens:int,completion_tokens:int,model:string}
+     * @return array{content:string,prompt_tokens:int,completion_tokens:int,model:string,finish_reason:string}
      */
     private function complete(string $system, string $user, string $model, int $maxTokens, ?string $adminInstruction = null): array
     {
@@ -190,7 +266,34 @@ class EmailReadingGenerationService
             'prompt_tokens' => $response->usage->promptTokens ?? 0,
             'completion_tokens' => $response->usage->completionTokens ?? 0,
             'model' => $model,
+            'finish_reason' => (string) ($choice->finishReason ?? 'stop'),
         ];
+    }
+
+    /**
+     * Returns the active formatting contract for the product or the default fallback.
+     */
+    public function resolveFormattingContract(?EmailReadingProduct $product = null): string
+    {
+        return filled($product?->formatting_contract)
+            ? trim((string) $product->formatting_contract)
+            : (string) config('email_reading.formatting_contract');
+    }
+
+    /**
+     * Extracts the designated closing section title from a formatting contract.
+     */
+    public function resolveExpectedClosingSection(string $contract): ?string
+    {
+        if (preg_match("/headed ['\"](?:###\s*)?([^'\"]+)['\"]/i", $contract, $matches)) {
+            return trim($matches[1]);
+        }
+
+        if (stripos($contract, 'From My Heart to Yours') !== false) {
+            return 'From My Heart to Yours';
+        }
+
+        return null;
     }
 
     private function renderPrompt(string $template, EmailReadingDelivery $delivery): string
@@ -210,11 +313,7 @@ class EmailReadingGenerationService
     public function buildSystemPrompt(?EmailReadingProduct $product = null): string
     {
         $base = $this->systemPrompt();
-
-        $contract = filled($product?->formatting_contract)
-            ? trim((string) $product->formatting_contract)
-            : (string) config('email_reading.formatting_contract');
-
+        $contract = $this->resolveFormattingContract($product);
         $voiceRules = $this->voiceRulesPrompt();
 
         $parts = array_filter(
