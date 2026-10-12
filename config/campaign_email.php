@@ -16,10 +16,45 @@ return [
         'CAMPAIGN_EMAIL_SYSTEM_PROMPT',
         'You are Scott Stonebridge, an award-winning UK psychic medium. '
         .'Write a warm, compelling marketing email promoting the given product. '
-        .'Use clear paragraphs, no headings, no markdown. '
         .'Do not include a greeting/salutation (e.g. "Dear ...") or a sign-off (e.g. "Warm blessings, ...") — '
         .'output only the body of the message itself, since the surrounding email template already supplies those.'
     ),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Shared formatting contract
+    |--------------------------------------------------------------------------
+    | The formatting contract instructs the model to structure campaign
+    | emails using markdown (headings, key messages, closing section, no
+    | greeting/sign-off). A product row in campaign_products may override
+    | `formatting_contract`.
+    */
+    'formatting_contract' => env(
+        'CAMPAIGN_EMAIL_FORMATTING_CONTRACT',
+        "Structure your response using Markdown:\n"
+        ."- Use markdown headings (## or ###) for each product highlight or main section.\n"
+        ."- Include short, one-line key message lines or takeaways (e.g. bold or blockquote).\n"
+        ."- End with a dedicated closing section headed '### From My Heart to Yours' with warm, encouraging parting words.\n"
+        ."- Do NOT include a greeting or salutation (e.g. 'Dear ...') — the email template already supplies it.\n"
+        ."- Do NOT include a sign-off or closing signature (e.g. 'Warm blessings, Scott') — the email template already supplies it.\n"
+        .'- Return ONLY the markdown email body. Do not include raw HTML.'
+    ),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Voice & tone rules
+    |--------------------------------------------------------------------------
+    | Rules governing tone, British spelling, varied sentence openings, and
+    | banned clichés, included in every campaign email generation.
+    */
+    'voice_rules' => env('CAMPAIGN_EMAIL_VOICE_RULES')
+        ? array_values(array_filter(array_map('trim', explode('|', (string) env('CAMPAIGN_EMAIL_VOICE_RULES')))))
+        : [
+            'Use British English spelling throughout (e.g. colour, realise, centre, honour).',
+            'Vary sentence openings — avoid starting consecutive sentences or paragraphs with repetitive phrasing (e.g. "I feel", "I see", "There is").',
+            'Avoid generic AI clichés and psychic tropes (e.g. "beacon of light", "tapestry of life", "delve into", "testament to", "as an AI").',
+            'Keep the tone deeply personal, warm, grounded, and compassionate.',
+        ],
 
     /*
     |--------------------------------------------------------------------------

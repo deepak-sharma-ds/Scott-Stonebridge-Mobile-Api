@@ -6,7 +6,7 @@ namespace App\Services\CampaignEmail;
 
 use App\Models\CampaignProduct;
 use App\Models\CampaignProductResponse;
-use App\Support\PlainTextMailBody;
+use App\Support\MarkdownMailBody;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Log;
@@ -42,7 +42,7 @@ class CampaignResponseGenerationService
         $start = microtime(true);
 
         try {
-            $result = $this->complete($this->systemPrompt(), $prompt, $model, $maxTokens);
+            $result = $this->complete($this->buildSystemPrompt($campaignProduct), $prompt, $model, $maxTokens);
         } catch (Throwable $e) {
             Log::channel('shopify_webhooks')->error('Campaign response OpenAI call failed', [
                 'campaign_product_id' => $campaignProduct->id,
@@ -59,7 +59,7 @@ class CampaignResponseGenerationService
             ['campaign_product_id' => $campaignProduct->id],
             [
                 'source' => CampaignProductResponse::SOURCE_AI,
-                'body' => PlainTextMailBody::toParagraphs($result['content']),
+                'body' => MarkdownMailBody::toHtml($result['content']),
                 'prompt_tokens' => $result['prompt_tokens'],
                 'completion_tokens' => $result['completion_tokens'],
                 'model_used' => $result['model'],
@@ -88,7 +88,10 @@ class CampaignResponseGenerationService
 
         $prompt = $this->renderPrompt($campaignProduct);
 
-        return $this->complete($this->systemPrompt(), $prompt, $model, $maxTokens);
+        $result = $this->complete($this->buildSystemPrompt($campaignProduct), $prompt, $model, $maxTokens);
+        $result['content'] = MarkdownMailBody::toHtml($result['content']);
+
+        return $result;
     }
 
     /**
@@ -137,13 +140,57 @@ class CampaignResponseGenerationService
         return Blade::render($template, $data);
     }
 
+    /**
+     * Builds the full system prompt composed of Scott's base persona, the
+     * formatting contract (product override or shared default), and voice rules.
+     */
+    public function buildSystemPrompt(?CampaignProduct $campaignProduct = null): string
+    {
+        $base = $this->systemPrompt();
+
+        $contract = filled($campaignProduct?->formatting_contract)
+            ? trim((string) $campaignProduct->formatting_contract)
+            : (string) config('campaign_email.formatting_contract');
+
+        $voiceRules = $this->voiceRulesPrompt();
+
+        $parts = array_filter(
+            [$base, $contract, $voiceRules],
+            fn (mixed $part): bool => filled($part)
+        );
+
+        return implode("\n\n", $parts);
+    }
+
+    /**
+     * Formats configured voice and tone rules as a bulleted markdown block.
+     */
+    private function voiceRulesPrompt(): string
+    {
+        $rules = config('campaign_email.voice_rules', []);
+
+        if (empty($rules)) {
+            return '';
+        }
+
+        if (is_string($rules)) {
+            return trim($rules);
+        }
+
+        $formatted = array_map(
+            fn (mixed $rule): string => '- '.trim((string) $rule),
+            (array) $rules
+        );
+
+        return "Voice rules:\n".implode("\n", $formatted);
+    }
+
     private function systemPrompt(): string
     {
         return (string) config(
             'campaign_email.system_prompt',
             'You are Scott Stonebridge, an award-winning UK psychic medium. '
             .'Write a warm, compelling marketing email promoting the given product. '
-            .'Use clear paragraphs, no headings, no markdown. '
             .'Do not include a greeting/salutation (e.g. "Dear ...") or a sign-off (e.g. "Warm blessings, ...") — '
             .'output only the body of the message itself, since the surrounding email template already supplies those.'
         );

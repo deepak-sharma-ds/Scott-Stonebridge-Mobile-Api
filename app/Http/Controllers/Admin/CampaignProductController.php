@@ -124,7 +124,10 @@ class CampaignProductController extends Controller
                 ->with('success', 'Manual response saved.');
         }
 
-        $campaignProduct->update(['prompt_template' => $data['prompt_template'] ?? null]);
+        $campaignProduct->update([
+            'prompt_template' => $data['prompt_template'] ?? null,
+            'formatting_contract' => $data['formatting_contract'] ?? null,
+        ]);
 
         try {
             $this->generation->generate($campaignProduct);

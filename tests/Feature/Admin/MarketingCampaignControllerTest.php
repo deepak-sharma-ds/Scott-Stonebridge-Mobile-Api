@@ -309,6 +309,22 @@ class MarketingCampaignControllerTest extends TestCase
             ->assertSee('&lt;h2&gt;Heading&lt;/h2&gt;', false);
     }
 
+    public function test_an_ai_generated_response_opens_in_the_rich_text_editor_for_manual_edits(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        $campaignProduct = CampaignProduct::create(['marketing_campaign_id' => $campaign->id, 'shopify_product_id' => 111, 'product_title' => 'Pendant']);
+        $campaignProduct->response()->create([
+            'source' => CampaignProductResponse::SOURCE_AI,
+            'body' => '<h2>AI Headline</h2><p>AI message body.</p>',
+        ]);
+
+        $this->actingAs(User::factory()->create())->get(route('admin.marketing-campaigns.show', $campaign))
+            ->assertOk()
+            ->assertSee('x-data="{ formOpen: false, source: \'manual\' }"', false)
+            ->assertSee('name="body" class="form-control" rows="5" data-rich-text', false)
+            ->assertSee('&lt;h2&gt;AI Headline&lt;/h2&gt;&lt;p&gt;AI message body.&lt;/p&gt;', false);
+    }
+
     public function test_generating_a_response_does_not_change_campaign_status(): void
     {
         $this->fakeOpenAiResponse();
@@ -327,7 +343,7 @@ class MarketingCampaignControllerTest extends TestCase
         $this->assertSame(MarketingCampaign::STATUS_DRAFT, $campaign->fresh()->status);
     }
 
-    public function test_regenerating_updates_the_prompt_template_before_calling_openai(): void
+    public function test_regenerating_updates_the_prompt_template_and_formatting_contract_before_calling_openai(): void
     {
         $this->fakeOpenAiResponse('Draft using new prompt.');
 
@@ -336,15 +352,58 @@ class MarketingCampaignControllerTest extends TestCase
             'marketing_campaign_id' => $campaign->id,
             'shopify_product_id' => 111,
             'prompt_template' => 'Old prompt.',
+            'formatting_contract' => 'Old contract.',
         ]);
 
         $this->actingAs(User::factory()->create())
             ->post(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
                 'source' => CampaignProductResponse::SOURCE_AI,
                 'prompt_template' => 'Updated prompt for {{ $productTitle }}.',
+                'formatting_contract' => 'Updated contract for {{ $productTitle }}.',
             ]);
 
-        $this->assertSame('Updated prompt for {{ $productTitle }}.', $campaignProduct->fresh()->prompt_template);
+        $fresh = $campaignProduct->fresh();
+        $this->assertSame('Updated prompt for {{ $productTitle }}.', $fresh->prompt_template);
+        $this->assertSame('Updated contract for {{ $productTitle }}.', $fresh->formatting_contract);
+    }
+
+    public function test_linking_a_product_can_persist_formatting_contract_override(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->post(route('admin.marketing-campaigns.products.store', $campaign), [
+                'shopify_product_id' => 999,
+                'shopify_variant_id' => 888,
+                'product_title' => 'Tarot Deck',
+                'prompt_template' => 'Prompt for Tarot Deck',
+                'formatting_contract' => '## Custom Formatting Contract',
+            ]);
+
+        $response->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
+        $this->assertDatabaseHas('campaign_products', [
+            'marketing_campaign_id' => $campaign->id,
+            'shopify_product_id' => 999,
+            'shopify_variant_id' => 888,
+            'formatting_contract' => '## Custom Formatting Contract',
+        ]);
+    }
+
+    public function test_campaign_show_page_displays_formatting_contract_inputs(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        CampaignProduct::create([
+            'marketing_campaign_id' => $campaign->id,
+            'shopify_product_id' => 111,
+            'product_title' => 'Pendant',
+            'formatting_contract' => '### Custom Contract Override',
+        ]);
+
+        $this->actingAs(User::factory()->create())->get(route('admin.marketing-campaigns.show', $campaign))
+            ->assertOk()
+            ->assertSee('name="formatting_contract" id="formatting_contract"', false)
+            ->assertSee('name="formatting_contract" class="form-control"', false)
+            ->assertSee('### Custom Contract Override', false);
     }
 
     public function test_admin_can_save_a_manual_response_without_calling_openai(): void

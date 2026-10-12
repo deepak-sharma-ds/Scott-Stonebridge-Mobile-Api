@@ -163,6 +163,16 @@
                             @{{ $campaignName }} available)</small></label>
                     <textarea name="prompt_template" id="prompt_template" class="form-control" rows="3"></textarea>
                 </div>
+                <div class="mb-3" x-show="source === 'ai'" x-cloak>
+                    <label for="formatting_contract" class="form-label">Formatting Contract Override <small
+                            style="color:var(--text-muted);">(optional; leave blank to use the shared contract)</small></label>
+                    <textarea name="formatting_contract" id="formatting_contract" class="form-control" rows="4"
+                        style="font-family:monospace;font-size:0.8125rem;"
+                        placeholder="{{ config('campaign_email.formatting_contract') }}"></textarea>
+                    <small style="color:var(--text-muted);display:block;margin-top:0.375rem;">
+                        Markdown instructions defining structure (headings, key messages, closing section). Overrides the shared contract for this product only.
+                    </small>
+                </div>
                 <div class="mb-3" x-show="source === 'manual'" x-cloak>
                     <label for="body" class="form-label">Response Body <small
                             style="color:var(--text-muted);">(optional — leave blank and add it later)</small></label>
@@ -186,7 +196,7 @@
                         </tr>
                     </thead>
                     @forelse($campaign->campaignProducts as $campaignProduct)
-                        <tbody x-data="{ formOpen: false, source: '{{ $campaignProduct->response->source ?? 'manual' }}' }">
+                        <tbody x-data="{ formOpen: false, source: 'manual' }">
                             <tr>
                                 <td style="font-weight:600;color:var(--text-primary);">
                                     {{ $campaignProduct->product_title ?: '—' }}</td>
@@ -279,15 +289,28 @@
                                         <div style="display:flex;gap:1.5rem;margin-bottom:0.75rem;">
                                             <label><input type="radio" name="source" value="ai" x-model="source">
                                                 Generate with AI</label>
-                                            <label><input type="radio" name="source" value="manual" x-model="source">
+                                            <label><input type="radio" name="source" value="manual" x-model="source"
+                                                    x-on:change="$nextTick(() => initRichTextEditors())">
                                                 Paste manual response</label>
                                         </div>
                                         <div x-show="source === 'ai'" x-cloak>
-                                            <label class="form-label">Prompt Template <small
-                                                    style="color:var(--text-muted);">(Blade template;
-                                                    @{{ $productTitle }} / @{{ $campaignName }}
-                                                    available)</small></label>
-                                            <textarea name="prompt_template" class="form-control" rows="3">{{ $campaignProduct->prompt_template }}</textarea>
+                                            <div class="mb-3">
+                                                <label class="form-label">Prompt Template <small
+                                                        style="color:var(--text-muted);">(Blade template;
+                                                        @{{ $productTitle }} / @{{ $campaignName }}
+                                                        available)</small></label>
+                                                <textarea name="prompt_template" class="form-control" rows="3">{{ $campaignProduct->prompt_template }}</textarea>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label">Formatting Contract Override <small
+                                                        style="color:var(--text-muted);">(optional; leave blank to use the shared contract)</small></label>
+                                                <textarea name="formatting_contract" class="form-control" rows="4"
+                                                    style="font-family:monospace;font-size:0.8125rem;"
+                                                    placeholder="{{ config('campaign_email.formatting_contract') }}">{{ $campaignProduct->formatting_contract }}</textarea>
+                                                <small style="color:var(--text-muted);display:block;margin-top:0.375rem;">
+                                                    Markdown instructions defining structure (headings, key messages, closing section). Overrides the shared contract for this product only.
+                                                </small>
+                                            </div>
                                         </div>
                                         <div x-show="source === 'manual'" x-cloak>
                                             <label class="form-label">Response Body</label>
