@@ -33,8 +33,8 @@ class CampaignEmailMail extends Mailable
     {
         $product = $this->delivery->campaignProduct;
         $vars = [
-            'productTitle' => $product?->product_title ?: 'your reading',
-            'campaignName' => $product?->marketingCampaign?->name ?: '',
+            'productTitle' => e($product?->product_title ?: 'your reading'),
+            'campaignName' => e($product?->marketingCampaign?->name ?: ''),
         ];
 
         return new Content(

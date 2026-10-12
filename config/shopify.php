@@ -1,5 +1,12 @@
 <?php
 
+use App\Services\CampaignEmail\Webhooks\CampaignOrderCancelledHandler;
+use App\Services\CampaignEmail\Webhooks\CampaignOrderPaidHandler;
+use App\Services\CampaignEmail\Webhooks\CampaignOrderUpdatedHandler;
+use App\Services\EmailReading\Webhooks\ReadingOrderCancelledHandler;
+use App\Services\EmailReading\Webhooks\ReadingOrderPaidHandler;
+use App\Services\EmailReading\Webhooks\ReadingOrderUpdatedHandler;
+
 return [
     'api_key' => env('SHOPIFY_API_KEY'),
     'api_secret' => env('SHOPIFY_API_SECRET'),
@@ -12,6 +19,32 @@ return [
     'store_url' => env('SHOPIFY_STORE_URL'),
     'currency' => env('CURRENCY', 'GBP'),
     'theme_id' => env('SHOPIFY_THEME_ID'), // Optional: specify theme ID, otherwise fetches active theme
+
+    /*
+    |--------------------------------------------------------------------------
+    | Webhook inbox
+    |--------------------------------------------------------------------------
+    |
+    | Reading/campaign order webhooks are stored first, then processed by
+    | ProcessShopifyWebhookEventJob through the handler registered for their
+    | endpoint. Each context owns its own handlers (ADR 0001); only the inbox
+    | row and job are shared.
+    |
+    */
+    'webhook_inbox' => [
+        'connection' => env('SHOPIFY_WEBHOOK_QUEUE_CONNECTION'),
+        'queue' => env('SHOPIFY_WEBHOOK_QUEUE', 'shopify-webhooks'),
+        'handlers' => [
+            'reading.paid' => ReadingOrderPaidHandler::class,
+            'reading.updated' => ReadingOrderUpdatedHandler::class,
+            'reading.cancelled' => ReadingOrderCancelledHandler::class,
+            'campaign.paid' => CampaignOrderPaidHandler::class,
+            'campaign.updated' => CampaignOrderUpdatedHandler::class,
+            'campaign.cancelled' => CampaignOrderCancelledHandler::class,
+        ],
+        // Events stuck in received/processing longer than this are re-queued.
+        'stale_after_minutes' => (int) env('SHOPIFY_WEBHOOK_STALE_MINUTES', 10),
+    ],
 
     'graphql' => [
         // enable hash verification in production only when you have precomputed checksums

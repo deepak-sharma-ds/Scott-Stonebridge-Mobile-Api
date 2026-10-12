@@ -21,7 +21,17 @@ use Throwable;
  */
 class EmailReadingGenerationService
 {
-    public function generate(EmailReadingDelivery $delivery): void
+    /**
+     * Generate and persist the reading.
+     *
+     * The write is a conditional UPDATE: it only lands while the delivery is
+     * still pending/failed/generated. If the delivery was cancelled, sent or
+     * claimed while OpenAI was running, the result is discarded instead of
+     * silently resurrecting it.
+     *
+     * @return bool false when the delivery's state changed and nothing was saved
+     */
+    public function generate(EmailReadingDelivery $delivery): bool
     {
         $product = $delivery->product;
 
@@ -50,14 +60,31 @@ class EmailReadingGenerationService
 
         $latencyMs = (int) round((microtime(true) - $start) * 1000);
 
-        $delivery->forceFill([
-            'ai_response' => $result['content'],
-            'prompt_tokens' => $result['prompt_tokens'],
-            'completion_tokens' => $result['completion_tokens'],
-            'model_used' => $result['model'],
-            'status' => EmailReadingDelivery::STATUS_GENERATED,
-            'error_message' => null,
-        ])->save();
+        $saved = EmailReadingDelivery::query()
+            ->whereKey($delivery->id)
+            ->whereIn('status', [
+                EmailReadingDelivery::STATUS_PENDING,
+                EmailReadingDelivery::STATUS_FAILED,
+                EmailReadingDelivery::STATUS_GENERATED,
+            ])
+            ->update([
+                'ai_response' => $result['content'],
+                'prompt_tokens' => $result['prompt_tokens'],
+                'completion_tokens' => $result['completion_tokens'],
+                'model_used' => $result['model'],
+                'status' => EmailReadingDelivery::STATUS_GENERATED,
+                'error_message' => null,
+            ]);
+
+        if ($saved !== 1) {
+            Log::channel('shopify_webhooks')->warning('Email reading generated but delivery state changed; result discarded', [
+                'delivery_id' => $delivery->id,
+            ]);
+
+            return false;
+        }
+
+        $delivery->refresh();
 
         Log::channel('shopify_webhooks')->info('Email reading generated', [
             'delivery_id' => $delivery->id,
@@ -65,6 +92,8 @@ class EmailReadingGenerationService
             'latency_ms' => $latencyMs,
             'completion_tokens' => $delivery->completion_tokens,
         ]);
+
+        return true;
     }
 
     /**

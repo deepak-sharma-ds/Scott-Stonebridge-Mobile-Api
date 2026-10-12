@@ -1,6 +1,10 @@
 @csrf
 @method('PUT')
 
+@if($delivery->status === 'sending')
+    <div class="alert alert-info">This delivery is being sent right now. Saving is unavailable until the send finishes (normally under a minute).</div>
+@endif
+
 <div class="row" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
     <div class="mb-3">
         <label class="form-label">Order</label>
@@ -50,12 +54,9 @@
 
 <div class="row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;">
     <div class="mb-3">
-        <label for="status" class="form-label">Status</label>
-        <select name="status" id="status" class="form-control">
-            @foreach($statuses as $value => $label)
-                <option value="{{ $value }}" @selected(old('status', $delivery->status ?? '') === $value)>{{ $label }}</option>
-            @endforeach
-        </select>
+        <label class="form-label">Status</label>
+        <input type="text" class="form-control" value="{{ $statuses[$delivery->status] ?? ucfirst($delivery->status) }}" disabled>
+        <small style="color:var(--text-muted);">Change state with the Send, Cancel, Reactivate and Mark-as-sent actions on the detail page.</small>
     </div>
     <div class="mb-3">
         <label for="scheduled_at" class="form-label">Scheduled At</label>

@@ -63,7 +63,7 @@ class MarkReadingOrderFulfilledJob implements ShouldQueue
 
         // Stamp whether a fulfillment was created or there was simply nothing
         // open to fulfill — both mean "no further action for this delivery".
-        $delivery->forceFill(['fulfilled_at' => Carbon::now()])->save();
+        $delivery->forceFill(['fulfilled_at' => Carbon::now(), 'fulfillment_error' => null])->save();
 
         Log::channel('shopify_webhooks')->info('Reading order line item fulfillment processed', [
             'delivery_id' => $delivery->id,
@@ -74,11 +74,29 @@ class MarkReadingOrderFulfilledJob implements ShouldQueue
         ]);
     }
 
+    /**
+     * Final failure: keep the error on the row (the admin list shows an
+     * "unfulfilled" badge with a Retry action) and notify an admin once. The
+     * delivery's email status stays `sent`.
+     */
     public function failed(\Throwable $e): void
     {
         Log::channel('shopify_webhooks')->error('Reading order fulfillment failed', [
             'delivery_id' => $this->deliveryId,
             'error' => $e->getMessage(),
         ]);
+
+        $message = 'Fulfilment failed: '.$e->getMessage();
+
+        $updated = EmailReadingDelivery::query()
+            ->whereKey($this->deliveryId)
+            ->whereNull('fulfilled_at')
+            ->update(['fulfillment_error' => $message]);
+
+        if ($updated === 1) {
+            NotifyReadingFailureJob::dispatch($this->deliveryId, $message)
+                ->onConnection(config('email_reading.queue.connection'))
+                ->onQueue(config('email_reading.queue.mail'));
+        }
     }
 }

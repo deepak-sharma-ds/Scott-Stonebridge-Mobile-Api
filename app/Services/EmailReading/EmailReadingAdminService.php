@@ -3,10 +3,10 @@
 namespace App\Services\EmailReading;
 
 use App\Jobs\EmailReading\ProcessEmailReadingOrderJob;
-use App\Jobs\EmailReading\SendEmailReadingJob;
 use App\Models\EmailReadingDelivery;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
+use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
@@ -19,7 +19,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class EmailReadingAdminService
 {
     public function __construct(
-        private readonly EmailReadingGenerationService $generation
+        private readonly EmailReadingDeliveryLifecycle $lifecycle
     ) {}
 
     /**
@@ -40,71 +40,115 @@ class EmailReadingAdminService
     }
 
     /**
-     * Persist edited fields on a delivery.
+     * Persist edited data fields on a delivery. State is never changed here —
+     * Cancel / Reactivate / Send now / Mark sent are explicit actions — and a
+     * `sending` delivery is frozen. A changed schedule goes through the
+     * lifecycle so it is validated against the live status.
      *
      * @param  array<string,mixed>  $data
+     *
+     * @throws RuntimeException when the delivery is being sent or cannot be rescheduled
      */
     public function updateDelivery(EmailReadingDelivery $delivery, array $data): EmailReadingDelivery
     {
-        $delivery->fill([
+        $this->lifecycle->assertNotSending($delivery);
+
+        $fields = [
             'customer_email' => $data['customer_email'] ?? $delivery->customer_email,
             'customer_name' => $data['customer_name'] ?? null,
-            'scheduled_at' => $data['scheduled_at'] ?? null,
-            'expedited_at' => $data['expedited_at'] ?? null,
-        ]);
+        ];
 
         if (array_key_exists('ai_response', $data)) {
-            $delivery->ai_response = $data['ai_response'];
+            $fields['ai_response'] = $data['ai_response'];
         }
 
-        if (! empty($data['status'])) {
-            $delivery->status = $data['status'];
+        $saved = EmailReadingDelivery::query()
+            ->whereKey($delivery->id)
+            ->where('status', '!=', EmailReadingDelivery::STATUS_SENDING)
+            ->update($fields);
+
+        if ($saved !== 1) {
+            throw new RuntimeException('This reading is being sent right now. Try again in a minute.');
         }
 
-        $delivery->save();
+        $delivery->refresh();
+
+        $scheduledAt = $this->parseDate($data['scheduled_at'] ?? null);
+        $expeditedAt = $this->parseDate($data['expedited_at'] ?? null);
+
+        if (! $this->sameInstant($scheduledAt, $delivery->scheduled_at)
+            || ! $this->sameInstant($expeditedAt, $delivery->expedited_at)) {
+            $this->lifecycle->reschedule($delivery, $scheduledAt, $expeditedAt);
+        }
 
         return $delivery;
     }
 
     /**
-     * Send (or resend) a reading now, bypassing the scheduled delay.
+     * Send (or resend) a reading now, bypassing the schedule. Generates the
+     * response synchronously first when none exists.
      *
-     * Ensures the AI response exists (generates if missing), forces the row to
-     * `generated` so SendEmailReadingJob's status guard lets it through, then
-     * dispatches the send with no delay.
+     * @throws RuntimeException when the delivery cannot be sent from its current state
      */
     public function sendNow(EmailReadingDelivery $delivery, bool $resend = false): void
     {
-        if (empty($delivery->ai_response)) {
-            // generate() persists ai_response + flips status to generated.
-            $this->generation->generate($delivery);
-            $delivery->refresh();
-        }
-
-        // Re-arm the status guard for an already-sent (resend) or failed row.
-        if ($delivery->status !== EmailReadingDelivery::STATUS_GENERATED) {
-            $delivery->forceFill(['status' => EmailReadingDelivery::STATUS_GENERATED])->save();
-        }
-
-        SendEmailReadingJob::dispatch($delivery->id)
-            ->onConnection(config('email_reading.queue.connection'))
-            ->onQueue(config('email_reading.queue.mail'));
+        $this->lifecycle->sendNow($delivery, $resend);
     }
 
     /**
-     * Mark a reading cancelled/held so its scheduled send job no-ops.
+     * Cancel a not-yet-sent reading so it is never sent.
+     *
+     * @throws RuntimeException when the delivery is being sent right now
      */
-    public function cancel(EmailReadingDelivery $delivery): void
+    public function cancel(EmailReadingDelivery $delivery): bool
     {
-        $cancellable = [
-            EmailReadingDelivery::STATUS_PENDING,
-            EmailReadingDelivery::STATUS_GENERATED,
-            EmailReadingDelivery::STATUS_FAILED,
-        ];
+        return $this->lifecycle->cancel($delivery);
+    }
 
-        if (in_array($delivery->status, $cancellable, true)) {
-            $delivery->forceFill(['status' => EmailReadingDelivery::STATUS_CANCELLED])->save();
+    /**
+     * Bring a cancelled/failed reading back into the pipeline.
+     *
+     * @return string|null the new status, or null when it could not be reactivated
+     *
+     * @throws RuntimeException when the delivery is being sent right now
+     */
+    public function reactivate(EmailReadingDelivery $delivery): ?string
+    {
+        return $this->lifecycle->reactivate($delivery);
+    }
+
+    /**
+     * Close a reading Scott already emailed by hand (no email is sent).
+     *
+     * @throws RuntimeException when the delivery cannot be closed from its current state
+     */
+    public function markSentManually(EmailReadingDelivery $delivery, bool $fulfil = true): void
+    {
+        $this->lifecycle->markSentManually($delivery, $fulfil);
+    }
+
+    /**
+     * Re-queue a failed Shopify fulfilment.
+     *
+     * @throws RuntimeException when there is nothing to fulfil
+     */
+    public function retryFulfillment(EmailReadingDelivery $delivery): void
+    {
+        $this->lifecycle->retryFulfillment($delivery);
+    }
+
+    /**
+     * Hard-delete a delivery; refused while it is being sent.
+     */
+    public function delete(EmailReadingDelivery $delivery): bool
+    {
+        if (! $this->lifecycle->canDelete($delivery)) {
+            return false;
         }
+
+        $delivery->delete();
+
+        return true;
     }
 
     /**
@@ -186,6 +230,23 @@ class EmailReadingAdminService
         };
 
         return response()->stream($callback, 200, $headers);
+    }
+
+    private function parseDate(mixed $value): ?Carbon
+    {
+        return filled($value) ? Carbon::parse($value) : null;
+    }
+
+    private function sameInstant(?Carbon $a, ?Carbon $b): bool
+    {
+        if ($a === null || $b === null) {
+            return $a === null && $b === null;
+        }
+
+        // The admin form carries minute precision (datetime-local), the stored
+        // value may carry seconds: compare by minute so an untouched field
+        // never counts as a reschedule.
+        return $a->format('Y-m-d H:i') === $b->format('Y-m-d H:i');
     }
 
     /**

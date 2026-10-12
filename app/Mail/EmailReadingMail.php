@@ -36,8 +36,8 @@ class EmailReadingMail extends Mailable
             ?: (string) config('email_reading.default_view', 'mail.email-reading');
         $customerName = $this->delivery->customer_name ?: 'Dear Friend';
         $vars = [
-            'productTitle' => $product?->name ?: 'your reading',
-            'customerName' => $customerName,
+            'productTitle' => e($product?->name ?: 'your reading'),
+            'customerName' => e($customerName),
         ];
 
         return new Content(

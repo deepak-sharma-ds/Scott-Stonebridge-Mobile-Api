@@ -60,6 +60,18 @@ class EmailReadingMailTest extends TestCase
         $this->assertStringContainsString('Custom footer for Jane Doe.', $html);
     }
 
+    public function test_a_customer_supplied_name_cannot_inject_html_through_template_placeholders(): void
+    {
+        $delivery = $this->delivery(['email_footer' => 'Footer for {{ $customerName }}.']);
+        $delivery->update(['customer_name' => '<a href="https://evil.example">Click</a><script>x()</script>']);
+
+        $html = (new EmailReadingMail($delivery->refresh()))->render();
+
+        $this->assertStringNotContainsString('<a href="https://evil.example">', $html);
+        $this->assertStringNotContainsString('<script>x()</script>', $html);
+        $this->assertStringContainsString('&lt;a href=', $html);
+    }
+
     public function test_uses_the_uploaded_header_image_when_present(): void
     {
         $delivery = $this->delivery(['header_image' => 'banner.jpg']);

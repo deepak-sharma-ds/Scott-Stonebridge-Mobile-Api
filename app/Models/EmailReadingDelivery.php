@@ -12,6 +12,9 @@ class EmailReadingDelivery extends Model
 
     public const STATUS_GENERATED = 'generated';
 
+    /** Claimed by exactly one send job; the email is being (or is about to be) sent. */
+    public const STATUS_SENDING = 'sending';
+
     public const STATUS_SENT = 'sent';
 
     public const STATUS_FAILED = 'failed';
@@ -36,6 +39,11 @@ class EmailReadingDelivery extends Model
         'scheduled_at',
         'expedited_at',
         'fulfilled_at',
+        'claim_token',
+        'claimed_at',
+        'release_count',
+        'sent_manually',
+        'fulfillment_error',
     ];
 
     protected function casts(): array
@@ -51,6 +59,9 @@ class EmailReadingDelivery extends Model
             'scheduled_at' => 'datetime',
             'expedited_at' => 'datetime',
             'fulfilled_at' => 'datetime',
+            'claimed_at' => 'datetime',
+            'release_count' => 'integer',
+            'sent_manually' => 'boolean',
         ];
     }
 
@@ -98,18 +109,45 @@ class EmailReadingDelivery extends Model
         return [
             self::STATUS_PENDING => 'Pending',
             self::STATUS_GENERATED => 'Generated',
+            self::STATUS_SENDING => 'Sending',
             self::STATUS_SENT => 'Sent',
             self::STATUS_FAILED => 'Failed',
             self::STATUS_CANCELLED => 'Cancelled',
         ];
     }
 
-    public function markFailed(string $message): void
+    /**
+     * Atomically flag the delivery failed. Never overwrites a terminal
+     * `sent`/`cancelled` state (e.g. a refund that landed mid-flight) and
+     * releases any send claim. Returns whether the row was actually updated.
+     */
+    public function markFailed(string $message): bool
     {
-        $this->forceFill([
+        $attributes = [
             'status' => self::STATUS_FAILED,
             'error_message' => $message,
-        ])->save();
+            'claim_token' => null,
+            'claimed_at' => null,
+        ];
+
+        $updated = static::query()
+            ->whereKey($this->getKey())
+            ->whereNotIn('status', [self::STATUS_SENT, self::STATUS_CANCELLED])
+            ->update($attributes);
+
+        if ($updated === 1) {
+            $this->forceFill($attributes)->syncOriginal();
+        }
+
+        return $updated === 1;
+    }
+
+    /**
+     * A sent delivery whose Shopify fulfilment is still outstanding.
+     */
+    public function needsFulfillment(): bool
+    {
+        return $this->status === self::STATUS_SENT && $this->fulfilled_at === null;
     }
 
     /**

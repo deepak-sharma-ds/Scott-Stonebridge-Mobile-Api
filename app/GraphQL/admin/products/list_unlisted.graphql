@@ -4,6 +4,7 @@ query listUnlistedProducts($first: Int!, $after: String) {
       node {
         id
         title
+        tags
         publishedOnCurrentPublication
         featuredImage {
           url

@@ -8,6 +8,7 @@ use App\Models\CampaignDelivery;
 use App\Models\CampaignProduct;
 use App\Models\CampaignProductResponse;
 use App\Models\MarketingCampaign;
+use App\Models\UnlistedProduct;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
@@ -15,6 +16,14 @@ use Tests\TestCase;
 class CampaignPaidWebhookControllerTest extends TestCase
 {
     use RefreshDatabase;
+
+    private function vip(int $productId): void
+    {
+        UnlistedProduct::updateOrCreate(
+            ['shopify_product_id' => $productId],
+            ['title' => 'Unlisted '.$productId, 'is_published' => true, 'is_vip' => true]
+        );
+    }
 
     private function activeCampaignWithResponse(string $campaignKey = 'spring-sale', int $productId = 111): CampaignProduct
     {
@@ -29,6 +38,7 @@ class CampaignPaidWebhookControllerTest extends TestCase
             'shopify_product_id' => $productId,
             'shopify_variant_id' => 5001,
         ]);
+        $this->vip($productId);
 
         CampaignProductResponse::create([
             'campaign_product_id' => $campaignProduct->id,
@@ -66,7 +76,7 @@ class CampaignPaidWebhookControllerTest extends TestCase
 
     public function test_resolves_active_campaign_and_creates_pending_delivery(): void
     {
-        Queue::fake();
+        Queue::fake([SendCampaignEmailJob::class, NotifyCampaignFailureJob::class]);
         $campaignProduct = $this->activeCampaignWithResponse();
 
         $response = $this->postJson(route('webhook.shopify.campaign'), $this->orderPayload([
@@ -85,12 +95,14 @@ class CampaignPaidWebhookControllerTest extends TestCase
         $delivery = CampaignDelivery::where('shopify_line_item_id', 501)->firstOrFail();
         $this->assertNotNull($delivery->scheduled_at);
 
-        Queue::assertPushed(SendCampaignEmailJob::class, fn ($job) => $job->deliveryId === $delivery->id);
+        // The webhook never queues a (delayed) send job: the delivery row is
+        // the source of truth and the dispatcher claims it once due.
+        Queue::assertNotPushed(SendCampaignEmailJob::class);
     }
 
     public function test_does_not_dispatch_send_job_for_failed_delivery(): void
     {
-        Queue::fake();
+        Queue::fake([SendCampaignEmailJob::class, NotifyCampaignFailureJob::class]);
         $this->activeCampaignWithResponse();
 
         $this->postJson(route('webhook.shopify.campaign'), $this->orderPayload([
@@ -102,7 +114,7 @@ class CampaignPaidWebhookControllerTest extends TestCase
 
     public function test_missing_campaign_key_creates_failed_delivery_and_notifies_admin(): void
     {
-        Queue::fake();
+        Queue::fake([SendCampaignEmailJob::class, NotifyCampaignFailureJob::class]);
         $this->activeCampaignWithResponse();
 
         $this->postJson(route('webhook.shopify.campaign'), $this->orderPayload([
@@ -146,6 +158,7 @@ class CampaignPaidWebhookControllerTest extends TestCase
             'shopify_product_id' => 111,
             'shopify_variant_id' => 5001,
         ]);
+        $this->vip(111);
 
         $this->postJson(route('webhook.shopify.campaign'), $this->orderPayload([
             $this->lineItem(111, 504, 'draft-campaign'),
@@ -170,6 +183,7 @@ class CampaignPaidWebhookControllerTest extends TestCase
             'shopify_product_id' => 111,
             'shopify_variant_id' => 5001,
         ]);
+        $this->vip(111);
 
         $this->postJson(route('webhook.shopify.campaign'), $this->orderPayload([
             $this->lineItem(111, 505, 'no-response-yet'),
@@ -209,6 +223,7 @@ class CampaignPaidWebhookControllerTest extends TestCase
             'shopify_product_id' => 222,
             'shopify_variant_id' => 5002,
         ]);
+        $this->vip(222);
         CampaignProductResponse::create([
             'campaign_product_id' => $productB->id,
             'source' => CampaignProductResponse::SOURCE_AI,

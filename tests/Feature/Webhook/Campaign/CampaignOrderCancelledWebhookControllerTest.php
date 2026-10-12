@@ -57,7 +57,7 @@ class CampaignOrderCancelledWebhookControllerTest extends TestCase
         );
 
         $response->assertOk();
-        $response->assertJson(['message' => 'OK', 'cancelled' => 2]);
+        $this->assertDatabaseHas('shopify_webhook_events', ['endpoint' => 'campaign.cancelled', 'status' => 'processed']);
 
         $this->assertSame(CampaignDelivery::STATUS_CANCELLED, $first->refresh()->status);
         $this->assertSame(CampaignDelivery::STATUS_CANCELLED, $second->refresh()->status);
@@ -98,7 +98,7 @@ class CampaignOrderCancelledWebhookControllerTest extends TestCase
         );
 
         $response->assertOk();
-        $response->assertJson(['message' => 'OK', 'cancelled' => 1]);
+        $this->assertDatabaseHas('shopify_webhook_events', ['endpoint' => 'campaign.cancelled', 'status' => 'processed']);
 
         $this->assertSame(CampaignDelivery::STATUS_CANCELLED, $refunded->refresh()->status);
         $this->assertSame(CampaignDelivery::STATUS_PENDING, $untouched->refresh()->status);
@@ -113,6 +113,6 @@ class CampaignOrderCancelledWebhookControllerTest extends TestCase
         );
 
         $response->assertOk();
-        $response->assertJson(['message' => 'OK', 'cancelled' => 0]);
+        $this->assertDatabaseHas('shopify_webhook_events', ['endpoint' => 'campaign.cancelled', 'status' => 'processed']);
     }
 }

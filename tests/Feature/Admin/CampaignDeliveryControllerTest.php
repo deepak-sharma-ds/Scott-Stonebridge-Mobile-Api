@@ -92,7 +92,7 @@ class CampaignDeliveryControllerTest extends TestCase
         $response->assertSee('Spring');
     }
 
-    public function test_admin_can_repair_attribution_failure_by_reassigning_campaign_product(): void
+    public function test_admin_can_repair_attribution_failure_by_re_pairing_then_reactivating(): void
     {
         Queue::fake();
 
@@ -103,24 +103,32 @@ class CampaignDeliveryControllerTest extends TestCase
             'status' => CampaignDelivery::STATUS_FAILED,
             'error_message' => 'unknown campaign_key: spring',
         ]);
+        $admin = User::factory()->create();
 
-        $response = $this->actingAs(User::factory()->create())
+        $this->actingAs($admin)
             ->put(route('admin.campaign_deliveries.update', $delivery), [
                 'customer_email' => $delivery->customer_email,
                 'customer_name' => $delivery->customer_name,
                 'campaign_product_id' => $campaignProduct->id,
-                'status' => CampaignDelivery::STATUS_PENDING,
-            ]);
+            ])
+            ->assertRedirect(route('admin.campaign_deliveries.show', $delivery));
 
-        $response->assertRedirect(route('admin.campaign_deliveries.show', $delivery));
+        // Re-pairing alone never changes state: the admin reactivates explicitly.
         $this->assertSame($campaignProduct->id, $delivery->fresh()->campaign_product_id);
+        $this->assertSame(CampaignDelivery::STATUS_FAILED, $delivery->fresh()->status);
+
+        $this->actingAs($admin)
+            ->post(route('admin.campaign_deliveries.reactivate', $delivery))
+            ->assertSessionHas('success');
+
         $this->assertSame(CampaignDelivery::STATUS_PENDING, $delivery->fresh()->status);
         $this->assertNull($delivery->fresh()->error_message);
 
-        Queue::assertPushed(SendCampaignEmailJob::class, fn ($job) => $job->deliveryId === $delivery->id);
+        // The dispatcher (not the admin action) owns sending: nothing is queued here.
+        Queue::assertNotPushed(SendCampaignEmailJob::class);
     }
 
-    public function test_updating_a_non_failed_delivery_does_not_dispatch_a_duplicate_send(): void
+    public function test_updating_a_delivery_never_dispatches_a_send(): void
     {
         Queue::fake();
 
@@ -133,15 +141,17 @@ class CampaignDeliveryControllerTest extends TestCase
                 'customer_email' => $delivery->customer_email,
                 'customer_name' => 'Updated Name',
                 'campaign_product_id' => $campaignProduct->id,
-                'status' => CampaignDelivery::STATUS_PENDING,
+                'status' => CampaignDelivery::STATUS_SENT,
             ]);
 
         $this->assertSame('Updated Name', $delivery->fresh()->customer_name);
+        // A posted status is ignored: state only changes through explicit actions.
+        $this->assertSame(CampaignDelivery::STATUS_PENDING, $delivery->fresh()->status);
 
         Queue::assertNotPushed(SendCampaignEmailJob::class);
     }
 
-    public function test_send_forces_status_to_pending_and_dispatches_the_job(): void
+    public function test_resend_claims_the_delivery_and_dispatches_one_token_bound_job(): void
     {
         Queue::fake();
 
@@ -158,9 +168,15 @@ class CampaignDeliveryControllerTest extends TestCase
 
         $response->assertRedirect();
         $response->assertSessionHas('success', 'Delivery re-sent.');
-        $this->assertSame(CampaignDelivery::STATUS_PENDING, $delivery->fresh()->status);
 
-        Queue::assertPushed(SendCampaignEmailJob::class, fn ($job) => $job->deliveryId === $delivery->id);
+        $delivery->refresh();
+        $this->assertSame(CampaignDelivery::STATUS_SENDING, $delivery->status);
+        $this->assertNotNull($delivery->claim_token);
+
+        Queue::assertPushed(
+            SendCampaignEmailJob::class,
+            fn ($job) => $job->deliveryId === $delivery->id && $job->claimToken === $delivery->claim_token
+        );
     }
 
     public function test_send_is_blocked_when_no_campaign_response_is_resolved(): void

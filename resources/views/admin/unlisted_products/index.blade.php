@@ -50,6 +50,9 @@
                                 <x-admin.badge :type="$product->is_published ? 'success' : 'secondary'">
                                     {{ $product->is_published ? 'Published' : 'Unpublished' }}
                                 </x-admin.badge>
+                                <x-admin.badge :type="$product->is_vip ? 'warning' : 'secondary'">
+                                    {{ $product->is_vip ? 'VIP' : 'Not VIP' }}
+                                </x-admin.badge>
                             </td>
                             <td class="text-center">
                                 <x-admin.badge :type="$product->email_content || $product->header_image ? 'primary' : 'secondary'">

@@ -405,7 +405,7 @@ class MarketingCampaignControllerTest extends TestCase
             'shopify_product_id' => 111,
             'title' => 'Love Reading',
             'variants' => [['id' => 11101, 'title' => 'Default Title', 'price' => '19.99', 'available_for_sale' => true]],
-            'is_published' => true,
+            'is_published' => true, 'is_vip' => true,
         ]);
 
         $response = $this->actingAs(User::factory()->create())
@@ -429,8 +429,8 @@ class MarketingCampaignControllerTest extends TestCase
     {
         $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
         CampaignProduct::create(['marketing_campaign_id' => $campaign->id, 'shopify_product_id' => 111]);
-        UnlistedProduct::create(['shopify_product_id' => 111, 'title' => 'Already Linked', 'is_published' => true]);
-        UnlistedProduct::create(['shopify_product_id' => 222, 'title' => 'Still Available', 'is_published' => true]);
+        UnlistedProduct::create(['shopify_product_id' => 111, 'title' => 'Already Linked', 'is_published' => true, 'is_vip' => true]);
+        UnlistedProduct::create(['shopify_product_id' => 222, 'title' => 'Still Available', 'is_published' => true, 'is_vip' => true]);
 
         $response = $this->actingAs(User::factory()->create())
             ->getJson(route('admin.marketing-campaigns.products.available', $campaign));
@@ -461,7 +461,7 @@ class MarketingCampaignControllerTest extends TestCase
             'header_image' => 'saved-header.jpg',
             'email_content' => 'Saved content.',
             'email_footer' => 'Saved footer.',
-            'is_published' => true,
+            'is_published' => true, 'is_vip' => true,
         ]);
 
         $response = $this->actingAs(User::factory()->create())
@@ -483,7 +483,7 @@ class MarketingCampaignControllerTest extends TestCase
     public function test_linking_a_product_saves_its_template_fields_back_onto_the_unlisted_product(): void
     {
         $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
-        UnlistedProduct::create(['shopify_product_id' => 111, 'title' => 'Love Reading', 'is_published' => true]);
+        UnlistedProduct::create(['shopify_product_id' => 111, 'title' => 'Love Reading', 'is_published' => true, 'is_vip' => true]);
 
         $this->actingAs(User::factory()->create())
             ->post(route('admin.marketing-campaigns.products.store', $campaign), [
@@ -522,7 +522,7 @@ class MarketingCampaignControllerTest extends TestCase
             'shopify_product_id' => 111,
             'title' => 'Love Reading',
             'header_image' => 'saved-header.jpg',
-            'is_published' => true,
+            'is_published' => true, 'is_vip' => true,
         ]);
         $user = User::factory()->create();
 

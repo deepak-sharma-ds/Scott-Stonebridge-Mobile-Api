@@ -22,6 +22,7 @@ use App\Http\Controllers\Admin\ReportingController;
 use App\Http\Controllers\Admin\RichTextUploadController;
 use App\Http\Controllers\Admin\UnlistedProductController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\WebhookEventController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RoleController;
 use Illuminate\Support\Facades\Route;
@@ -123,6 +124,9 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
             Route::post('/{delivery}/regenerate', [EmailReadingController::class, 'regenerate'])->name('regenerate');
             Route::post('/{delivery}/send', [EmailReadingController::class, 'sendNow'])->name('send');
             Route::post('/{delivery}/cancel', [EmailReadingController::class, 'cancel'])->name('cancel');
+            Route::post('/{delivery}/reactivate', [EmailReadingController::class, 'reactivate'])->name('reactivate');
+            Route::post('/{delivery}/mark-sent', [EmailReadingController::class, 'markSent'])->name('mark_sent');
+            Route::post('/{delivery}/retry-fulfillment', [EmailReadingController::class, 'retryFulfillment'])->name('retry_fulfillment');
             Route::delete('/{delivery}', [EmailReadingController::class, 'destroy'])->name('destroy');
         });
 
@@ -159,7 +163,16 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
             Route::put('/{delivery}', [CampaignDeliveryController::class, 'update'])->name('update');
             Route::post('/{delivery}/send', [CampaignDeliveryController::class, 'send'])->name('send');
             Route::post('/{delivery}/cancel', [CampaignDeliveryController::class, 'cancel'])->name('cancel');
+            Route::post('/{delivery}/reactivate', [CampaignDeliveryController::class, 'reactivate'])->name('reactivate');
+            Route::post('/{delivery}/mark-sent', [CampaignDeliveryController::class, 'markSent'])->name('mark_sent');
+            Route::post('/{delivery}/retry-fulfillment', [CampaignDeliveryController::class, 'retryFulfillment'])->name('retry_fulfillment');
             Route::delete('/{delivery}', [CampaignDeliveryController::class, 'destroy'])->name('destroy');
+        });
+
+        // Webhook inbox (stored Shopify events + replay)
+        Route::prefix('webhook-events')->name('webhook_events.')->group(function () {
+            Route::get('/', [WebhookEventController::class, 'index'])->name('index');
+            Route::post('/{event}/replay', [WebhookEventController::class, 'replay'])->name('replay');
         });
     });
 

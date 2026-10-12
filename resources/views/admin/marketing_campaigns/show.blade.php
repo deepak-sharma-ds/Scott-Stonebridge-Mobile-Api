@@ -246,6 +246,13 @@
                                         action="{{ route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]) }}"
                                         method="POST" enctype="multipart/form-data">
                                         @csrf
+                                        @if (($unsentCounts[$campaignProduct->id] ?? 0) > 0)
+                                            <div class="alert alert-info">
+                                                Saving changes affects {{ $unsentCounts[$campaignProduct->id] }}
+                                                unsent {{ \Illuminate\Support\Str::plural('delivery', $unsentCounts[$campaignProduct->id]) }}:
+                                                they will be sent with the updated text.
+                                            </div>
+                                        @endif
                                         <div class="mb-3">
                                             <label class="form-label">Header Banner Image <small
                                                     style="color:var(--text-muted);">(leave blank to keep the
