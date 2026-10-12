@@ -255,7 +255,7 @@ class EmailReadingControllerTest extends TestCase
 
         $this->actingAs($this->admin())->postJson(route('admin.email_readings.regenerate', $delivery))
             ->assertOk()
-            ->assertJsonPath('content', '<p>One.</p><p>Two.</p>');
+            ->assertJsonPath('content', "<p>One.</p>\n<p>Two.</p>");
     }
 
     public function test_saving_without_touching_the_schedule_never_counts_as_a_reschedule(): void

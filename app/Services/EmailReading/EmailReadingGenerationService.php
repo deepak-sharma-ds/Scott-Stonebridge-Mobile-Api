@@ -6,7 +6,7 @@ namespace App\Services\EmailReading;
 
 use App\Models\EmailReadingDelivery;
 use App\Models\EmailReadingProduct;
-use App\Support\PlainTextMailBody;
+use App\Support\MarkdownMailBody;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Log;
 use OpenAI\Laravel\Facades\OpenAI;
@@ -48,7 +48,7 @@ class EmailReadingGenerationService
         $start = microtime(true);
 
         try {
-            $result = $this->complete($this->systemPrompt(), $prompt, $model, $maxTokens);
+            $result = $this->complete($this->buildSystemPrompt($product), $prompt, $model, $maxTokens);
         } catch (Throwable $e) {
             Log::channel('shopify_webhooks')->error('Email reading OpenAI call failed', [
                 'delivery_id' => $delivery->id,
@@ -69,7 +69,7 @@ class EmailReadingGenerationService
                 EmailReadingDelivery::STATUS_GENERATED,
             ])
             ->update([
-                'ai_response' => PlainTextMailBody::toParagraphs($result['content']),
+                'ai_response' => MarkdownMailBody::toHtml($result['content']),
                 'prompt_tokens' => $result['prompt_tokens'],
                 'completion_tokens' => $result['completion_tokens'],
                 'model_used' => $result['model'],
@@ -119,8 +119,8 @@ class EmailReadingGenerationService
 
         $prompt = $this->renderPrompt($product->prompt_template, $delivery);
 
-        $result = $this->complete($this->systemPrompt(), $prompt, $model, $maxTokens, $adminInstruction);
-        $result['content'] = PlainTextMailBody::toParagraphs($result['content']);
+        $result = $this->complete($this->buildSystemPrompt($product), $prompt, $model, $maxTokens, $adminInstruction);
+        $result['content'] = MarkdownMailBody::toHtml($result['content']);
 
         return $result;
     }
@@ -144,7 +144,10 @@ class EmailReadingGenerationService
 
         $prompt = Blade::render($product->prompt_template, $data);
 
-        return $this->complete($this->systemPrompt(), $prompt, $model, $maxTokens);
+        $result = $this->complete($this->buildSystemPrompt($product), $prompt, $model, $maxTokens);
+        $result['content'] = MarkdownMailBody::toHtml($result['content']);
+
+        return $result;
     }
 
     /**
@@ -200,13 +203,57 @@ class EmailReadingGenerationService
         return Blade::render($template, $data);
     }
 
+    /**
+     * Builds the full system prompt composed of Scott's base persona, the
+     * formatting contract (product override or shared default), and voice rules.
+     */
+    public function buildSystemPrompt(?EmailReadingProduct $product = null): string
+    {
+        $base = $this->systemPrompt();
+
+        $contract = filled($product?->formatting_contract)
+            ? trim((string) $product->formatting_contract)
+            : (string) config('email_reading.formatting_contract');
+
+        $voiceRules = $this->voiceRulesPrompt();
+
+        $parts = array_filter(
+            [$base, $contract, $voiceRules],
+            fn (mixed $part): bool => filled($part)
+        );
+
+        return implode("\n\n", $parts);
+    }
+
+    /**
+     * Formats configured voice and tone rules as a bulleted markdown block.
+     */
+    private function voiceRulesPrompt(): string
+    {
+        $rules = config('email_reading.voice_rules', []);
+
+        if (empty($rules)) {
+            return '';
+        }
+
+        if (is_string($rules)) {
+            return trim($rules);
+        }
+
+        $formatted = array_map(
+            fn (mixed $rule): string => '- '.trim((string) $rule),
+            (array) $rules
+        );
+
+        return "Voice rules:\n".implode("\n", $formatted);
+    }
+
     private function systemPrompt(): string
     {
         return (string) config(
             'email_reading.system_prompt',
             'You are Scott Stonebridge, an award-winning UK psychic medium. '
             .'Write a warm, compassionate, well-structured email reading. '
-            .'Use clear paragraphs, no headings, no markdown. '
             .'Do not include a greeting/salutation (e.g. "Dear ...") or a sign-off (e.g. "Warm blessings, ...") — '
             .'output only the body of the reading itself, since the surrounding email template already supplies those.'
         );

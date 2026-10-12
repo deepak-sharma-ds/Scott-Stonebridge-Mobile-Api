@@ -7,6 +7,9 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use OpenAI\Laravel\Facades\OpenAI;
+use OpenAI\Resources\Chat;
+use OpenAI\Responses\Chat\CreateResponse;
 use Tests\TestCase;
 
 class EmailReadingProductControllerTest extends TestCase
@@ -82,5 +85,56 @@ class EmailReadingProductControllerTest extends TestCase
         $fresh = $product->fresh();
         $this->assertNotSame('old.jpg', $fresh->header_image);
         Storage::disk('public')->assertExists('reading-header-images/'.$fresh->header_image);
+    }
+
+    public function test_admin_can_set_and_update_formatting_contract_override(): void
+    {
+        $response = $this->actingAs(User::factory()->create())
+            ->post(route('admin.email-reading-products.store'), $this->payload([
+                'formatting_contract' => '## CUSTOM CONTRACT',
+            ]));
+
+        $response->assertRedirect(route('admin.email-reading-products.index'));
+        $product = EmailReadingProduct::where('slug', 'love-reading')->firstOrFail();
+        $this->assertSame('## CUSTOM CONTRACT', $product->formatting_contract);
+
+        $this->actingAs(User::factory()->create())
+            ->put(route('admin.email-reading-products.update', $product), $this->payload([
+                'formatting_contract' => '## UPDATED CONTRACT',
+            ]));
+
+        $this->assertSame('## UPDATED CONTRACT', $product->fresh()->formatting_contract);
+    }
+
+    public function test_admin_can_run_prompt_test_with_contract_and_receive_rendered_html(): void
+    {
+        OpenAI::fake([
+            CreateResponse::fake([
+                'choices' => [
+                    ['message' => ['role' => 'assistant', 'content' => "## Test Heading\n\n**Bold takeaway**"]],
+                ],
+            ]),
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->postJson(route('admin.email-reading-products.test'), [
+                'prompt_template' => 'Customer: {{ $customer_name }}.',
+                'formatting_contract' => '## TEST SPECIFIC CONTRACT',
+                'customer_name' => 'Alice',
+                'answers' => ['q1' => 'My question'],
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('success', true);
+
+        $content = $response->json('content');
+        $this->assertStringContainsString('<h2>Test Heading</h2>', $content);
+        $this->assertStringContainsString('<strong>Bold takeaway</strong>', $content);
+
+        OpenAI::assertSent(Chat::class, function (string $method, array $parameters): bool {
+            $systemMessage = collect($parameters['messages'])->firstWhere('role', 'system')['content'] ?? '';
+
+            return str_contains($systemMessage, 'TEST SPECIFIC CONTRACT');
+        });
     }
 }

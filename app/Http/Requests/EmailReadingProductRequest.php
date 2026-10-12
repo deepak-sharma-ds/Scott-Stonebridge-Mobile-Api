@@ -40,6 +40,7 @@ class EmailReadingProductRequest extends FormRequest
             'is_active' => ['nullable', 'boolean'],
             'is_automation_enabled' => ['nullable', 'boolean'],
             'prompt_template' => ['required', 'string'],
+            'formatting_contract' => ['nullable', 'string'],
             // An active product with zero questions is a legitimate final
             // state (some readings need no personalization) — not every
             // reading product requires a question schema, so this is

@@ -183,6 +183,7 @@ class EmailReadingProductController extends Controller
     {
         $validated = $request->validate([
             'prompt_template' => ['required', 'string'],
+            'formatting_contract' => ['nullable', 'string'],
             'model' => ['nullable', 'string', 'max:255'],
             'max_tokens' => ['nullable', 'integer', 'min:1', 'max:8000'],
             'customer_name' => ['nullable', 'string', 'max:255'],
@@ -194,6 +195,7 @@ class EmailReadingProductController extends Controller
         // exact render + system-prompt path without persisting anything.
         $product = new EmailReadingProduct([
             'prompt_template' => $validated['prompt_template'],
+            'formatting_contract' => $validated['formatting_contract'] ?? null,
             'model' => $validated['model'] ?? null,
             'max_tokens' => $validated['max_tokens'] ?? null,
         ]);

@@ -146,6 +146,16 @@
         </small>
     </div>
 
+    <div class="mb-3">
+        <label for="formatting_contract" class="form-label">Formatting Contract Override <small style="color:var(--text-muted);">(optional; leave blank to use the shared contract)</small></label>
+        <textarea name="formatting_contract" id="formatting_contract" class="form-control" rows="6" x-model="formattingContract"
+            style="font-family:monospace;font-size:0.8125rem;"
+            placeholder="{{ config('email_reading.formatting_contract') }}">{{ old('formatting_contract', $p->formatting_contract ?? '') }}</textarea>
+        <small style="color:var(--text-muted);display:block;margin-top:0.375rem;">
+            Markdown instructions defining structure (headings, key messages, closing section). Overrides the shared contract for this product only.
+        </small>
+    </div>
+
     {{-- Live prompt test --}}
     <div class="card p-4"
         style="background:var(--color-primary-muted);border:1px solid var(--card-border);margin-bottom:1rem;">
@@ -171,8 +181,9 @@
                 style="font-size:0.75rem;color:var(--text-muted);margin-left:0.5rem;"></span>
         </div>
         <div x-show="testOutput"
-            style="white-space:pre-wrap;line-height:1.7;background:#fff;border:1px solid var(--card-border);border-radius:10px;padding:1rem;font-size:0.9375rem;"
-            x-text="testOutput"></div>
+            class="response-body"
+            style="line-height:1.7;background:#fff;border:1px solid var(--card-border);border-radius:10px;padding:1rem;font-size:0.9375rem;"
+            x-html="testOutput"></div>
     </div>
 
     <div class="mt-2" style="display:flex;gap:0.5rem;">
@@ -199,6 +210,7 @@
                     required: true
                 }],
             promptTemplate: @js(old('prompt_template', $p->prompt_template ?? '')),
+            formattingContract: @js(old('formatting_contract', $p->formatting_contract ?? '')),
             model: @js(old('model', $p->model ?? '')),
             maxTokens: {{ (int) old('max_tokens', $p->max_tokens ?? 1500) }},
             testName: '',
@@ -248,6 +260,7 @@
                         },
                         body: JSON.stringify({
                             prompt_template: this.promptTemplate,
+                            formatting_contract: this.formattingContract || null,
                             model: this.model || null,
                             max_tokens: this.maxTokens || null,
                             customer_name: this.testName || null,
