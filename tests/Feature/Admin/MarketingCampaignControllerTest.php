@@ -217,7 +217,7 @@ class MarketingCampaignControllerTest extends TestCase
         $this->assertDatabaseHas('campaign_product_responses', [
             'campaign_product_id' => $campaignProduct->id,
             'source' => CampaignProductResponse::SOURCE_AI,
-            'body' => 'Discover your future with our love reading.',
+            'body' => '<p>Discover your future with our love reading.</p>',
         ]);
         $this->assertDatabaseCount('campaign_product_responses', 1);
     }
@@ -244,8 +244,69 @@ class MarketingCampaignControllerTest extends TestCase
         $this->assertDatabaseCount('campaign_product_responses', 1);
         $this->assertDatabaseHas('campaign_product_responses', [
             'campaign_product_id' => $campaignProduct->id,
-            'body' => 'Second draft.',
+            'body' => '<p>Second draft.</p>',
         ]);
+    }
+
+    public function test_a_manual_body_is_sanitized_when_linking_and_when_responding(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post(route('admin.marketing-campaigns.products.store', $campaign), [
+            'shopify_product_id' => 999,
+            'shopify_variant_id' => 5001,
+            'source' => CampaignProductResponse::SOURCE_MANUAL,
+            'body' => '<h2>Hello</h2><script>steal()</script><p onclick="x()">Copy</p>',
+        ]);
+        $campaignProduct = CampaignProduct::where('shopify_product_id', 999)->firstOrFail();
+        $this->assertSame('<h2>Hello</h2><p>Copy</p>', $campaignProduct->response->body);
+
+        $this->actingAs($user)->post(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
+            'source' => CampaignProductResponse::SOURCE_MANUAL,
+            'body' => '<p>Edited</p><a href="javascript:alert(1)">bad</a>',
+        ])->assertSessionHas('success');
+
+        $this->assertSame('<p>Edited</p><a>bad</a>', $campaignProduct->response()->first()->body);
+    }
+
+    public function test_a_blank_editor_body_is_rejected_on_respond_and_creates_nothing_on_link(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        $user = User::factory()->create();
+
+        $this->actingAs($user)->post(route('admin.marketing-campaigns.products.store', $campaign), [
+            'shopify_product_id' => 999,
+            'shopify_variant_id' => 5001,
+            'source' => CampaignProductResponse::SOURCE_MANUAL,
+            'body' => '<p>&nbsp;</p>',
+        ]);
+        $campaignProduct = CampaignProduct::where('shopify_product_id', 999)->firstOrFail();
+        $this->assertNull($campaignProduct->response);
+
+        $this->actingAs($user)->post(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
+            'source' => CampaignProductResponse::SOURCE_MANUAL,
+            'body' => '<p>&nbsp;</p>',
+        ])->assertSessionHasErrors('body');
+
+        $this->assertNull($campaignProduct->response()->first());
+    }
+
+    public function test_the_campaign_page_uses_the_editor_for_manual_bodies_and_shows_the_formatted_response(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        $campaignProduct = CampaignProduct::create(['marketing_campaign_id' => $campaign->id, 'shopify_product_id' => 111, 'product_title' => 'Love']);
+        $campaignProduct->response()->create([
+            'source' => CampaignProductResponse::SOURCE_MANUAL,
+            'body' => '<h2>Heading</h2><p>Body</p><script>steal()</script>',
+        ]);
+
+        $this->actingAs(User::factory()->create())->get(route('admin.marketing-campaigns.show', $campaign))
+            ->assertOk()
+            ->assertSee('<h2>Heading</h2>', false)
+            ->assertDontSee('steal()', false)
+            ->assertSee('name="body" id="body" class="form-control" rows="4" data-rich-text', false)
+            ->assertSee('&lt;h2&gt;Heading&lt;/h2&gt;', false);
     }
 
     public function test_generating_a_response_does_not_change_campaign_status(): void

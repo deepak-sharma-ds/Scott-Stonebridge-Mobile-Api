@@ -12,6 +12,7 @@ use App\Models\MarketingCampaign;
 use App\Models\UnlistedProduct;
 use App\Services\CampaignEmail\CampaignProductCatalogService;
 use App\Services\CampaignEmail\CampaignResponseGenerationService;
+use App\Support\SafeHtml;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Throwable;
@@ -40,7 +41,7 @@ class CampaignProductController extends Controller
     {
         $data = $request->validated();
         $source = $data['source'] ?? CampaignProductResponse::SOURCE_MANUAL;
-        $body = $data['body'] ?? null;
+        $body = SafeHtml::clean($data['body'] ?? null);
         unset($data['source'], $data['body']);
 
         if ($request->hasFile('header_image')) {
@@ -54,7 +55,7 @@ class CampaignProductController extends Controller
 
         $this->syncProductDefaults((int) $data['shopify_product_id'], $data);
 
-        if ($source === CampaignProductResponse::SOURCE_MANUAL && filled($body)) {
+        if ($source === CampaignProductResponse::SOURCE_MANUAL && ! SafeHtml::isBlank($body)) {
             $campaignProduct->response()->create([
                 'source' => CampaignProductResponse::SOURCE_MANUAL,
                 'body' => $body,
@@ -89,6 +90,12 @@ class CampaignProductController extends Controller
 
         $data = $request->validated();
 
+        $body = SafeHtml::clean($data['body'] ?? null);
+
+        if ($data['source'] === CampaignProductResponse::SOURCE_MANUAL && SafeHtml::isBlank($body)) {
+            return back()->withInput()->withErrors(['body' => 'The response body cannot be empty.']);
+        }
+
         $templateFields = [
             'email_content' => $data['email_content'] ?? null,
             'email_footer' => $data['email_footer'] ?? null,
@@ -104,7 +111,7 @@ class CampaignProductController extends Controller
                 ['campaign_product_id' => $campaignProduct->id],
                 [
                     'source' => CampaignProductResponse::SOURCE_MANUAL,
-                    'body' => $data['body'],
+                    'body' => $body,
                     'model_used' => null,
                     'prompt_tokens' => null,
                     'completion_tokens' => null,

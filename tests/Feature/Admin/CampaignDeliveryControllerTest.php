@@ -44,6 +44,19 @@ class CampaignDeliveryControllerTest extends TestCase
         ], $overrides));
     }
 
+    public function test_show_renders_the_formatted_response_body(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'spring', 'name' => 'Spring', 'status' => MarketingCampaign::STATUS_ACTIVE]);
+        $campaignProduct = $this->campaignProductWithResponse($campaign);
+        $campaignProduct->response->update(['body' => '<h2>Heading</h2><p>Copy</p><script>steal()</script>']);
+        $delivery = $this->delivery(['campaign_product_id' => $campaignProduct->id]);
+
+        $this->actingAs(User::factory()->create())->get(route('admin.campaign_deliveries.show', $delivery))
+            ->assertOk()
+            ->assertSee('<h2>Heading</h2>', false)
+            ->assertDontSee('steal()', false);
+    }
+
     public function test_index_filters_by_status(): void
     {
         $campaign = MarketingCampaign::create(['campaign_key' => 'spring', 'name' => 'Spring', 'status' => MarketingCampaign::STATUS_ACTIVE]);

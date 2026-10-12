@@ -56,7 +56,7 @@
             <div class="card p-4">
                 <h3 style="margin:0 0 1rem;font-size:1rem;">Campaign Response (read-only)</h3>
                 @if($response)
-                    <div style="white-space:pre-wrap;line-height:1.7;color:var(--text-primary);font-size:0.9375rem;">{{ $response->body }}</div>
+                    <div class="response-body">{!! \App\Support\SafeHtml::clean($response->body) !!}</div>
                     <p style="color:var(--text-muted);font-size:0.75rem;margin-top:0.75rem;">
                         Source: {{ \App\Models\CampaignProductResponse::sourceLabels()[$response->source] ?? $response->source }}
                         — edit the response itself on the <a href="{{ $campaign ? route('admin.marketing-campaigns.show', $campaign) : '#' }}">Marketing Campaign page</a>.

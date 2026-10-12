@@ -166,7 +166,7 @@
                 <div class="mb-3" x-show="source === 'manual'" x-cloak>
                     <label for="body" class="form-label">Response Body <small
                             style="color:var(--text-muted);">(optional — leave blank and add it later)</small></label>
-                    <textarea name="body" id="body" class="form-control" rows="4"></textarea>
+                    <textarea name="body" id="body" class="form-control" rows="4" data-rich-text></textarea>
                 </div>
                 <button type="submit" class="btn btn-primary" :disabled="!selected || !variantId">Link Product</button>
             </form>
@@ -234,9 +234,8 @@
                             </tr>
                             @if ($campaignProduct->response)
                                 <tr>
-                                    <td colspan="5"
-                                        style="background:var(--surface-muted, rgba(0,0,0,0.02));white-space:pre-wrap;font-size:0.875rem;color:var(--text-secondary);">
-                                        {{ $campaignProduct->response->body }}
+                                    <td colspan="5" style="background:var(--surface-muted, rgba(0,0,0,0.02));">
+                                        <div class="response-body">{!! \App\Support\SafeHtml::clean($campaignProduct->response->body) !!}</div>
                                     </td>
                                 </tr>
                             @endif
@@ -292,7 +291,7 @@
                                         </div>
                                         <div x-show="source === 'manual'" x-cloak>
                                             <label class="form-label">Response Body</label>
-                                            <textarea name="body" class="form-control" rows="5"></textarea>
+                                            <textarea name="body" class="form-control" rows="5" data-rich-text>{{ \App\Support\SafeHtml::clean($campaignProduct->response?->body) }}</textarea>
                                         </div>
                                         <button type="submit" class="btn btn-sm btn-primary"
                                             style="margin-top:0.75rem;">Save Response</button>
