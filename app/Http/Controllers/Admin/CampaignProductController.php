@@ -6,6 +6,8 @@ use App\Http\Controllers\Admin\Concerns\StoresHeaderImages;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CampaignProductRequest;
 use App\Http\Requests\CampaignProductResponseRequest;
+use App\Mail\CampaignEmailMail;
+use App\Models\CampaignDelivery;
 use App\Models\CampaignProduct;
 use App\Models\CampaignProductResponse;
 use App\Models\MarketingCampaign;
@@ -16,7 +18,9 @@ use App\Support\SafeHtml;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Mail;
 use Throwable;
 
 class CampaignProductController extends Controller
@@ -277,5 +281,91 @@ class CampaignProductController extends Controller
         if ($defaults !== []) {
             UnlistedProduct::where('shopify_product_id', $shopifyProductId)->update($defaults);
         }
+    }
+
+    /**
+     * Renders the real CampaignEmailMail Mailable for this campaign product using sample data
+     * and optional unsaved overrides, without persisting anything.
+     */
+    public function preview(Request $request, MarketingCampaign $marketingCampaign, CampaignProduct $campaignProduct): Response
+    {
+        $previewDelivery = $this->buildPreviewDelivery($request, $campaignProduct);
+        $mailable = new CampaignEmailMail($previewDelivery);
+        $html = $mailable->render();
+
+        return response($html, 200, ['Content-Type' => 'text/html; charset=UTF-8']);
+    }
+
+    /**
+     * Sends the real CampaignEmailMail Mailable for this product to the logged-in admin's
+     * email address with sample data / unsaved overrides. Creates no delivery row, touches
+     * no customer, and triggers no queue or webhook lifecycle side effects.
+     */
+    public function sendTest(Request $request, MarketingCampaign $marketingCampaign, CampaignProduct $campaignProduct): JsonResponse
+    {
+        $admin = $request->user();
+        if (! $admin || ! $admin->email) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Logged-in user has no email address configured.',
+            ], 422);
+        }
+
+        $previewDelivery = $this->buildPreviewDelivery($request, $campaignProduct);
+        Mail::to($admin->email)->send(new CampaignEmailMail($previewDelivery));
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Test email sent to '.$admin->email.'.',
+        ]);
+    }
+
+    private function buildPreviewDelivery(Request $request, CampaignProduct $campaignProduct): CampaignDelivery
+    {
+        $previewProduct = clone $campaignProduct;
+        $previewProduct->loadMissing('marketingCampaign', 'response');
+
+        if ($request->has('product_title')) {
+            $previewProduct->product_title = (string) $request->input('product_title');
+        }
+        if ($request->has('email_subject')) {
+            $previewProduct->email_subject = (string) $request->input('email_subject');
+        }
+        if ($request->has('email_content')) {
+            $previewProduct->email_content = $request->input('email_content');
+        }
+        if ($request->has('email_footer')) {
+            $previewProduct->email_footer = $request->input('email_footer');
+        }
+
+        $body = $request->input('body') ?? $request->input('campaign_body');
+        if (! $body) {
+            $body = $previewProduct->response?->body ?: $this->defaultSampleCampaignBody();
+        }
+
+        $response = $previewProduct->response ? clone $previewProduct->response : new CampaignProductResponse;
+        $response->body = (string) $body;
+        $previewProduct->setRelation('response', $response);
+
+        $customerName = (string) ($request->input('customer_name') ?: 'Jane Doe');
+
+        $delivery = new CampaignDelivery([
+            'customer_name' => $customerName,
+            'customer_email' => $request->user()?->email ?: 'admin@example.com',
+        ]);
+        $delivery->setRelation('campaignProduct', $previewProduct);
+
+        return $delivery;
+    }
+
+    private function defaultSampleCampaignBody(): string
+    {
+        return <<<'HTML'
+<h2>A Special Message for You</h2>
+<p>This reading was chosen specifically to connect with the season you find yourself in today.</p>
+<p><strong>Trust the subtle signs pointing you towards your next step.</strong></p>
+<h2>From My Heart to Yours</h2>
+<p>May this message bring you clarity and peace as you move forward.</p>
+HTML;
     }
 }

@@ -180,10 +180,19 @@
             <span x-show="testInfo" x-text="testInfo"
                 style="font-size:0.75rem;color:var(--text-muted);margin-left:0.5rem;"></span>
         </div>
-        <div x-show="testOutput"
-            class="response-body"
-            style="line-height:1.7;background:#fff;border:1px solid var(--card-border);border-radius:10px;padding:1rem;font-size:0.9375rem;"
-            x-html="testOutput"></div>
+        @if ($p)
+            <div x-show="testOutput"
+                class="alert alert-info"
+                style="margin-top:0.75rem;padding:0.75rem 1rem;border-radius:8px;font-size:0.875rem;background:#eef7ff;border:1px solid #b8daff;color:#004085;">
+                ✓ Prompt test generated successfully. The reading output is rendered in the live email preview.
+            </div>
+        @else
+            <div x-show="testOutput"
+                class="alert alert-success"
+                style="margin-top:0.75rem;padding:0.75rem 1rem;border-radius:8px;font-size:0.875rem;">
+                ✓ Prompt test generated successfully. (Full email preview is available on the edit page once saved).
+            </div>
+        @endif
     </div>
 
     <div class="mt-2" style="display:flex;gap:0.5rem;">
@@ -273,6 +282,12 @@
                     }
                     this.testOutput = data.content;
                     this.testInfo = (data.model || '') + ' · ' + (data.completion_tokens || 0) + ' tokens';
+                    window.dispatchEvent(new CustomEvent('email-preview-refresh', {
+                        detail: {
+                            body: data.content,
+                            customer_name: this.testName || null,
+                        }
+                    }));
                 } catch (e) {
                     this.testInfo = e.message;
                     if (window.adminNotify) window.adminNotify(e.message, 'error');

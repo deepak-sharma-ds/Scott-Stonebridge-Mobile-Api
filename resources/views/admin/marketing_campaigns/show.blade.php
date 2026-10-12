@@ -192,7 +192,7 @@
                             <th>Shopify ID</th>
                             <th class="text-center">Response</th>
                             <th>Campaign Link</th>
-                            <th class="text-end" style="width:280px;">Actions</th>
+                            <th class="text-end" style="width:360px;">Actions</th>
                         </tr>
                     </thead>
                     @forelse($campaign->campaignProducts as $campaignProduct)
@@ -228,11 +228,15 @@
                                         </div>
                                     @else
                                         <small style="color:var(--text-muted);">Set a Shopify Variant ID to generate a
-                                            link.</small>
+                                             link.</small>
                                     @endif
                                 </td>
                                 <td class="text-end">
                                     <div style="display:inline-flex;gap:0.5rem;">
+                                        <button type="button" class="btn btn-sm btn-secondary"
+                                            x-on:click="previewOpen = !previewOpen; if (previewOpen) $nextTick(() => window.dispatchEvent(new CustomEvent('email-preview-refresh', { detail: { productId: id } })))">
+                                            <span x-text="previewOpen ? 'Hide Preview' : 'Preview Email'"></span>
+                                        </button>
                                         <button type="button" class="btn btn-sm btn-primary"
                                             x-on:click="formOpen = !formOpen; $nextTick(() => initRichTextEditors())">
                                             {{ $campaignProduct->response ? 'Edit Response' : 'Add Response' }}
@@ -377,6 +381,18 @@
                                     </form>
                                 </td>
                             </tr>
+                            <tr x-show="previewOpen" x-cloak>
+                                <td colspan="5" style="background:var(--surface-muted, #f8fafc);padding:1.25rem;">
+                                    @include('admin.components.email-preview', [
+                                        'previewUrl' => route('admin.marketing-campaigns.products.preview', [$campaign, $campaignProduct]),
+                                        'sendTestUrl' => route('admin.marketing-campaigns.products.send-test', [$campaign, $campaignProduct]),
+                                        'editable' => true,
+                                        'context' => 'campaign_product',
+                                        'productId' => $campaignProduct->id,
+                                        'title' => 'Email Preview: ' . ($campaignProduct->product_title ?: ('Product #' . $campaignProduct->shopify_product_id)),
+                                    ])
+                                </td>
+                            </tr>
                         </tbody>
                     @empty
                         <tbody>
@@ -431,6 +447,7 @@
             generateUrl: config.generateUrl,
             validateUrl: config.validateUrl,
             formOpen: false,
+            previewOpen: false,
             source: config.initialSource || 'manual',
             generating: false,
             validating: false,
@@ -513,6 +530,13 @@
                     this.isValid = Boolean(data.is_valid);
                     this.hasProposed = true;
                     this.infoMessage = 'Proposed response generated · ' + (data.model || '') + ' · ' + (data.completion_tokens || 0) + ' tokens';
+
+                    window.dispatchEvent(new CustomEvent('email-preview-refresh', {
+                        detail: {
+                            productId: this.id,
+                            body: data.content,
+                        }
+                    }));
 
                     if (window.adminNotify) {
                         if (this.isValid) {

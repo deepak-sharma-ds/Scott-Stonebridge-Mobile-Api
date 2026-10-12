@@ -136,6 +136,8 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
 
         // Reading Products (email reading templates)
         Route::post('email-reading-products/test', [EmailReadingProductController::class, 'test'])->name('email-reading-products.test');
+        Route::match(['GET', 'POST'], 'email-reading-products/{emailReadingProduct}/preview', [EmailReadingProductController::class, 'preview'])->name('email-reading-products.preview');
+        Route::post('email-reading-products/{emailReadingProduct}/send-test', [EmailReadingProductController::class, 'sendTest'])->name('email-reading-products.send-test');
         Route::post('email-reading-products/{emailReadingProduct}/toggle', [EmailReadingProductController::class, 'toggleActive'])->name('email-reading-products.toggle');
         // Reading Catalog Sync picker (collections -> products, no local mirror table — ADR 0018)
         Route::get('email-reading-products/sync', [EmailReadingProductController::class, 'syncForm'])->name('email-reading-products.sync.form');
@@ -152,6 +154,8 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
         Route::get('marketing-campaigns/{marketingCampaign}/products/available', [CampaignProductController::class, 'available'])->name('marketing-campaigns.products.available');
         Route::post('marketing-campaigns/{marketingCampaign}/products', [CampaignProductController::class, 'store'])->name('marketing-campaigns.products.store');
         Route::delete('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}', [CampaignProductController::class, 'destroy'])->name('marketing-campaigns.products.destroy');
+        Route::match(['GET', 'POST'], 'marketing-campaigns/{marketingCampaign}/products/{campaignProduct}/preview', [CampaignProductController::class, 'preview'])->name('marketing-campaigns.products.preview');
+        Route::post('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}/send-test', [CampaignProductController::class, 'sendTest'])->name('marketing-campaigns.products.send-test');
         Route::post('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}/generate', [CampaignProductController::class, 'generate'])->name('marketing-campaigns.products.generate');
         Route::post('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}/validate-body', [CampaignProductController::class, 'validateBody'])->name('marketing-campaigns.products.validate-body');
         Route::post('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}/respond', [CampaignProductController::class, 'respond'])->name('marketing-campaigns.products.respond');

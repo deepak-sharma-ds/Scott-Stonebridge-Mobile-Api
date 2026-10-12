@@ -2,12 +2,15 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Mail\CampaignEmailMail;
+use App\Models\CampaignDelivery;
 use App\Models\CampaignProduct;
 use App\Models\CampaignProductResponse;
 use App\Models\MarketingCampaign;
 use App\Models\UnlistedProduct;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use OpenAI\Laravel\Facades\OpenAI;
 use OpenAI\Responses\Chat\CreateResponse;
 use Tests\TestCase;
@@ -878,5 +881,138 @@ class MarketingCampaignControllerTest extends TestCase
 
         $response->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
         $this->assertDatabaseMissing('campaign_products', ['id' => $campaignProduct->id]);
+    }
+
+    public function test_preview_campaign_product_requires_authentication(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-prev', 'name' => 'Prev', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        $campaignProduct = CampaignProduct::create([
+            'marketing_campaign_id' => $campaign->id,
+            'shopify_product_id' => 111,
+            'product_title' => 'VIP Reading',
+        ]);
+
+        $response = $this->get(route('admin.marketing-campaigns.products.preview', [$campaign, $campaignProduct]));
+
+        $response->assertRedirect(route('login'));
+    }
+
+    public function test_preview_campaign_product_renders_campaign_email_mail_with_sample_data(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-prev-2', 'name' => 'Prev 2', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        $campaignProduct = CampaignProduct::create([
+            'marketing_campaign_id' => $campaign->id,
+            'shopify_product_id' => 111,
+            'product_title' => 'VIP Reading Product',
+        ]);
+        CampaignProductResponse::create([
+            'campaign_product_id' => $campaignProduct->id,
+            'source' => CampaignProductResponse::SOURCE_MANUAL,
+            'body' => '<h2>Existing Saved VIP Body</h2><p>Saved copy</p>',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->get(route('admin.marketing-campaigns.products.preview', [$campaign, $campaignProduct]));
+
+        $response->assertOk();
+        $content = $response->getContent();
+        $this->assertStringContainsString('VIP Reading Product', $content);
+        $this->assertStringContainsString('Existing Saved VIP Body', $content);
+    }
+
+    public function test_preview_campaign_product_accepts_unsaved_overrides_without_persisting(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-prev-3', 'name' => 'Prev 3', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        $campaignProduct = CampaignProduct::create([
+            'marketing_campaign_id' => $campaign->id,
+            'shopify_product_id' => 111,
+            'product_title' => 'Initial VIP Product',
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->postJson(route('admin.marketing-campaigns.products.preview', [$campaign, $campaignProduct]), [
+                'product_title' => 'Overridden VIP Title',
+                'customer_name' => 'Test VIP Customer',
+                'email_content' => '<p>Special offer for {{ $productTitle }}</p>',
+                'body' => '<h2>Unsaved In-Editor VIP Copy</h2><p>Not persisted yet</p>',
+            ]);
+
+        $response->assertOk();
+        $content = $response->getContent();
+        $this->assertStringContainsString('Overridden VIP Title', $content);
+        $this->assertStringContainsString('Special offer for Overridden VIP Title', $content);
+        $this->assertStringContainsString('Unsaved In-Editor VIP Copy', $content);
+
+        $this->assertSame(0, CampaignDelivery::count());
+        $this->assertSame('Initial VIP Product', $campaignProduct->fresh()->product_title);
+    }
+
+    public function test_send_test_campaign_product_requires_authentication(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-auth-test', 'name' => 'Auth Test Campaign', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        $campaignProduct = CampaignProduct::create([
+            'marketing_campaign_id' => $campaign->id,
+            'shopify_product_id' => 111,
+            'product_title' => 'Auth VIP Email Product',
+        ]);
+
+        $response = $this->postJson(route('admin.marketing-campaigns.products.send-test', [$campaign, $campaignProduct]), [
+            'body' => '<p>Test body</p>',
+        ]);
+
+        $response->assertUnauthorized();
+    }
+
+    public function test_send_test_campaign_product_returns_unprocessable_entity_if_user_has_no_email(): void
+    {
+        $admin = User::factory()->create(['email' => '']);
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-no-email-test', 'name' => 'No Email Test', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        $campaignProduct = CampaignProduct::create([
+            'marketing_campaign_id' => $campaign->id,
+            'shopify_product_id' => 111,
+            'product_title' => 'No Email VIP Product',
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->postJson(route('admin.marketing-campaigns.products.send-test', [$campaign, $campaignProduct]), [
+                'body' => '<p>Test body</p>',
+            ]);
+
+        $response->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Logged-in user has no email address configured.');
+    }
+
+    public function test_send_test_campaign_product_sends_to_authenticated_admin_only_and_creates_no_delivery(): void
+    {
+        Mail::fake();
+
+        $admin = User::factory()->create(['email' => 'admin-campaign@example.com']);
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-send-test', 'name' => 'Send Test Campaign', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        $campaignProduct = CampaignProduct::create([
+            'marketing_campaign_id' => $campaign->id,
+            'shopify_product_id' => 111,
+            'product_title' => 'Test VIP Email Product',
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->postJson(route('admin.marketing-campaigns.products.send-test', [$campaign, $campaignProduct]), [
+                'customer_name' => 'Admin Test Target',
+                'body' => '<h2>Tested Campaign Body</h2><p>Direct to admin inbox</p>',
+            ]);
+
+        $response->assertOk()
+            ->assertJsonPath('success', true)
+            ->assertJsonPath('message', 'Test email sent to admin-campaign@example.com.');
+
+        Mail::assertSent(CampaignEmailMail::class, function (CampaignEmailMail $mail) use ($admin): bool {
+            $this->assertTrue($mail->hasTo($admin->email));
+            $this->assertSame('Admin Test Target', $mail->delivery->customer_name);
+            $this->assertStringContainsString('Tested Campaign Body', (string) $mail->delivery->campaignProduct?->response?->body);
+
+            return true;
+        });
+
+        $this->assertSame(0, CampaignDelivery::count());
     }
 }
