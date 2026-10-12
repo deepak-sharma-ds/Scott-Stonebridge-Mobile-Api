@@ -162,4 +162,54 @@ class CampaignResponseGenerationServiceTest extends TestCase
         $this->assertStringNotContainsString('no markdown', $systemPrompt);
         $this->assertStringNotContainsString('no headings', $systemPrompt);
     }
+
+    public function test_preview_returns_validation_result_problems_and_finish_reason(): void
+    {
+        $this->fakeReply("## Valid Heading\n\nBody copy.\n\n### From My Heart to Yours\n\nParting blessing.");
+        $product = $this->campaignProduct();
+
+        $result = app(CampaignResponseGenerationService::class)->preview($product);
+
+        $this->assertTrue($result['is_valid']);
+        $this->assertSame([], $result['problems']);
+        $this->assertSame('stop', $result['finish_reason']);
+        $this->assertStringContainsString('<h2>Valid Heading</h2>', $result['content']);
+        $this->assertStringContainsString('<h3>From My Heart to Yours</h3>', $result['content']);
+    }
+
+    public function test_preview_detects_validation_problems_when_closing_section_is_missing(): void
+    {
+        $this->fakeReply("## Heading\n\nBody copy without closing section.");
+        $product = $this->campaignProduct();
+
+        $result = app(CampaignResponseGenerationService::class)->preview($product);
+
+        $this->assertFalse($result['is_valid']);
+        $this->assertNotEmpty($result['problems']);
+        $this->assertStringContainsString('From My Heart to Yours', $result['problems'][0]);
+    }
+
+    public function test_preview_supports_ad_hoc_prompt_and_contract_overrides(): void
+    {
+        $this->fakeReply("## Ad-Hoc Output\n\nCustom body.\n\n### Custom Final Section\n\nGoodbye.");
+        $product = $this->campaignProduct();
+
+        $result = app(CampaignResponseGenerationService::class)->preview(
+            $product,
+            'Prompt override for {{ $productTitle }}',
+            "## AD-HOC CONTRACT\nMust include a final section headed 'Custom Final Section'."
+        );
+
+        $this->assertTrue($result['is_valid']);
+        $this->assertSame([], $result['problems']);
+
+        OpenAI::assertSent(Chat::class, function (string $method, array $parameters): bool {
+            $userMessage = collect($parameters['messages'])->firstWhere('role', 'user')['content'] ?? '';
+            $systemMessage = collect($parameters['messages'])->firstWhere('role', 'system')['content'] ?? '';
+
+            return $method === 'create'
+                && str_contains($userMessage, 'Prompt override for Crystal Pendant')
+                && str_contains($systemMessage, 'AD-HOC CONTRACT');
+        });
+    }
 }

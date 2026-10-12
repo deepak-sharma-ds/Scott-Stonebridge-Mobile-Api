@@ -15,6 +15,8 @@ use App\Services\CampaignEmail\CampaignResponseGenerationService;
 use App\Support\SafeHtml;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Throwable;
 
 class CampaignProductController extends Controller
@@ -79,21 +81,116 @@ class CampaignProductController extends Controller
     }
 
     /**
-     * Save the pre-generated response for this pairing — either by calling
-     * OpenAI (source=ai) or persisting an admin-authored body directly
-     * (source=manual). A prior response is replaced in place, never
-     * duplicated.
+     * AJAX: Generate a proposed response for a campaign product pairing via OpenAI.
+     * Produces the proposed body and validation result without persisting anything
+     * to the database.
      */
-    public function respond(CampaignProductResponseRequest $request, MarketingCampaign $marketingCampaign, CampaignProduct $campaignProduct): RedirectResponse
+    public function generate(Request $request, MarketingCampaign $marketingCampaign, CampaignProduct $campaignProduct): JsonResponse
+    {
+        abort_unless($campaignProduct->marketing_campaign_id === $marketingCampaign->id, 404);
+
+        $validated = $request->validate([
+            'prompt_template' => ['nullable', 'string'],
+            'formatting_contract' => ['nullable', 'string'],
+        ]);
+
+        try {
+            $result = $this->generation->preview(
+                $campaignProduct,
+                $validated['prompt_template'] ?? null,
+                $validated['formatting_contract'] ?? null
+            );
+
+            return response()->json([
+                'success' => true,
+                'content' => $result['content'],
+                'model' => $result['model'],
+                'prompt_tokens' => $result['prompt_tokens'],
+                'completion_tokens' => $result['completion_tokens'],
+                'finish_reason' => $result['finish_reason'],
+                'problems' => $result['problems'],
+                'is_valid' => $result['is_valid'],
+            ]);
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to generate response: '.$e->getMessage(),
+            ], 422);
+        }
+    }
+
+    /**
+     * AJAX: Validates a response body (from the admin editor) against the
+     * product or shared formatting contract.
+     */
+    public function validateBody(Request $request, MarketingCampaign $marketingCampaign, CampaignProduct $campaignProduct): JsonResponse
+    {
+        abort_unless($campaignProduct->marketing_campaign_id === $marketingCampaign->id, 404);
+
+        $validated = $request->validate([
+            'body' => ['required', 'string'],
+            'formatting_contract' => ['nullable', 'string'],
+        ]);
+
+        $validation = $this->generation->validateBody(
+            $campaignProduct,
+            $validated['body'],
+            $validated['formatting_contract'] ?? null
+        );
+
+        return response()->json([
+            'success' => true,
+            'problems' => $validation->problems(),
+            'is_valid' => $validation->isValid(),
+        ]);
+    }
+
+    /**
+     * Save/accept the response for this pairing — either accepting a validated AI
+     * proposed body (source=ai) or persisting an admin-authored body directly
+     * (source=manual). A prior response is replaced in place, never duplicated.
+     */
+    public function respond(CampaignProductResponseRequest $request, MarketingCampaign $marketingCampaign, CampaignProduct $campaignProduct): RedirectResponse|JsonResponse
     {
         abort_unless($campaignProduct->marketing_campaign_id === $marketingCampaign->id, 404);
 
         $data = $request->validated();
-
+        $source = $data['source'];
         $body = SafeHtml::clean($data['body'] ?? null);
 
-        if ($data['source'] === CampaignProductResponse::SOURCE_MANUAL && SafeHtml::isBlank($body)) {
+        if (SafeHtml::isBlank($body)) {
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'The response body cannot be empty.',
+                ], 422);
+            }
+
             return back()->withInput()->withErrors(['body' => 'The response body cannot be empty.']);
+        }
+
+        if ($source === CampaignProductResponse::SOURCE_AI) {
+            $validation = $this->generation->validateBody(
+                $campaignProduct,
+                $body,
+                $data['formatting_contract'] ?? null
+            );
+
+            if ($validation->isInvalid()) {
+                $errorMessage = 'Cannot accept response: '.implode('; ', $validation->problems());
+
+                if ($request->wantsJson()) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => $errorMessage,
+                        'problems' => $validation->problems(),
+                    ], 422);
+                }
+
+                return back()->withInput()->withErrors(['body' => $errorMessage]);
+            }
         }
 
         $templateFields = [
@@ -103,10 +200,16 @@ class CampaignProductController extends Controller
         if ($request->hasFile('header_image')) {
             $templateFields['header_image'] = $this->storeHeaderImage($request->file('header_image'), 'campaign-header-images');
         }
+
+        if ($source === CampaignProductResponse::SOURCE_AI) {
+            $templateFields['prompt_template'] = $data['prompt_template'] ?? null;
+            $templateFields['formatting_contract'] = $data['formatting_contract'] ?? null;
+        }
+
         $campaignProduct->update($templateFields);
         $this->syncProductDefaults($campaignProduct->shopify_product_id, $templateFields);
 
-        if ($data['source'] === CampaignProductResponse::SOURCE_MANUAL) {
+        if ($source === CampaignProductResponse::SOURCE_MANUAL) {
             $campaignProduct->response()->updateOrCreate(
                 ['campaign_product_id' => $campaignProduct->id],
                 [
@@ -119,27 +222,40 @@ class CampaignProductController extends Controller
                 ]
             );
 
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Manual response saved.',
+                ]);
+            }
+
             return redirect()
                 ->route('admin.marketing-campaigns.show', $marketingCampaign)
                 ->with('success', 'Manual response saved.');
         }
 
-        $campaignProduct->update([
-            'prompt_template' => $data['prompt_template'] ?? null,
-            'formatting_contract' => $data['formatting_contract'] ?? null,
-        ]);
+        $campaignProduct->response()->updateOrCreate(
+            ['campaign_product_id' => $campaignProduct->id],
+            [
+                'source' => CampaignProductResponse::SOURCE_AI,
+                'body' => $body,
+                'model_used' => $data['model_used'] ?? null,
+                'prompt_tokens' => isset($data['prompt_tokens']) ? (int) $data['prompt_tokens'] : null,
+                'completion_tokens' => isset($data['completion_tokens']) ? (int) $data['completion_tokens'] : null,
+                'generated_at' => Carbon::now(),
+            ]
+        );
 
-        try {
-            $this->generation->generate($campaignProduct);
-
-            return redirect()
-                ->route('admin.marketing-campaigns.show', $marketingCampaign)
-                ->with('success', 'Response generated. Review it before activating the campaign.');
-        } catch (Throwable $e) {
-            report($e);
-
-            return back()->with('error', 'Failed to generate response: '.$e->getMessage());
+        if ($request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Response accepted and saved.',
+            ]);
         }
+
+        return redirect()
+            ->route('admin.marketing-campaigns.show', $marketingCampaign)
+            ->with('success', 'Response accepted and saved.');
     }
 
     /**

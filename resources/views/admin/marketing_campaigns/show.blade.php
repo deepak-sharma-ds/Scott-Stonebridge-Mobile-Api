@@ -196,7 +196,13 @@
                         </tr>
                     </thead>
                     @forelse($campaign->campaignProducts as $campaignProduct)
-                        <tbody x-data="{ formOpen: false, source: 'manual' }">
+                        <tbody x-data="campaignProductRow({
+                            id: {{ $campaignProduct->id }},
+                            generateUrl: '{{ route('admin.marketing-campaigns.products.generate', [$campaign, $campaignProduct]) }}',
+                            validateUrl: '{{ route('admin.marketing-campaigns.products.validate-body', [$campaign, $campaignProduct]) }}',
+                            hasExistingResponse: {{ $campaignProduct->response ? 'true' : 'false' }},
+                            initialSource: '{{ $campaignProduct->response?->source ?? 'manual' }}'
+                        })">
                             <tr>
                                 <td style="font-weight:600;color:var(--text-primary);">
                                     {{ $campaignProduct->product_title ?: '—' }}</td>
@@ -253,8 +259,13 @@
                                 <td colspan="5" style="background:var(--surface-muted, rgba(0,0,0,0.02));">
                                     <form
                                         action="{{ route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]) }}"
-                                        method="POST" enctype="multipart/form-data">
+                                        method="POST" enctype="multipart/form-data"
+                                        x-on:submit="onFormSubmit($event)">
                                         @csrf
+                                        <input type="hidden" name="model_used" x-model="modelUsed">
+                                        <input type="hidden" name="prompt_tokens" x-model="promptTokens">
+                                        <input type="hidden" name="completion_tokens" x-model="completionTokens">
+
                                         @if (($unsentCounts[$campaignProduct->id] ?? 0) > 0)
                                             <div class="alert alert-info">
                                                 Saving changes affects {{ $unsentCounts[$campaignProduct->id] }}
@@ -287,7 +298,8 @@
                                             <textarea name="email_footer" class="form-control" rows="5" data-rich-text>{{ $campaignProduct->email_footer }}</textarea>
                                         </div>
                                         <div style="display:flex;gap:1.5rem;margin-bottom:0.75rem;">
-                                            <label><input type="radio" name="source" value="ai" x-model="source">
+                                            <label><input type="radio" name="source" value="ai" x-model="source"
+                                                    x-on:change="$nextTick(() => initRichTextEditors())">
                                                 Generate with AI</label>
                                             <label><input type="radio" name="source" value="manual" x-model="source"
                                                     x-on:change="$nextTick(() => initRichTextEditors())">
@@ -299,25 +311,69 @@
                                                         style="color:var(--text-muted);">(Blade template;
                                                         @{{ $productTitle }} / @{{ $campaignName }}
                                                         available)</small></label>
-                                                <textarea name="prompt_template" class="form-control" rows="3">{{ $campaignProduct->prompt_template }}</textarea>
+                                                <textarea name="prompt_template" id="prompt_template_{{ $campaignProduct->id }}" class="form-control" rows="3">{{ $campaignProduct->prompt_template }}</textarea>
                                             </div>
                                             <div class="mb-3">
                                                 <label class="form-label">Formatting Contract Override <small
                                                         style="color:var(--text-muted);">(optional; leave blank to use the shared contract)</small></label>
-                                                <textarea name="formatting_contract" class="form-control" rows="4"
+                                                <textarea name="formatting_contract" class="form-control" id="formatting_contract_{{ $campaignProduct->id }}" rows="4"
                                                     style="font-family:monospace;font-size:0.8125rem;"
                                                     placeholder="{{ config('campaign_email.formatting_contract') }}">{{ $campaignProduct->formatting_contract }}</textarea>
                                                 <small style="color:var(--text-muted);display:block;margin-top:0.375rem;">
                                                     Markdown instructions defining structure (headings, key messages, closing section). Overrides the shared contract for this product only.
                                                 </small>
                                             </div>
+                                            <div style="margin-bottom:1rem;">
+                                                <button type="button" class="btn btn-sm btn-secondary"
+                                                    x-on:click="generateWithAi()"
+                                                    :disabled="generating">
+                                                    <span x-show="!generating">Generate with AI</span>
+                                                    <span x-show="generating" x-cloak>Generating response...</span>
+                                                </button>
+                                            </div>
+
+                                            <div class="alert alert-danger" x-show="generateError" x-cloak style="margin-bottom:1rem;">
+                                                <span x-text="generateError"></span>
+                                            </div>
+
+                                            <div class="alert alert-warning" x-show="problems.length > 0" x-cloak style="margin-bottom:1rem;">
+                                                <strong>Formatting issues detected:</strong>
+                                                <ul style="margin:0.25rem 0 0.5rem 1.25rem;">
+                                                    <template x-for="p in problems" :key="p">
+                                                        <li x-text="p"></li>
+                                                    </template>
+                                                </ul>
+                                                <small style="display:block;">Edit the text in the editor below and click "Re-check Formatting", or click "Generate with AI" above to try again.</small>
+                                            </div>
+
+                                            <div class="alert alert-success" x-show="hasProposed && isValid && problems.length === 0" x-cloak style="margin-bottom:1rem;">
+                                                <span x-text="infoMessage || 'Proposed response passed all formatting checks. Review and accept below.'"></span>
+                                            </div>
                                         </div>
-                                        <div x-show="source === 'manual'" x-cloak>
-                                            <label class="form-label">Response Body</label>
-                                            <textarea name="body" class="form-control" rows="5" data-rich-text>{{ \App\Support\SafeHtml::clean($campaignProduct->response?->body) }}</textarea>
+
+                                        <div class="mb-3" style="margin-top:0.75rem;">
+                                            <label class="form-label">Response Body <small style="color:var(--text-muted);">(formatted HTML)</small></label>
+                                            <textarea name="body" class="form-control" id="body_{{ $campaignProduct->id }}" rows="5" data-rich-text>{{ \App\Support\SafeHtml::clean($campaignProduct->response?->body) }}</textarea>
                                         </div>
-                                        <button type="submit" class="btn btn-sm btn-primary"
-                                            style="margin-top:0.75rem;">Save Response</button>
+
+                                        <div style="display:flex;gap:0.5rem;align-items:center;margin-top:1rem;">
+                                            <button type="submit" class="btn btn-sm btn-primary"
+                                                x-show="source === 'ai'"
+                                                :disabled="!isValid || problems.length > 0 || !hasProposed || generating || validating">
+                                                Accept &amp; Save Response
+                                            </button>
+                                            <button type="button" class="btn btn-sm btn-secondary"
+                                                x-show="source === 'ai' && hasProposed"
+                                                x-on:click="recheckFormatting()"
+                                                :disabled="validating || generating">
+                                                <span x-show="!validating">Re-check Formatting</span>
+                                                <span x-show="validating" x-cloak>Checking...</span>
+                                            </button>
+                                            <button type="submit" class="btn btn-sm btn-primary"
+                                                x-show="source === 'manual'">
+                                                Save Manual Response
+                                            </button>
+                                        </div>
                                     </form>
                                 </td>
                             </tr>
@@ -367,6 +423,171 @@
             // no-op: nothing more we can do without the Clipboard API
         }
         document.body.removeChild(el);
+    }
+
+    function campaignProductRow(config) {
+        return {
+            id: config.id,
+            generateUrl: config.generateUrl,
+            validateUrl: config.validateUrl,
+            formOpen: false,
+            source: config.initialSource || 'manual',
+            generating: false,
+            validating: false,
+            generateError: '',
+            problems: [],
+            isValid: Boolean(config.hasExistingResponse),
+            hasProposed: Boolean(config.hasExistingResponse),
+            modelUsed: '',
+            promptTokens: null,
+            completionTokens: null,
+            infoMessage: '',
+
+            getEditor() {
+                const textarea = document.getElementById('body_' + this.id);
+                if (!textarea) return null;
+                return textarea.ckEditorInstance || null;
+            },
+
+            getEditorContent() {
+                const editor = this.getEditor();
+                if (editor) {
+                    return editor.getData();
+                }
+                const textarea = document.getElementById('body_' + this.id);
+                return textarea ? textarea.value : '';
+            },
+
+            setEditorContent(content) {
+                const editor = this.getEditor();
+                const textarea = document.getElementById('body_' + this.id);
+                if (editor) {
+                    editor.setData(content);
+                }
+                if (textarea) {
+                    textarea.value = content;
+                }
+            },
+
+            getPromptTemplate() {
+                const el = document.getElementById('prompt_template_' + this.id);
+                return el ? el.value : '';
+            },
+
+            getFormattingContract() {
+                const el = document.getElementById('formatting_contract_' + this.id);
+                return el ? el.value : '';
+            },
+
+            async generateWithAi() {
+                this.generating = true;
+                this.generateError = '';
+                this.infoMessage = '';
+                this.problems = [];
+
+                try {
+                    const response = await fetch(this.generateUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        },
+                        body: JSON.stringify({
+                            prompt_template: this.getPromptTemplate(),
+                            formatting_contract: this.getFormattingContract(),
+                        }),
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.message || 'Failed to generate response.');
+                    }
+
+                    this.setEditorContent(data.content);
+                    this.modelUsed = data.model || '';
+                    this.promptTokens = data.prompt_tokens || null;
+                    this.completionTokens = data.completion_tokens || null;
+                    this.problems = Array.isArray(data.problems) ? data.problems : [];
+                    this.isValid = Boolean(data.is_valid);
+                    this.hasProposed = true;
+                    this.infoMessage = 'Proposed response generated · ' + (data.model || '') + ' · ' + (data.completion_tokens || 0) + ' tokens';
+
+                    if (window.adminNotify) {
+                        if (this.isValid) {
+                            window.adminNotify('Response generated successfully — review and accept below.', 'success');
+                        } else {
+                            window.adminNotify('Response generated with formatting issues — please review before accepting.', 'warning');
+                        }
+                    }
+                } catch (err) {
+                    this.generateError = err.message || 'Failed to generate response.';
+                    if (window.adminNotify) {
+                        window.adminNotify(this.generateError, 'error');
+                    }
+                } finally {
+                    this.generating = false;
+                }
+            },
+
+            async recheckFormatting() {
+                this.validating = true;
+                this.generateError = '';
+                this.infoMessage = '';
+
+                try {
+                    const content = this.getEditorContent();
+                    const response = await fetch(this.validateUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                        },
+                        body: JSON.stringify({
+                            body: content,
+                            formatting_contract: this.getFormattingContract(),
+                        }),
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.message || 'Validation request failed.');
+                    }
+
+                    this.problems = Array.isArray(data.problems) ? data.problems : [];
+                    this.isValid = Boolean(data.is_valid);
+
+                    if (this.isValid) {
+                        this.infoMessage = 'Formatting checks passed! You may now accept the response.';
+                        if (window.adminNotify) {
+                            window.adminNotify('Formatting checks passed.', 'success');
+                        }
+                    } else {
+                        if (window.adminNotify) {
+                            window.adminNotify('Formatting issues still remain.', 'warning');
+                        }
+                    }
+                } catch (err) {
+                    this.generateError = err.message || 'Validation failed.';
+                    if (window.adminNotify) {
+                        window.adminNotify(this.generateError, 'error');
+                    }
+                } finally {
+                    this.validating = false;
+                }
+            },
+
+            onFormSubmit(e) {
+                const editor = this.getEditor();
+                const textarea = document.getElementById('body_' + this.id);
+                if (editor && textarea) {
+                    textarea.value = editor.getData();
+                }
+            }
+        };
     }
 
     function productPicker(availableUrl) {

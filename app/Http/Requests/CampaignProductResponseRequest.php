@@ -22,10 +22,23 @@ class CampaignProductResponseRequest extends FormRequest
             'source' => ['required', Rule::in([CampaignProductResponse::SOURCE_AI, CampaignProductResponse::SOURCE_MANUAL])],
             'prompt_template' => ['nullable', 'string'],
             'formatting_contract' => ['nullable', 'string'],
-            'body' => ['required_if:source,'.CampaignProductResponse::SOURCE_MANUAL, 'nullable', 'string'],
+            'body' => ['required', 'string'],
+            'model_used' => ['nullable', 'string'],
+            'prompt_tokens' => ['nullable', 'integer'],
+            'completion_tokens' => ['nullable', 'integer'],
             'header_image' => ['nullable', 'image', 'max:5120'],
             'email_content' => ['nullable', 'string'],
             'email_footer' => ['nullable', 'string'],
+        ];
+    }
+
+    /**
+     * @return array{'body.required': string}
+     */
+    public function messages(): array
+    {
+        return [
+            'body.required' => 'The response body cannot be empty.',
         ];
     }
 }

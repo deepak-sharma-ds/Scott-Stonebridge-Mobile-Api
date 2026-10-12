@@ -16,7 +16,7 @@ class MarketingCampaignControllerTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function fakeOpenAiResponse(string $content = 'Generated marketing copy.'): void
+    private function fakeOpenAiResponse(string $content = "## Heading\n\nGenerated marketing copy.\n\n### From My Heart to Yours\n\nParting blessings."): void
     {
         OpenAI::fake([
             CreateResponse::fake([
@@ -196,9 +196,9 @@ class MarketingCampaignControllerTest extends TestCase
         $this->assertDatabaseCount('campaign_product_responses', 0);
     }
 
-    public function test_admin_can_generate_an_ai_response_for_a_campaign_product_pairing(): void
+    public function test_generate_produces_proposed_body_and_validation_without_saving_and_accept_saves_response(): void
     {
-        $this->fakeOpenAiResponse('Discover your future with our love reading.');
+        $this->fakeOpenAiResponse("## Love Reading\n\nDiscover your future with our love reading.\n\n### From My Heart to Yours\n\nParting blessings.");
 
         $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
         $campaignProduct = CampaignProduct::create([
@@ -207,22 +207,46 @@ class MarketingCampaignControllerTest extends TestCase
             'product_title' => 'Love Reading',
         ]);
 
-        $response = $this->actingAs(User::factory()->create())
-            ->post(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
-                'source' => CampaignProductResponse::SOURCE_AI,
+        $user = User::factory()->create();
+
+        // 1. Generate: produces proposed body without saving to DB
+        $generateResponse = $this->actingAs($user)
+            ->postJson(route('admin.marketing-campaigns.products.generate', [$campaign, $campaignProduct]));
+
+        $generateResponse->assertOk()
+            ->assertJson([
+                'success' => true,
+                'is_valid' => true,
+                'problems' => [],
             ]);
 
-        $response->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
+        $proposedHtml = $generateResponse->json('content');
+        $this->assertStringContainsString('<h2>Love Reading</h2>', $proposedHtml);
+        $this->assertStringContainsString('<h3>From My Heart to Yours</h3>', $proposedHtml);
+        $this->assertDatabaseCount('campaign_product_responses', 0);
 
+        // 2. Accept: saves proposed body
+        $acceptResponse = $this->actingAs($user)
+            ->post(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
+                'source' => CampaignProductResponse::SOURCE_AI,
+                'body' => $proposedHtml,
+                'model_used' => 'gpt-4o-mini',
+                'prompt_tokens' => 12,
+                'completion_tokens' => 8,
+            ]);
+
+        $acceptResponse->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
+
+        $this->assertDatabaseCount('campaign_product_responses', 1);
         $this->assertDatabaseHas('campaign_product_responses', [
             'campaign_product_id' => $campaignProduct->id,
             'source' => CampaignProductResponse::SOURCE_AI,
-            'body' => '<p>Discover your future with our love reading.</p>',
+            'body' => $proposedHtml,
+            'model_used' => 'gpt-4o-mini',
         ]);
-        $this->assertDatabaseCount('campaign_product_responses', 1);
     }
 
-    public function test_regenerating_a_response_replaces_it_instead_of_duplicating(): void
+    public function test_regenerating_and_accepting_replaces_it_instead_of_duplicating(): void
     {
         $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
         $campaignProduct = CampaignProduct::create([
@@ -231,20 +255,22 @@ class MarketingCampaignControllerTest extends TestCase
         ]);
         $user = User::factory()->create();
 
-        $this->fakeOpenAiResponse('First draft.');
+        $firstBody = '<h2>First draft.</h2><h3>From My Heart to Yours</h3><p>Blessings.</p>';
         $this->actingAs($user)->post(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
             'source' => CampaignProductResponse::SOURCE_AI,
+            'body' => $firstBody,
         ]);
 
-        $this->fakeOpenAiResponse('Second draft.');
+        $secondBody = '<h2>Second draft.</h2><h3>From My Heart to Yours</h3><p>Blessings.</p>';
         $this->actingAs($user)->post(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
             'source' => CampaignProductResponse::SOURCE_AI,
+            'body' => $secondBody,
         ]);
 
         $this->assertDatabaseCount('campaign_product_responses', 1);
         $this->assertDatabaseHas('campaign_product_responses', [
             'campaign_product_id' => $campaignProduct->id,
-            'body' => '<p>Second draft.</p>',
+            'body' => $secondBody,
         ]);
     }
 
@@ -320,8 +346,8 @@ class MarketingCampaignControllerTest extends TestCase
 
         $this->actingAs(User::factory()->create())->get(route('admin.marketing-campaigns.show', $campaign))
             ->assertOk()
-            ->assertSee('x-data="{ formOpen: false, source: \'manual\' }"', false)
-            ->assertSee('name="body" class="form-control" rows="5" data-rich-text', false)
+            ->assertSee('campaignProductRow', false)
+            ->assertSee('name="body" class="form-control" id="body_'.$campaignProduct->id.'" rows="5" data-rich-text', false)
             ->assertSee('&lt;h2&gt;AI Headline&lt;/h2&gt;&lt;p&gt;AI message body.&lt;/p&gt;', false);
     }
 
@@ -336,35 +362,203 @@ class MarketingCampaignControllerTest extends TestCase
         ]);
 
         $this->actingAs(User::factory()->create())
-            ->post(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
-                'source' => CampaignProductResponse::SOURCE_AI,
-            ]);
+            ->postJson(route('admin.marketing-campaigns.products.generate', [$campaign, $campaignProduct]))
+            ->assertOk();
 
         $this->assertSame(MarketingCampaign::STATUS_DRAFT, $campaign->fresh()->status);
     }
 
-    public function test_regenerating_updates_the_prompt_template_and_formatting_contract_before_calling_openai(): void
+    public function test_generating_can_use_prompt_template_and_formatting_contract_overrides(): void
     {
-        $this->fakeOpenAiResponse('Draft using new prompt.');
+        $this->fakeOpenAiResponse("## Custom Header\n\nDraft using new prompt.\n\n### Custom Final Section\n\nBye.");
 
         $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
         $campaignProduct = CampaignProduct::create([
             'marketing_campaign_id' => $campaign->id,
             'shopify_product_id' => 111,
+            'product_title' => 'Deck',
             'prompt_template' => 'Old prompt.',
             'formatting_contract' => 'Old contract.',
         ]);
 
-        $this->actingAs(User::factory()->create())
-            ->post(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
-                'source' => CampaignProductResponse::SOURCE_AI,
+        $response = $this->actingAs(User::factory()->create())
+            ->postJson(route('admin.marketing-campaigns.products.generate', [$campaign, $campaignProduct]), [
                 'prompt_template' => 'Updated prompt for {{ $productTitle }}.',
-                'formatting_contract' => 'Updated contract for {{ $productTitle }}.',
+                'formatting_contract' => "## CUSTOM CONTRACT\nMust have section headed 'Custom Final Section'.",
             ]);
 
-        $fresh = $campaignProduct->fresh();
-        $this->assertSame('Updated prompt for {{ $productTitle }}.', $fresh->prompt_template);
-        $this->assertSame('Updated contract for {{ $productTitle }}.', $fresh->formatting_contract);
+        $response->assertOk()->assertJson(['success' => true, 'is_valid' => true]);
+    }
+
+    public function test_accept_is_blocked_when_body_fails_validation(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        $campaignProduct = CampaignProduct::create([
+            'marketing_campaign_id' => $campaign->id,
+            'shopify_product_id' => 111,
+            'prompt_template' => 'Original template',
+        ]);
+        $user = User::factory()->create();
+
+        $invalidBody = '<h2>Headline</h2><p>Body copy without closing section.</p>';
+
+        $response = $this->actingAs($user)
+            ->from(route('admin.marketing-campaigns.show', $campaign))
+            ->post(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
+                'source' => CampaignProductResponse::SOURCE_AI,
+                'prompt_template' => 'Attempted override',
+                'body' => $invalidBody,
+            ]);
+
+        $response->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
+        $response->assertSessionHasErrors('body');
+        $this->assertDatabaseCount('campaign_product_responses', 0);
+        $this->assertSame('Original template', $campaignProduct->fresh()->prompt_template);
+
+        $jsonResponse = $this->actingAs($user)
+            ->postJson(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
+                'source' => CampaignProductResponse::SOURCE_AI,
+                'prompt_template' => 'Attempted override',
+                'body' => $invalidBody,
+            ]);
+
+        $jsonResponse->assertStatus(422)
+            ->assertJson([
+                'success' => false,
+            ]);
+        $this->assertSame('Original template', $campaignProduct->fresh()->prompt_template);
+    }
+
+    public function test_validate_body_endpoint_checks_formatting_and_returns_problems(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        $campaignProduct = CampaignProduct::create([
+            'marketing_campaign_id' => $campaign->id,
+            'shopify_product_id' => 111,
+        ]);
+        $user = User::factory()->create();
+
+        $invalidResponse = $this->actingAs($user)
+            ->postJson(route('admin.marketing-campaigns.products.validate-body', [$campaign, $campaignProduct]), [
+                'body' => '<p>Dear Customer,</p><p>Text without closing section.</p>',
+            ]);
+
+        $invalidResponse->assertOk()
+            ->assertJson([
+                'success' => true,
+                'is_valid' => false,
+            ]);
+        $this->assertCount(2, $invalidResponse->json('problems'));
+
+        $validResponse = $this->actingAs($user)
+            ->postJson(route('admin.marketing-campaigns.products.validate-body', [$campaign, $campaignProduct]), [
+                'body' => '<h2>Heading</h2><p>Valid text.</p><h3>From My Heart to Yours</h3><p>Blessings.</p>',
+            ]);
+
+        $validResponse->assertOk()
+            ->assertJson([
+                'success' => true,
+                'is_valid' => true,
+                'problems' => [],
+            ]);
+    }
+
+    public function test_integrated_generate_validation_failure_edit_recheck_and_accept_workflow(): void
+    {
+        $this->fakeOpenAiResponse("## Headline\n\nAI drafted message without closing section.");
+
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        $campaignProduct = CampaignProduct::create([
+            'marketing_campaign_id' => $campaign->id,
+            'shopify_product_id' => 111,
+            'prompt_template' => 'Original prompt',
+        ]);
+        $user = User::factory()->create();
+
+        $generateResponse = $this->actingAs($user)
+            ->postJson(route('admin.marketing-campaigns.products.generate', [$campaign, $campaignProduct]), [
+                'prompt_template' => 'Proposed new prompt',
+            ]);
+
+        $generateResponse->assertOk()
+            ->assertJson([
+                'success' => true,
+                'is_valid' => false,
+            ]);
+        $this->assertNotEmpty($generateResponse->json('problems'));
+        $this->assertDatabaseCount('campaign_product_responses', 0);
+        $this->assertSame('Original prompt', $campaignProduct->fresh()->prompt_template);
+
+        $proposedContent = $generateResponse->json('content');
+
+        $blockedAccept = $this->actingAs($user)
+            ->post(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
+                'source' => CampaignProductResponse::SOURCE_AI,
+                'prompt_template' => 'Proposed new prompt',
+                'body' => $proposedContent,
+            ]);
+
+        $blockedAccept->assertSessionHasErrors('body');
+        $this->assertDatabaseCount('campaign_product_responses', 0);
+        $this->assertSame('Original prompt', $campaignProduct->fresh()->prompt_template);
+
+        $editedBody = $proposedContent.'<h3>From My Heart to Yours</h3><p>Blessings.</p>';
+
+        $recheckResponse = $this->actingAs($user)
+            ->postJson(route('admin.marketing-campaigns.products.validate-body', [$campaign, $campaignProduct]), [
+                'body' => $editedBody,
+            ]);
+
+        $recheckResponse->assertOk()
+            ->assertJson([
+                'success' => true,
+                'is_valid' => true,
+                'problems' => [],
+            ]);
+
+        $accepted = $this->actingAs($user)
+            ->post(route('admin.marketing-campaigns.products.respond', [$campaign, $campaignProduct]), [
+                'source' => CampaignProductResponse::SOURCE_AI,
+                'prompt_template' => 'Proposed new prompt',
+                'body' => $editedBody,
+            ]);
+
+        $accepted->assertRedirect(route('admin.marketing-campaigns.show', $campaign));
+        $this->assertDatabaseCount('campaign_product_responses', 1);
+
+        $saved = $campaignProduct->fresh()->response;
+        $this->assertSame(CampaignProductResponse::SOURCE_AI, $saved->source);
+        $this->assertStringContainsString('From My Heart to Yours', $saved->body);
+        $this->assertSame('Proposed new prompt', $campaignProduct->fresh()->prompt_template);
+    }
+
+    public function test_failure_to_reach_openai_shows_clear_error_and_leaves_existing_response_untouched(): void
+    {
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-a', 'name' => 'A', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        $campaignProduct = CampaignProduct::create([
+            'marketing_campaign_id' => $campaign->id,
+            'shopify_product_id' => 111,
+        ]);
+        $existing = $campaignProduct->response()->create([
+            'source' => CampaignProductResponse::SOURCE_AI,
+            'body' => '<h2>Existing Body</h2><h3>From My Heart to Yours</h3><p>Original.</p>',
+        ]);
+
+        OpenAI::fake([
+            new \RuntimeException('Connection to OpenAI failed: API key invalid or network down.'),
+        ]);
+
+        $response = $this->actingAs(User::factory()->create())
+            ->postJson(route('admin.marketing-campaigns.products.generate', [$campaign, $campaignProduct]));
+
+        $response->assertStatus(422)
+            ->assertJson([
+                'success' => false,
+            ]);
+        $this->assertStringContainsString('Connection to OpenAI failed', $response->json('message'));
+
+        $this->assertSame($existing->body, $campaignProduct->fresh()->response->body);
+        $this->assertDatabaseCount('campaign_product_responses', 1);
     }
 
     public function test_linking_a_product_can_persist_formatting_contract_override(): void
