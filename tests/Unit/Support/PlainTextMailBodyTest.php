@@ -33,6 +33,15 @@ class PlainTextMailBodyTest extends TestCase
         $this->assertStringContainsString('&lt;script&gt;', $html);
     }
 
+    public function test_to_paragraphs_returns_unstyled_escaped_paragraph_html(): void
+    {
+        $this->assertSame(
+            '<p>First &amp; one.</p><p>Second<br />'."\n".'line.</p>',
+            PlainTextMailBody::toParagraphs("First & one.\n\nSecond\nline.")
+        );
+        $this->assertSame('', PlainTextMailBody::toParagraphs('  '));
+    }
+
     public function test_it_returns_empty_string_for_blank_input(): void
     {
         $this->assertSame('', PlainTextMailBody::toHtml(''));

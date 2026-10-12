@@ -4,6 +4,7 @@ namespace App\Services\EmailReading;
 
 use App\Jobs\EmailReading\ProcessEmailReadingOrderJob;
 use App\Models\EmailReadingDelivery;
+use App\Support\SafeHtml;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
 use RuntimeException;
@@ -59,7 +60,8 @@ class EmailReadingAdminService
         ];
 
         if (array_key_exists('ai_response', $data)) {
-            $fields['ai_response'] = $data['ai_response'];
+            $clean = SafeHtml::clean($data['ai_response']);
+            $fields['ai_response'] = SafeHtml::isBlank($clean) ? null : $clean;
         }
 
         $saved = EmailReadingDelivery::query()

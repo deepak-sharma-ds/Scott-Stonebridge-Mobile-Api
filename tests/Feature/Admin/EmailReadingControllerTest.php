@@ -10,6 +10,8 @@ use App\Models\ShopifyWebhookEvent;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use OpenAI\Laravel\Facades\OpenAI;
+use OpenAI\Responses\Chat\CreateResponse;
 use Tests\TestCase;
 
 class EmailReadingControllerTest extends TestCase
@@ -185,6 +187,75 @@ class EmailReadingControllerTest extends TestCase
         $this->actingAs($admin)->put(route('admin.email_readings.update', $sent), $this->updatePayload($sent, [
             'scheduled_at' => now()->addDays(9)->format('Y-m-d\TH:i'),
         ]))->assertSessionHas('error');
+    }
+
+    public function test_saving_the_response_sanitizes_the_html(): void
+    {
+        $delivery = $this->delivery();
+
+        $this->actingAs($this->admin())->put(route('admin.email_readings.update', $delivery), $this->updatePayload($delivery, [
+            'ai_response' => '<h2>Card One</h2><p onclick="x()">Body</p><script>steal()</script><a href="javascript:alert(1)">bad</a>',
+        ]))->assertSessionHas('success');
+
+        $saved = $delivery->fresh()->ai_response;
+        $this->assertStringContainsString('<h2>Card One</h2>', $saved);
+        $this->assertStringContainsString('<p>Body</p>', $saved);
+        $this->assertStringNotContainsString('script', $saved);
+        $this->assertStringNotContainsString('onclick', $saved);
+        $this->assertStringNotContainsString('javascript:', $saved);
+    }
+
+    public function test_clearing_the_editor_removes_the_response_instead_of_keeping_a_blank_paragraph(): void
+    {
+        $delivery = $this->delivery();
+
+        $this->actingAs($this->admin())->put(route('admin.email_readings.update', $delivery), $this->updatePayload($delivery, [
+            'ai_response' => '<p>&nbsp;</p>',
+        ]))->assertSessionHas('success');
+
+        $this->assertNull($delivery->fresh()->ai_response);
+    }
+
+    public function test_a_response_edit_on_a_sending_delivery_is_rejected(): void
+    {
+        $delivery = $this->delivery(['status' => EmailReadingDelivery::STATUS_SENDING, 'claim_token' => 't', 'claimed_at' => now()]);
+
+        $this->actingAs($this->admin())->put(route('admin.email_readings.update', $delivery), $this->updatePayload($delivery, [
+            'ai_response' => '<p>Changed mid-send.</p>',
+        ]))->assertSessionHas('error');
+
+        $this->assertSame('Reading text.', $delivery->fresh()->ai_response);
+    }
+
+    public function test_the_show_page_renders_the_formatted_body(): void
+    {
+        $delivery = $this->delivery(['ai_response' => '<h2>Card One</h2><p>Spirit says yes.</p><script>steal()</script>']);
+
+        $this->actingAs($this->admin())->get(route('admin.email_readings.show', $delivery))
+            ->assertOk()
+            ->assertSee('<h2>Card One</h2>', false)
+            ->assertDontSee('steal()', false);
+    }
+
+    public function test_the_edit_page_uses_the_rich_text_editor_for_the_response(): void
+    {
+        $delivery = $this->delivery(['ai_response' => '<p>Editable body.</p>']);
+
+        $this->actingAs($this->admin())->get(route('admin.email_readings.edit', $delivery))
+            ->assertOk()
+            ->assertSee('name="ai_response"', false)
+            ->assertSee('data-rich-text', false)
+            ->assertSee('&lt;p&gt;Editable body.&lt;/p&gt;', false);
+    }
+
+    public function test_regenerate_returns_html_for_the_editor(): void
+    {
+        OpenAI::fake([CreateResponse::fake(['choices' => [['message' => ['role' => 'assistant', 'content' => "One.\n\nTwo."]]]])]);
+        $delivery = $this->delivery();
+
+        $this->actingAs($this->admin())->postJson(route('admin.email_readings.regenerate', $delivery))
+            ->assertOk()
+            ->assertJsonPath('content', '<p>One.</p><p>Two.</p>');
     }
 
     public function test_saving_without_touching_the_schedule_never_counts_as_a_reschedule(): void

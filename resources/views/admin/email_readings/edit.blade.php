@@ -28,12 +28,12 @@
 @endsection
 
 @section('custom_js_scripts')
+@include('admin.components.rich-text-editor-scripts')
 <script>
-    function readingRegenerator(url, initial) {
+    function readingRegenerator(url) {
         return {
             url: url,
             instruction: '',
-            response: initial || '',
             loading: false,
             info: '',
             async regenerate() {
@@ -53,7 +53,12 @@
                     if (!res.ok || !data.success) {
                         throw new Error(data.message || 'Regeneration failed.');
                     }
-                    this.response = data.content;
+                    const field = document.getElementById('ai_response');
+                    if (field.ckEditorInstance) {
+                        field.ckEditorInstance.setData(data.content);
+                    } else {
+                        field.value = data.content;
+                    }
                     this.info = 'Preview generated · ' + (data.model || '') + ' · ' + (data.completion_tokens || 0) + ' tokens';
                     if (window.adminNotify) window.adminNotify('Response regenerated — review and Save to persist.', 'success');
                 } catch (e) {

@@ -40,7 +40,7 @@
 
 {{-- AI response editor with regenerate --}}
 <div class="card p-4" style="background:var(--color-primary-muted);border:1px solid var(--card-border);margin-bottom:1rem;"
-     x-data="readingRegenerator(@js(route('admin.email_readings.regenerate', $delivery)), @js(old('ai_response', $delivery->ai_response ?? '')))">
+     x-data="readingRegenerator(@js(route('admin.email_readings.regenerate', $delivery)))">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;flex-wrap:wrap;gap:0.5rem;">
         <h3 style="margin:0;font-size:1rem;">AI Reading Response</h3>
         <span x-show="info" x-text="info" style="font-size:0.75rem;color:var(--text-muted);"></span>
@@ -59,8 +59,7 @@
     </div>
 
     <label for="ai_response" class="form-label">Response</label>
-    <textarea name="ai_response" id="ai_response" x-model="response" class="form-control" rows="16"
-              style="font-family:inherit;line-height:1.6;">{{ old('ai_response', $delivery->ai_response ?? '') }}</textarea>
+    <textarea name="ai_response" id="ai_response" class="form-control" rows="16" data-rich-text>{{ old('ai_response', $delivery->ai_response ?? '') }}</textarea>
 </div>
 
 <div class="mt-2" style="display:flex;gap:0.5rem;">

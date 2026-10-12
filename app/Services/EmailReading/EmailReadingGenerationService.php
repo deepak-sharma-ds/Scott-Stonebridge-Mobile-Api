@@ -6,6 +6,7 @@ namespace App\Services\EmailReading;
 
 use App\Models\EmailReadingDelivery;
 use App\Models\EmailReadingProduct;
+use App\Support\PlainTextMailBody;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Log;
 use OpenAI\Laravel\Facades\OpenAI;
@@ -68,7 +69,7 @@ class EmailReadingGenerationService
                 EmailReadingDelivery::STATUS_GENERATED,
             ])
             ->update([
-                'ai_response' => $result['content'],
+                'ai_response' => PlainTextMailBody::toParagraphs($result['content']),
                 'prompt_tokens' => $result['prompt_tokens'],
                 'completion_tokens' => $result['completion_tokens'],
                 'model_used' => $result['model'],
@@ -118,7 +119,10 @@ class EmailReadingGenerationService
 
         $prompt = $this->renderPrompt($product->prompt_template, $delivery);
 
-        return $this->complete($this->systemPrompt(), $prompt, $model, $maxTokens, $adminInstruction);
+        $result = $this->complete($this->systemPrompt(), $prompt, $model, $maxTokens, $adminInstruction);
+        $result['content'] = PlainTextMailBody::toParagraphs($result['content']);
+
+        return $result;
     }
 
     /**

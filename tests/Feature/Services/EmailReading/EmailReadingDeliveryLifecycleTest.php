@@ -434,7 +434,7 @@ class EmailReadingDeliveryLifecycleTest extends TestCase
 
         $this->lifecycle()->sendNow($delivery);
 
-        $this->assertSame('Fresh reading.', $delivery->fresh()->ai_response);
+        $this->assertSame('<p>Fresh reading.</p>', $delivery->fresh()->ai_response);
         $this->assertSame(EmailReadingDelivery::STATUS_SENDING, $delivery->fresh()->status);
 
         $this->runSendJob($delivery);

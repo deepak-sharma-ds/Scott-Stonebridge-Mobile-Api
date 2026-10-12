@@ -74,7 +74,7 @@
             <div class="card p-4">
                 <h3 style="margin:0 0 1rem;font-size:1rem;">AI Reading Response</h3>
                 @if($delivery->ai_response)
-                    <div style="white-space:pre-wrap;line-height:1.7;color:var(--text-primary);font-size:0.9375rem;">{{ $delivery->ai_response }}</div>
+                    <div class="response-body">{!! \App\Support\SafeHtml::clean($delivery->ai_response) !!}</div>
                 @else
                     <p style="color:var(--text-muted);margin:0;">Not generated yet.</p>
                 @endif

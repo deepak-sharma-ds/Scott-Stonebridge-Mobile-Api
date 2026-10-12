@@ -47,6 +47,22 @@ class EmailReadingMailTest extends TestCase
         $this->assertStringContainsString('Motor Neurone Disease Association', $html);
     }
 
+    public function test_a_rich_text_body_renders_with_inline_styles_and_is_sanitized(): void
+    {
+        $delivery = $this->delivery();
+        $delivery->update(['ai_response' => '<h2>Card One</h2><p>Spirit says <a href="https://example.com">hello</a>.</p><blockquote>The answer is yes.</blockquote><script>steal()</script><p onclick="x()">Tap</p>']);
+
+        $html = (new EmailReadingMail($delivery->refresh()))->render();
+
+        $this->assertStringContainsString('Card One</h2>', $html);
+        $this->assertStringContainsString('margin:28px 0 12px', $html);
+        $this->assertStringContainsString('font-family:Arial', $html);
+        $this->assertStringContainsString('border-left:3px solid', $html);
+        $this->assertStringContainsString('The answer is yes.', $html);
+        $this->assertStringNotContainsString('steal()', $html);
+        $this->assertStringNotContainsString('onclick', $html);
+    }
+
     public function test_renders_admin_authored_content_and_footer_with_placeholders(): void
     {
         $delivery = $this->delivery([
