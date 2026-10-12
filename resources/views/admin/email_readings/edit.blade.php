@@ -20,9 +20,18 @@
         </div>
     @endif
 
-    <form action="{{ route('admin.email_readings.update', $delivery) }}" method="POST" class="card p-4">
-        @include('admin.email_readings._form', ['delivery' => $delivery, 'statuses' => $statuses])
-    </form>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(460px, 1fr));gap:1.5rem;align-items:start;">
+        <form action="{{ route('admin.email_readings.update', $delivery) }}" method="POST" class="card p-4">
+            @include('admin.email_readings._form', ['delivery' => $delivery, 'statuses' => $statuses])
+        </form>
+
+        @include('admin.components.email-preview', [
+            'previewUrl' => route('admin.email_readings.preview', $delivery),
+            'editable' => true,
+            'isReading' => true,
+            'title' => 'Live Email Preview',
+        ])
+    </div>
 
 </div>
 @endsection
@@ -63,6 +72,7 @@
                     }
                     this.problems = Array.isArray(data.problems) ? data.problems : [];
                     this.info = 'Preview generated · ' + (data.model || '') + ' · ' + (data.completion_tokens || 0) + ' tokens';
+                    window.dispatchEvent(new CustomEvent('email-preview-refresh'));
                     if (this.problems.length > 0) {
                         if (window.adminNotify) window.adminNotify('Response regenerated with validation issues — please review before saving.', 'warning');
                     } else {

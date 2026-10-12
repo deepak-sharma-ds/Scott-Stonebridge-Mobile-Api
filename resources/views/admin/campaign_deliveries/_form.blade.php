@@ -35,7 +35,7 @@
 
 <div class="mb-3">
     <label for="campaign_product_id" class="form-label">Campaign Product (pairing)</label>
-    <select name="campaign_product_id" id="campaign_product_id" class="form-control">
+    <select name="campaign_product_id" id="campaign_product_id" class="form-control" @change="window.dispatchEvent(new CustomEvent('email-preview-refresh'))">
         <option value="">— Unassigned —</option>
         @foreach($campaignProducts as $campaignProduct)
             <option value="{{ $campaignProduct->id }}"

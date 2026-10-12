@@ -20,9 +20,18 @@
         </div>
     @endif
 
-    <form action="{{ route('admin.campaign_deliveries.update', $delivery) }}" method="POST" class="card p-4">
-        @include('admin.campaign_deliveries._form', ['delivery' => $delivery, 'statuses' => $statuses, 'campaignProducts' => $campaignProducts])
-    </form>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(460px, 1fr));gap:1.5rem;align-items:start;">
+        <form action="{{ route('admin.campaign_deliveries.update', $delivery) }}" method="POST" class="card p-4" x-data>
+            @include('admin.campaign_deliveries._form', ['delivery' => $delivery, 'statuses' => $statuses, 'campaignProducts' => $campaignProducts])
+        </form>
+
+        @include('admin.components.email-preview', [
+            'previewUrl' => route('admin.campaign_deliveries.preview', $delivery),
+            'editable' => true,
+            'isReading' => false,
+            'title' => 'Live Email Preview',
+        ])
+    </div>
 
 </div>
 @endsection

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\EmailReadingDeliveryStoreRequest;
 use App\Http\Requests\EmailReadingDeliveryUpdateRequest;
+use App\Mail\EmailReadingMail;
 use App\Models\EmailReadingDelivery;
 use App\Models\EmailReadingProduct;
 use App\Services\EmailReading\EmailReadingAdminService;
@@ -12,6 +13,7 @@ use App\Services\EmailReading\EmailReadingGenerationService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
@@ -72,6 +74,32 @@ class EmailReadingController extends Controller
             'delivery' => $delivery,
             'statuses' => EmailReadingDelivery::statusLabels(),
         ]);
+    }
+
+    /**
+     * Renders the real EmailReadingMail Mailable for this delivery.
+     * Optionally applies unsaved overrides without persisting, so
+     * the edit screen can preview unsaved changes.
+     */
+    public function preview(Request $request, EmailReadingDelivery $delivery): Response
+    {
+        $delivery->load('product');
+
+        $previewDelivery = clone $delivery;
+        if ($request->has('ai_response')) {
+            $previewDelivery->ai_response = $request->input('ai_response');
+        }
+        if ($request->has('customer_name')) {
+            $previewDelivery->customer_name = $request->input('customer_name');
+        }
+        if ($request->has('customer_email')) {
+            $previewDelivery->customer_email = $request->input('customer_email');
+        }
+
+        $mailable = new EmailReadingMail($previewDelivery);
+        $html = $mailable->render();
+
+        return response($html, 200, ['Content-Type' => 'text/html; charset=UTF-8']);
     }
 
     public function update(EmailReadingDeliveryUpdateRequest $request, EmailReadingDelivery $delivery): RedirectResponse

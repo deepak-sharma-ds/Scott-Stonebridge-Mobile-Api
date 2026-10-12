@@ -10,6 +10,7 @@ use App\Models\ShopifyWebhookEvent;
 use App\Models\User;
 use App\Support\GeneratedBodyValidator;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Queue;
 use OpenAI\Laravel\Facades\OpenAI;
 use OpenAI\Responses\Chat\CreateResponse;
@@ -319,5 +320,102 @@ class EmailReadingControllerTest extends TestCase
         $this->actingAs($admin)->get(route('admin.campaign_deliveries.show', $delivery))->assertOk()->assertSee('being sent right now');
         $this->actingAs($admin)->get(route('admin.campaign_deliveries.edit', $delivery))->assertOk();
         $this->actingAs($admin)->get(route('admin.webhook_events.index'))->assertOk()->assertSee('boom')->assertSee('Replay');
+    }
+
+    public function test_preview_endpoint_requires_authentication(): void
+    {
+        $delivery = $this->delivery();
+
+        $this->get(route('admin.email_readings.preview', $delivery))
+            ->assertRedirect(route('login'));
+
+        $this->post(route('admin.email_readings.preview', $delivery))
+            ->assertRedirect(route('login'));
+    }
+
+    public function test_preview_renders_real_mailable_html_without_side_effects(): void
+    {
+        Mail::fake();
+
+        $delivery = $this->delivery([
+            'customer_name' => 'Original Customer',
+            'customer_email' => 'original@example.com',
+            'ai_response' => '<h2>Stored Reading</h2><p>Original body copy.</p>',
+            'status' => EmailReadingDelivery::STATUS_GENERATED,
+        ]);
+        $delivery->product->update(['email_content' => '<p>Dear {{ $customerName }}, insights for {{ $productTitle }}.</p>']);
+
+        $response = $this->actingAs($this->admin())
+            ->get(route('admin.email_readings.preview', $delivery));
+
+        $response->assertOk()
+            ->assertHeader('Content-Type', 'text/html; charset=UTF-8')
+            ->assertSee('Original Customer')
+            ->assertSee('Stored Reading')
+            ->assertSee('Original body copy.');
+
+        $fresh = $delivery->fresh();
+        $this->assertSame(EmailReadingDelivery::STATUS_GENERATED, $fresh->status);
+        $this->assertSame('Original Customer', $fresh->customer_name);
+        $this->assertSame('<h2>Stored Reading</h2><p>Original body copy.</p>', $fresh->ai_response);
+        Mail::assertNothingSent();
+        Mail::assertNothingQueued();
+    }
+
+    public function test_preview_supports_unsaved_overrides_without_persisting(): void
+    {
+        Mail::fake();
+
+        $delivery = $this->delivery([
+            'customer_name' => 'Original Customer',
+            'customer_email' => 'original@example.com',
+            'ai_response' => '<h2>Stored Reading</h2><p>Original body copy.</p>',
+            'status' => EmailReadingDelivery::STATUS_PENDING,
+        ]);
+        $delivery->product->update(['email_content' => '<p>Dear {{ $customerName }}, insights for {{ $productTitle }}.</p>']);
+
+        $response = $this->actingAs($this->admin())
+            ->post(route('admin.email_readings.preview', $delivery), [
+                'customer_name' => 'Unsaved Preview Customer',
+                'customer_email' => 'unsaved@example.com',
+                'ai_response' => '<h2>Unsaved Heading</h2><p>Unsaved response text.</p>',
+            ]);
+
+        $response->assertOk()
+            ->assertHeader('Content-Type', 'text/html; charset=UTF-8')
+            ->assertSee('Unsaved Preview Customer')
+            ->assertSee('Unsaved Heading')
+            ->assertSee('Unsaved response text.')
+            ->assertDontSee('Stored Reading');
+
+        $fresh = $delivery->fresh();
+        $this->assertSame('Original Customer', $fresh->customer_name);
+        $this->assertSame('<h2>Stored Reading</h2><p>Original body copy.</p>', $fresh->ai_response);
+        $this->assertSame(EmailReadingDelivery::STATUS_PENDING, $fresh->status);
+        Mail::assertNothingSent();
+        Mail::assertNothingQueued();
+    }
+
+    public function test_show_and_edit_pages_embed_sandboxed_preview_iframe_with_controls(): void
+    {
+        $delivery = $this->delivery();
+
+        $showResponse = $this->actingAs($this->admin())
+            ->get(route('admin.email_readings.show', $delivery));
+
+        $showResponse->assertOk()
+            ->assertSee('sandbox="allow-same-origin"', false)
+            ->assertSee('Desktop', false)
+            ->assertSee('Mobile', false)
+            ->assertSee(route('admin.email_readings.preview', $delivery), false);
+
+        $editResponse = $this->actingAs($this->admin())
+            ->get(route('admin.email_readings.edit', $delivery));
+
+        $editResponse->assertOk()
+            ->assertSee('sandbox="allow-same-origin"', false)
+            ->assertSee('Desktop', false)
+            ->assertSee('Mobile', false)
+            ->assertSee(route('admin.email_readings.preview', $delivery), false);
     }
 }

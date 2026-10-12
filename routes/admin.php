@@ -120,6 +120,7 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
             Route::post('/', [EmailReadingController::class, 'store'])->name('store');
             Route::get('/{delivery}', [EmailReadingController::class, 'show'])->name('show');
             Route::get('/{delivery}/edit', [EmailReadingController::class, 'edit'])->name('edit');
+            Route::match(['GET', 'POST'], '/{delivery}/preview', [EmailReadingController::class, 'preview'])->name('preview');
             Route::put('/{delivery}', [EmailReadingController::class, 'update'])->name('update');
             Route::post('/{delivery}/regenerate', [EmailReadingController::class, 'regenerate'])->name('regenerate');
             Route::post('/{delivery}/send', [EmailReadingController::class, 'sendNow'])->name('send');
@@ -162,6 +163,7 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
             Route::get('/export', [CampaignDeliveryController::class, 'export'])->name('export');
             Route::get('/{delivery}', [CampaignDeliveryController::class, 'show'])->name('show');
             Route::get('/{delivery}/edit', [CampaignDeliveryController::class, 'edit'])->name('edit');
+            Route::match(['GET', 'POST'], '/{delivery}/preview', [CampaignDeliveryController::class, 'preview'])->name('preview');
             Route::put('/{delivery}', [CampaignDeliveryController::class, 'update'])->name('update');
             Route::post('/{delivery}/send', [CampaignDeliveryController::class, 'send'])->name('send');
             Route::post('/{delivery}/cancel', [CampaignDeliveryController::class, 'cancel'])->name('cancel');

@@ -82,6 +82,11 @@
                     <div class="alert alert-danger" style="margin-top:1rem;">{{ $delivery->error_message }}</div>
                 @endif
             </div>
+
+            @include('admin.components.email-preview', [
+                'previewUrl' => route('admin.email_readings.preview', $delivery),
+                'title' => 'Email Preview',
+            ])
         </div>
 
         {{-- Side meta --}}

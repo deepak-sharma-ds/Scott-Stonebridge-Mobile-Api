@@ -4,12 +4,14 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CampaignDeliveryUpdateRequest;
+use App\Mail\CampaignEmailMail;
 use App\Models\CampaignDelivery;
 use App\Models\CampaignProduct;
 use App\Models\MarketingCampaign;
 use App\Services\CampaignEmail\CampaignDeliveryAdminService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use RuntimeException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Throwable;
@@ -49,6 +51,40 @@ class CampaignDeliveryController extends Controller
             'statuses' => CampaignDelivery::statusLabels(),
             'campaignProducts' => CampaignProduct::with('marketingCampaign')->orderBy('product_title')->get(),
         ]);
+    }
+
+    /**
+     * Renders the real CampaignEmailMail Mailable for this delivery.
+     * Optionally applies unsaved overrides without persisting, so
+     * the edit screen can preview unsaved changes.
+     */
+    public function preview(Request $request, CampaignDelivery $delivery): Response
+    {
+        $delivery->load('campaignProduct.marketingCampaign', 'campaignProduct.response');
+
+        $previewDelivery = clone $delivery;
+        if ($request->has('customer_name')) {
+            $previewDelivery->customer_name = $request->input('customer_name');
+        }
+        if ($request->has('customer_email')) {
+            $previewDelivery->customer_email = $request->input('customer_email');
+        }
+        if ($request->has('campaign_product_id')) {
+            $productId = $request->input('campaign_product_id');
+            if ($productId) {
+                $previewDelivery->campaign_product_id = (int) $productId;
+                $campaignProduct = CampaignProduct::with(['marketingCampaign', 'response'])->find($previewDelivery->campaign_product_id);
+                $previewDelivery->setRelation('campaignProduct', $campaignProduct);
+            } else {
+                $previewDelivery->campaign_product_id = null;
+                $previewDelivery->setRelation('campaignProduct', null);
+            }
+        }
+
+        $mailable = new CampaignEmailMail($previewDelivery);
+        $html = $mailable->render();
+
+        return response($html, 200, ['Content-Type' => 'text/html; charset=UTF-8']);
     }
 
     public function update(CampaignDeliveryUpdateRequest $request, CampaignDelivery $delivery): RedirectResponse
