@@ -3,6 +3,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Jobs\EmailReading\MarkReadingOrderFulfilledJob;
+use App\Jobs\EmailReading\ProcessEmailReadingOrderJob;
 use App\Models\CampaignDelivery;
 use App\Models\EmailReadingDelivery;
 use App\Models\EmailReadingProduct;
@@ -73,6 +74,7 @@ class EmailReadingControllerTest extends TestCase
             EmailReadingDelivery::STATUS_FAILED,
             EmailReadingDelivery::STATUS_CANCELLED,
             EmailReadingDelivery::STATUS_SENT,
+            EmailReadingDelivery::STATUS_COMPLIANCE_HOLD,
         ] as $status) {
             $delivery = $this->delivery(['status' => $status]);
 
@@ -110,6 +112,68 @@ class EmailReadingControllerTest extends TestCase
         $this->assertSame(EmailReadingDelivery::STATUS_CANCELLED, $delivery->fresh()->status);
 
         $this->actingAs($admin)->post(route('admin.email_readings.reactivate', $delivery))->assertSessionHas('success');
+        $this->assertSame(EmailReadingDelivery::STATUS_GENERATED, $delivery->fresh()->status);
+    }
+
+    private function heldDelivery(array $overrides = []): EmailReadingDelivery
+    {
+        return $this->delivery(array_merge([
+            'status' => EmailReadingDelivery::STATUS_COMPLIANCE_HOLD,
+            'ai_response' => null,
+            'compliance_flagged_reason' => 'Medical diagnosis or prognosis: "do i have cancer"',
+        ], $overrides));
+    }
+
+    public function test_a_held_delivery_shows_its_badge_reason_and_review_actions(): void
+    {
+        $admin = $this->admin();
+        $held = $this->heldDelivery();
+
+        $this->actingAs($admin)->get(route('admin.email_readings.show', $held))
+            ->assertSee('Compliance Hold')
+            ->assertSee('do i have cancer')
+            ->assertSee('Approve &amp; Generate', false)
+            ->assertSee('Cancel')
+            ->assertSee('Mark as sent manually')
+            ->assertDontSee('Send Now')
+            ->assertDontSee('Reactivate');
+    }
+
+    public function test_the_index_lists_held_deliveries_with_a_badge_and_filters_by_status(): void
+    {
+        $admin = $this->admin();
+        $this->heldDelivery(['customer_name' => 'Held Customer']);
+        $this->delivery(['customer_name' => 'Normal Customer']);
+
+        $this->actingAs($admin)->get(route('admin.email_readings.index', ['status' => EmailReadingDelivery::STATUS_COMPLIANCE_HOLD]))
+            ->assertOk()
+            ->assertSee('Held Customer')
+            ->assertSee('Compliance Hold')
+            ->assertDontSee('Normal Customer');
+    }
+
+    public function test_approving_a_hold_requeues_generation(): void
+    {
+        Queue::fake();
+        $admin = $this->admin();
+        $held = $this->heldDelivery();
+
+        $this->actingAs($admin)->post(route('admin.email_readings.approve_compliance', $held))->assertSessionHas('success');
+
+        $held->refresh();
+        $this->assertSame(EmailReadingDelivery::STATUS_PENDING, $held->status);
+        $this->assertNotNull($held->compliance_reviewed_at);
+        Queue::assertPushed(ProcessEmailReadingOrderJob::class);
+    }
+
+    public function test_approving_a_delivery_that_is_not_held_is_rejected(): void
+    {
+        Queue::fake();
+        $admin = $this->admin();
+        $delivery = $this->delivery();
+
+        $this->actingAs($admin)->post(route('admin.email_readings.approve_compliance', $delivery))->assertSessionHas('error');
+
         $this->assertSame(EmailReadingDelivery::STATUS_GENERATED, $delivery->fresh()->status);
     }
 

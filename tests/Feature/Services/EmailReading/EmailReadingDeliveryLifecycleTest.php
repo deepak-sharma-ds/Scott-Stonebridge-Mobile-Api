@@ -500,4 +500,120 @@ class EmailReadingDeliveryLifecycleTest extends TestCase
         $this->assertNull($delivery->fresh()->error_message);
         Queue::assertPushed(ProcessEmailReadingOrderJob::class, 1);
     }
+
+    // ---------------------------------------------------------------
+    // Compliance hold
+    // ---------------------------------------------------------------
+
+    private function heldDelivery(array $overrides = []): EmailReadingDelivery
+    {
+        return $this->delivery(array_merge([
+            'status' => EmailReadingDelivery::STATUS_COMPLIANCE_HOLD,
+            'ai_response' => null,
+            'compliance_flagged_reason' => 'Medical diagnosis or prognosis: "do i have cancer"',
+        ], $overrides));
+    }
+
+    public function test_a_held_delivery_is_never_claimed_by_the_dispatcher(): void
+    {
+        Queue::fake();
+        $this->heldDelivery(['scheduled_at' => now()->subHour()]);
+
+        $this->assertSame(0, $this->lifecycle()->dispatchDue());
+        Queue::assertNotPushed(SendEmailReadingJob::class);
+    }
+
+    public function test_send_now_refuses_a_held_delivery_without_calling_openai(): void
+    {
+        Queue::fake();
+        OpenAI::fake();
+        $delivery = $this->heldDelivery();
+
+        try {
+            $this->lifecycle()->sendNow($delivery);
+            $this->fail('Expected sendNow to refuse a held delivery.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('compliance hold', $e->getMessage());
+        }
+
+        OpenAI::assertNothingSent();
+        $this->assertSame(EmailReadingDelivery::STATUS_COMPLIANCE_HOLD, $delivery->fresh()->status);
+    }
+
+    public function test_a_held_delivery_can_be_cancelled(): void
+    {
+        $delivery = $this->heldDelivery();
+
+        $this->assertTrue($this->lifecycle()->cancel($delivery));
+
+        $this->assertSame(EmailReadingDelivery::STATUS_CANCELLED, $delivery->fresh()->status);
+    }
+
+    public function test_a_held_delivery_can_be_marked_sent_manually(): void
+    {
+        Queue::fake();
+        $delivery = $this->heldDelivery();
+
+        $this->lifecycle()->markSentManually($delivery);
+
+        $delivery->refresh();
+        $this->assertSame(EmailReadingDelivery::STATUS_SENT, $delivery->status);
+        $this->assertTrue($delivery->sent_manually);
+        Queue::assertPushed(MarkReadingOrderFulfilledJob::class);
+    }
+
+    public function test_a_refund_or_cancel_webhook_cancels_a_held_delivery(): void
+    {
+        $held = $this->heldDelivery(['shopify_order_id' => 7777]);
+
+        $this->assertSame(1, $this->lifecycle()->cancelForOrder(7777));
+
+        $this->assertSame(EmailReadingDelivery::STATUS_CANCELLED, $held->fresh()->status);
+    }
+
+    public function test_approving_a_hold_requeues_generation_and_stamps_the_review(): void
+    {
+        Queue::fake();
+        $delivery = $this->heldDelivery();
+
+        $this->assertTrue($this->lifecycle()->approveComplianceHold($delivery));
+
+        $delivery->refresh();
+        $this->assertSame(EmailReadingDelivery::STATUS_PENDING, $delivery->status);
+        $this->assertNotNull($delivery->compliance_reviewed_at);
+        $this->assertNotNull($delivery->compliance_flagged_reason);
+        Queue::assertPushed(ProcessEmailReadingOrderJob::class, 1);
+    }
+
+    public function test_an_approved_delivery_is_generated_instead_of_held_again(): void
+    {
+        Queue::fake();
+        OpenAI::fake([CreateResponse::fake(['choices' => [['message' => ['role' => 'assistant', 'content' => "## Reading\n\nBody.\n\n### From My Heart to Yours\n\nBlessings."]]]])]);
+        $delivery = $this->heldDelivery(['questions' => ['q1' => 'Do I have cancer?']]);
+
+        $this->lifecycle()->approveComplianceHold($delivery);
+        (new ProcessEmailReadingOrderJob($delivery->id))->handle(app(EmailReadingGenerationService::class));
+
+        $this->assertSame(EmailReadingDelivery::STATUS_GENERATED, $delivery->fresh()->status);
+    }
+
+    public function test_only_a_held_delivery_can_be_approved(): void
+    {
+        Queue::fake();
+        $delivery = $this->delivery(['status' => EmailReadingDelivery::STATUS_GENERATED]);
+
+        $this->assertFalse($this->lifecycle()->approveComplianceHold($delivery));
+
+        Queue::assertNotPushed(ProcessEmailReadingOrderJob::class);
+    }
+
+    public function test_a_held_delivery_schedule_can_be_edited(): void
+    {
+        $delivery = $this->heldDelivery();
+        $when = now()->addDays(2)->startOfMinute();
+
+        $this->lifecycle()->reschedule($delivery, $when, null);
+
+        $this->assertTrue($delivery->fresh()->scheduled_at->equalTo($when));
+    }
 }

@@ -54,6 +54,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Compliance gate
+    |--------------------------------------------------------------------------
+    | Customer answers are screened BEFORE generation. A critical breach puts
+    | the delivery in `compliance_hold` (no generation, no email) and alerts an
+    | admin. Local patterns run first; the free OpenAI Moderation endpoint is
+    | the second pass and fails open if unavailable.
+    |
+    | moderation_categories  Moderation categories that trigger a hold.
+    */
+    'compliance' => [
+        'enabled' => (bool) env('READINGS_COMPLIANCE_ENABLED', true),
+        'moderation_model' => env('READINGS_MODERATION_MODEL', 'omni-moderation-latest'),
+        'moderation_categories' => ['self-harm', 'self-harm/intent', 'self-harm/instructions', 'illicit/violent'],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Voice & tone rules
     |--------------------------------------------------------------------------
     | Rules governing tone, British spelling, varied sentence openings, and

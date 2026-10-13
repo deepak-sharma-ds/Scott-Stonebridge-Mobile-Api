@@ -1,8 +1,8 @@
 {{-- Delivery actions: every button maps to one lifecycle transition. --}}
 @php
     $status = $delivery->status;
-    $canSendNow = ! in_array($status, ['sending', 'cancelled'], true);
-    $isUnsent = in_array($status, ['pending', 'generated', 'failed'], true);
+    $canSendNow = ! in_array($status, ['sending', 'cancelled', 'compliance_hold'], true);
+    $isUnsent = in_array($status, ['pending', 'generated', 'failed', 'compliance_hold'], true);
 @endphp
 
 <div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:1.25rem;">
@@ -18,6 +18,17 @@
                         data-confirm="{{ $status === 'sent' ? 'Re-send this reading?' : 'Send this reading now?' }}">
                     {{ $status === 'sent' ? 'Resend Email' : 'Send Now' }}
                 </button>
+            </form>
+        @endif
+
+        @if($status === 'compliance_hold')
+            <div class="alert alert-warning" style="margin:0;font-size:0.8125rem;">
+                Held for compliance review. Nothing has been generated or emailed.
+            </div>
+            <form action="{{ route('admin.email_readings.approve_compliance', $delivery) }}" method="POST">
+                @csrf
+                <button type="submit" class="btn btn-primary" style="width:100%;"
+                        data-confirm="Approve this reading? It will be generated and sent as normal.">Approve &amp; Generate</button>
             </form>
         @endif
 

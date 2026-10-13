@@ -10,6 +10,7 @@
         'sent'      => 'success',
         'failed'    => 'danger',
         'cancelled' => 'secondary',
+        'compliance_hold' => 'warning',
     ];
 @endphp
 
@@ -111,7 +112,7 @@
                                     <a href="{{ route('admin.email_readings.show', $delivery) }}" class="btn btn-sm btn-secondary">View</a>
                                     <a href="{{ route('admin.email_readings.edit', $delivery) }}" class="btn btn-sm btn-warning">Edit</a>
 
-                                    @if(! in_array($delivery->status, ['sending', 'cancelled']))
+                                    @if(! in_array($delivery->status, ['sending', 'cancelled', 'compliance_hold']))
                                     <form action="{{ route('admin.email_readings.send', $delivery) }}" method="POST" style="display:inline;">
                                         @csrf
                                         <button type="submit" class="btn btn-sm btn-success"

@@ -120,6 +120,18 @@ class EmailReadingAdminService
     }
 
     /**
+     * Approve a reading held by the Compliance Gate and re-queue generation.
+     *
+     * @return bool false when the reading is not on compliance hold
+     *
+     * @throws RuntimeException when the delivery is being sent right now
+     */
+    public function approveComplianceHold(EmailReadingDelivery $delivery): bool
+    {
+        return $this->lifecycle->approveComplianceHold($delivery);
+    }
+
+    /**
      * Close a reading Scott already emailed by hand (no email is sent).
      *
      * @throws RuntimeException when the delivery cannot be closed from its current state

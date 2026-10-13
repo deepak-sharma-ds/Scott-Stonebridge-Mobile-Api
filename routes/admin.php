@@ -126,6 +126,7 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
             Route::post('/{delivery}/send', [EmailReadingController::class, 'sendNow'])->name('send');
             Route::post('/{delivery}/cancel', [EmailReadingController::class, 'cancel'])->name('cancel');
             Route::post('/{delivery}/reactivate', [EmailReadingController::class, 'reactivate'])->name('reactivate');
+            Route::post('/{delivery}/approve-compliance', [EmailReadingController::class, 'approveCompliance'])->name('approve_compliance');
             Route::post('/{delivery}/mark-sent', [EmailReadingController::class, 'markSent'])->name('mark_sent');
             Route::post('/{delivery}/retry-fulfillment', [EmailReadingController::class, 'retryFulfillment'])->name('retry_fulfillment');
             Route::delete('/{delivery}', [EmailReadingController::class, 'destroy'])->name('destroy');

@@ -198,6 +198,19 @@ class EmailReadingController extends Controller
         }
     }
 
+    public function approveCompliance(EmailReadingDelivery $delivery): RedirectResponse
+    {
+        try {
+            if (! $this->service->approveComplianceHold($delivery)) {
+                return back()->with('error', 'Only readings on compliance hold can be approved.');
+            }
+
+            return back()->with('success', 'Reading approved. Generation has been queued.');
+        } catch (RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
     public function markSent(Request $request, EmailReadingDelivery $delivery): RedirectResponse
     {
         try {

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\EmailReading;
 
+use App\Jobs\EmailReading\NotifyComplianceHoldJob;
 use App\Jobs\EmailReading\NotifyReadingFailureJob;
 use App\Models\EmailReadingDelivery;
 use App\Models\EmailReadingProduct;
@@ -25,6 +26,8 @@ use Throwable;
  */
 class EmailReadingGenerationService
 {
+    public function __construct(private readonly ComplianceGateService $complianceGate) {}
+
     /**
      * Generate and persist the reading.
      *
@@ -41,6 +44,10 @@ class EmailReadingGenerationService
 
         if (! $product) {
             throw new RuntimeException('Email reading product missing for delivery '.$delivery->id);
+        }
+
+        if ($this->holdForCompliance($delivery)) {
+            return false;
         }
 
         $model = $product->model ?: (string) config('email_reading.openai_model');
@@ -123,6 +130,39 @@ class EmailReadingGenerationService
             'latency_ms' => $latencyMs,
             'completion_tokens' => $delivery->completion_tokens,
         ]);
+
+        return true;
+    }
+
+    /**
+     * Run the Compliance Gate. A critical breach quarantines the delivery
+     * (`compliance_hold`), alerts an admin, and stops generation. Deliveries an
+     * admin has already approved are never re-screened.
+     *
+     * @return bool true when the delivery was put on hold
+     */
+    private function holdForCompliance(EmailReadingDelivery $delivery): bool
+    {
+        if (! (bool) config('email_reading.compliance.enabled', true) || $delivery->compliance_reviewed_at !== null) {
+            return false;
+        }
+
+        $reason = $this->complianceGate->evaluate((array) $delivery->questions);
+
+        if ($reason === null) {
+            return false;
+        }
+
+        if ($delivery->markComplianceHold($reason)) {
+            Log::channel('shopify_webhooks')->warning('Email reading held for compliance review', [
+                'delivery_id' => $delivery->id,
+                'reason' => $reason,
+            ]);
+
+            NotifyComplianceHoldJob::dispatch($delivery->id)
+                ->onConnection(config('email_reading.queue.connection'))
+                ->onQueue(config('email_reading.queue.mail'));
+        }
 
         return true;
     }

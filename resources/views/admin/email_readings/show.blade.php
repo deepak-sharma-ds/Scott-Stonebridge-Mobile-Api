@@ -10,6 +10,7 @@
         'sent'      => 'success',
         'failed'    => 'danger',
         'cancelled' => 'secondary',
+        'compliance_hold' => 'warning',
     ];
     $statuses = \App\Models\EmailReadingDelivery::statusLabels();
 
@@ -77,6 +78,14 @@
                     <div class="response-body">{!! \App\Support\SafeHtml::clean($delivery->ai_response) !!}</div>
                 @else
                     <p style="color:var(--text-muted);margin:0;">Not generated yet.</p>
+                @endif
+                @if($delivery->compliance_flagged_reason)
+                    <div class="alert alert-warning" style="margin-top:1rem;">
+                        <strong>Compliance flag:</strong> {{ $delivery->compliance_flagged_reason }}
+                        @if($delivery->compliance_reviewed_at)
+                            <div style="font-size:0.8125rem;">Approved by an admin on {{ $delivery->compliance_reviewed_at->format('d M Y H:i') }}.</div>
+                        @endif
+                    </div>
                 @endif
                 @if($delivery->error_message)
                     <div class="alert alert-danger" style="margin-top:1rem;">{{ $delivery->error_message }}</div>
