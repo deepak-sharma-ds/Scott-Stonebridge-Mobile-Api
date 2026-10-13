@@ -256,7 +256,16 @@ class EmailReadingProductController extends Controller
         }
 
         $previewDelivery = $this->buildPreviewDelivery($request, $emailReadingProduct);
-        Mail::to($admin->email)->send(new EmailReadingMail($previewDelivery));
+        try {
+            Mail::to($admin->email)->send(new EmailReadingMail($previewDelivery));
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send test email: '.$e->getMessage(),
+            ], 422);
+        }
 
         return response()->json([
             'success' => true,
@@ -280,9 +289,9 @@ class EmailReadingProductController extends Controller
         if ($request->has('email_footer')) {
             $previewProduct->email_footer = $request->input('email_footer');
         }
-        if ($request->has('email_view')) {
-            $previewProduct->email_view = $request->input('email_view');
-        }
+        // if ($request->has('email_view')) {
+        //     $previewProduct->email_view = $request->input('email_view');
+        // }
 
         $body = $request->input('body') ?? $request->input('ai_response');
         if (! $body) {

@@ -312,7 +312,16 @@ class CampaignProductController extends Controller
         }
 
         $previewDelivery = $this->buildPreviewDelivery($request, $campaignProduct);
-        Mail::to($admin->email)->send(new CampaignEmailMail($previewDelivery));
+        try {
+            Mail::to($admin->email)->send(new CampaignEmailMail($previewDelivery));
+        } catch (Throwable $e) {
+            report($e);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to send test email: '.$e->getMessage(),
+            ], 422);
+        }
 
         return response()->json([
             'success' => true,

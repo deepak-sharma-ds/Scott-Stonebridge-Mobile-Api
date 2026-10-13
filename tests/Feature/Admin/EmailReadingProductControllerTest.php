@@ -184,6 +184,20 @@ class EmailReadingProductControllerTest extends TestCase
         $this->assertSame('Love Reading', $product->fresh()->name);
     }
 
+    public function test_send_test_returns_json_failure_when_the_mailer_throws(): void
+    {
+        Mail::shouldReceive('to')->once()->andThrow(new \RuntimeException('SMTP down'));
+
+        $admin = User::factory()->create(['email' => 'admin-tester@example.com']);
+        $product = EmailReadingProduct::create($this->payload());
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.email-reading-products.send-test', $product), ['body' => '<p>Body</p>'])
+            ->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Failed to send test email: SMTP down');
+    }
+
     public function test_send_test_requires_authentication(): void
     {
         $product = EmailReadingProduct::create($this->payload());

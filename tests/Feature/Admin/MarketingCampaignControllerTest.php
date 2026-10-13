@@ -947,6 +947,25 @@ class MarketingCampaignControllerTest extends TestCase
         $this->assertSame('Initial VIP Product', $campaignProduct->fresh()->product_title);
     }
 
+    public function test_send_test_campaign_product_returns_json_failure_when_the_mailer_throws(): void
+    {
+        Mail::shouldReceive('to')->once()->andThrow(new \RuntimeException('SMTP down'));
+
+        $admin = User::factory()->create(['email' => 'admin-campaign@example.com']);
+        $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-mail-fail', 'name' => 'Mail Fail', 'status' => MarketingCampaign::STATUS_DRAFT]);
+        $campaignProduct = CampaignProduct::create([
+            'marketing_campaign_id' => $campaign->id,
+            'shopify_product_id' => 111,
+            'product_title' => 'Mail Fail Product',
+        ]);
+
+        $this->actingAs($admin)
+            ->postJson(route('admin.marketing-campaigns.products.send-test', [$campaign, $campaignProduct]), ['body' => '<p>Body</p>'])
+            ->assertStatus(422)
+            ->assertJsonPath('success', false)
+            ->assertJsonPath('message', 'Failed to send test email: SMTP down');
+    }
+
     public function test_send_test_campaign_product_requires_authentication(): void
     {
         $campaign = MarketingCampaign::create(['campaign_key' => 'campaign-auth-test', 'name' => 'Auth Test Campaign', 'status' => MarketingCampaign::STATUS_DRAFT]);
