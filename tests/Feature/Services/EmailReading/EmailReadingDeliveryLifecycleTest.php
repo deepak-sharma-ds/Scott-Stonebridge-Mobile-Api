@@ -458,6 +458,26 @@ class EmailReadingDeliveryLifecycleTest extends TestCase
         Queue::assertNothingPushed();
     }
 
+    public function test_send_now_surfaces_validation_failure_message_when_generation_fails_validation(): void
+    {
+        Queue::fake();
+        OpenAI::fake([
+            CreateResponse::fake(['choices' => [['finish_reason' => 'length', 'message' => ['role' => 'assistant', 'content' => "## Reading\n\nCut off mid sentence"]]]]),
+            CreateResponse::fake(['choices' => [['finish_reason' => 'length', 'message' => ['role' => 'assistant', 'content' => "## Reading\n\nStill cut off"]]]]),
+        ]);
+        $delivery = $this->delivery(['status' => EmailReadingDelivery::STATUS_PENDING, 'ai_response' => null]);
+
+        try {
+            $this->lifecycle()->sendNow($delivery);
+            $this->fail('validation failure should surface to the admin');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('Validation failed:', $e->getMessage());
+        }
+
+        $this->assertSame(EmailReadingDelivery::STATUS_FAILED, $delivery->fresh()->status);
+        $this->assertStringContainsString('Validation failed:', (string) $delivery->fresh()->error_message);
+    }
+
     public function test_process_job_generates_but_never_queues_a_send(): void
     {
         Queue::fake();

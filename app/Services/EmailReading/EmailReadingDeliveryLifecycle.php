@@ -145,6 +145,11 @@ class EmailReadingDeliveryLifecycle
 
         if (trim((string) $delivery->ai_response) === '') {
             if (! $this->generation->generate($delivery)) {
+                $delivery->refresh();
+                if ($delivery->status === EmailReadingDelivery::STATUS_FAILED && filled($delivery->error_message)) {
+                    throw new RuntimeException($delivery->error_message);
+                }
+
                 throw new RuntimeException('The reading changed state while it was being generated. Refresh and try again.');
             }
             $delivery->refresh();
