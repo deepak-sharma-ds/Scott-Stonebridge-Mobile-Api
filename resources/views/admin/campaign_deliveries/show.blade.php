@@ -6,12 +6,12 @@
     $badgeFor = [
         'pending'   => 'warning',
         'generated' => 'info',
+        'sending'   => 'info',
         'sent'      => 'success',
         'failed'    => 'danger',
         'cancelled' => 'secondary',
     ];
     $statuses = \App\Models\CampaignDelivery::statusLabels();
-    $cancellable = ['pending', 'generated', 'failed'];
     $campaign = $delivery->campaignProduct?->marketingCampaign;
     $response = $delivery->campaignProduct?->response;
 @endphp
@@ -56,7 +56,7 @@
             <div class="card p-4">
                 <h3 style="margin:0 0 1rem;font-size:1rem;">Campaign Response (read-only)</h3>
                 @if($response)
-                    <div style="white-space:pre-wrap;line-height:1.7;color:var(--text-primary);font-size:0.9375rem;">{{ $response->body }}</div>
+                    <div class="response-body">{!! \App\Support\SafeHtml::clean($response->body) !!}</div>
                     <p style="color:var(--text-muted);font-size:0.75rem;margin-top:0.75rem;">
                         Source: {{ \App\Models\CampaignProductResponse::sourceLabels()[$response->source] ?? $response->source }}
                         — edit the response itself on the <a href="{{ $campaign ? route('admin.marketing-campaigns.show', $campaign) : '#' }}">Marketing Campaign page</a>.
@@ -68,6 +68,11 @@
                     <div class="alert alert-danger" style="margin-top:1rem;">{{ $delivery->error_message }}</div>
                 @endif
             </div>
+
+            @include('admin.components.email-preview', [
+                'previewUrl' => route('admin.campaign_deliveries.preview', $delivery),
+                'title' => 'Email Preview',
+            ])
         </div>
 
         {{-- Side meta --}}
@@ -94,22 +99,7 @@
                 <div><dt style="color:var(--text-muted);">Created</dt><dd style="margin:0.125rem 0 0;color:var(--text-primary);">{{ $delivery->created_at?->format('d M Y H:i') }}</dd></div>
             </dl>
 
-            <div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:1.25rem;">
-                <form action="{{ route('admin.campaign_deliveries.send', $delivery) }}" method="POST">
-                    @csrf
-                    <button type="submit" class="btn btn-success" style="width:100%;"
-                            data-confirm="{{ $delivery->status === 'sent' ? 'Re-send this delivery?' : 'Send this delivery now?' }}">
-                        {{ $delivery->status === 'sent' ? 'Resend Email' : 'Send Now' }}
-                    </button>
-                </form>
-                @if(in_array($delivery->status, $cancellable, true))
-                    <form action="{{ route('admin.campaign_deliveries.cancel', $delivery) }}" method="POST">
-                        @csrf
-                        <button type="submit" class="btn btn-secondary" style="width:100%;"
-                                data-confirm="Cancel this delivery? No email will be sent.">Cancel Delivery</button>
-                    </form>
-                @endif
-            </div>
+            @include('admin.campaign_deliveries._actions', ['delivery' => $delivery])
         </div>
 
     </div>

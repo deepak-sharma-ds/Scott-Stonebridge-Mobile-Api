@@ -22,6 +22,14 @@ class InlineEmailStylesTest extends TestCase
         $this->assertStringContainsString('style="margin:0 0 14px; text-align:center;"', $html);
     }
 
+    public function test_per_tag_overrides_are_appended_after_the_base_style(): void
+    {
+        $html = InlineEmailStyles::apply('<p>Hi</p><h2>Title</h2>', ['p' => 'font-family:Arial;']);
+
+        $this->assertStringContainsString('<p style="margin:0 0 14px;font-family:Arial;">Hi</p>', $html);
+        $this->assertStringContainsString('<h2 style="margin:0 0 12px;color:#2b1a3d;font-size:20px;font-weight:bold;">', $html);
+    }
+
     public function test_it_returns_empty_string_for_blank_input(): void
     {
         $this->assertSame('', InlineEmailStyles::apply(null));

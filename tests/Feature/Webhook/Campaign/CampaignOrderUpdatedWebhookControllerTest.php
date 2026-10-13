@@ -46,6 +46,7 @@ class CampaignOrderUpdatedWebhookControllerTest extends TestCase
         return [
             'id' => $orderId,
             'email' => 'buyer@example.com',
+            'line_items' => [['id' => 501, 'product_id' => 111]],
             'shipping_lines' => $shippingLines,
         ];
     }
@@ -57,7 +58,7 @@ class CampaignOrderUpdatedWebhookControllerTest extends TestCase
 
     public function test_reschedules_pending_deliveries_on_same_day_upgrade(): void
     {
-        Queue::fake();
+        Queue::fake([SendCampaignEmailJob::class]);
         $delivery = $this->delivery();
 
         $response = $this->postJson(route('webhook.shopify.campaign.updated'), $this->orderPayload(9001, [
@@ -70,12 +71,13 @@ class CampaignOrderUpdatedWebhookControllerTest extends TestCase
         $this->assertNotNull($delivery->expedited_at);
         $this->assertTrue($delivery->scheduled_at->lessThan(now()->addDays(1)));
 
-        Queue::assertPushed(SendCampaignEmailJob::class, fn ($job) => $job->deliveryId === $delivery->id);
+        // No job is (re)queued: the dispatcher reads the live scheduled_at.
+        Queue::assertNotPushed(SendCampaignEmailJob::class);
     }
 
     public function test_does_not_reschedule_already_sent_delivery(): void
     {
-        Queue::fake();
+        Queue::fake([SendCampaignEmailJob::class]);
         $delivery = $this->delivery([
             'status' => CampaignDelivery::STATUS_SENT,
             'sent_at' => now()->subHour(),
@@ -92,7 +94,7 @@ class CampaignOrderUpdatedWebhookControllerTest extends TestCase
 
     public function test_ignores_order_without_same_day_upgrade(): void
     {
-        Queue::fake();
+        Queue::fake([SendCampaignEmailJob::class]);
         $delivery = $this->delivery();
 
         $this->postJson(route('webhook.shopify.campaign.updated'), $this->orderPayload(9001, [
@@ -105,14 +107,18 @@ class CampaignOrderUpdatedWebhookControllerTest extends TestCase
 
     public function test_order_with_only_reading_deliveries_does_not_error_or_expedite_campaign(): void
     {
-        Queue::fake();
+        Queue::fake([SendCampaignEmailJob::class]);
 
         $response = $this->postJson(route('webhook.shopify.campaign.updated'), $this->orderPayload(9002, [
             $this->sameDayShippingLine(),
         ]));
 
         $response->assertOk();
-        $response->assertJson(['message' => 'Nothing to expedite']);
+        $this->assertDatabaseHas('shopify_webhook_events', [
+            'endpoint' => 'campaign.updated',
+            'status' => 'ignored',
+            'reason' => 'no_campaign_products',
+        ]);
         Queue::assertNotPushed(SendCampaignEmailJob::class);
     }
 }

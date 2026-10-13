@@ -6,6 +6,7 @@
     $badgeFor = [
         'pending'   => 'warning',
         'generated' => 'info',
+        'sending'   => 'info',
         'sent'      => 'success',
         'failed'    => 'danger',
         'cancelled' => 'secondary',
@@ -73,7 +74,7 @@
             <div class="card p-4">
                 <h3 style="margin:0 0 1rem;font-size:1rem;">AI Reading Response</h3>
                 @if($delivery->ai_response)
-                    <div style="white-space:pre-wrap;line-height:1.7;color:var(--text-primary);font-size:0.9375rem;">{{ $delivery->ai_response }}</div>
+                    <div class="response-body">{!! \App\Support\SafeHtml::clean($delivery->ai_response) !!}</div>
                 @else
                     <p style="color:var(--text-muted);margin:0;">Not generated yet.</p>
                 @endif
@@ -81,6 +82,11 @@
                     <div class="alert alert-danger" style="margin-top:1rem;">{{ $delivery->error_message }}</div>
                 @endif
             </div>
+
+            @include('admin.components.email-preview', [
+                'previewUrl' => route('admin.email_readings.preview', $delivery),
+                'title' => 'Email Preview',
+            ])
         </div>
 
         {{-- Side meta --}}
@@ -108,22 +114,7 @@
                 <div><dt style="color:var(--text-muted);">Created</dt><dd style="margin:0.125rem 0 0;color:var(--text-primary);">{{ $delivery->created_at?->format('d M Y H:i') }}</dd></div>
             </dl>
 
-            <div style="display:flex;flex-direction:column;gap:0.5rem;margin-top:1.25rem;">
-                <form action="{{ route('admin.email_readings.send', $delivery) }}" method="POST">
-                    @csrf
-                    <button type="submit" class="btn btn-success" style="width:100%;"
-                            data-confirm="{{ $delivery->status === 'sent' ? 'Re-send this reading?' : 'Send this reading now?' }}">
-                        {{ $delivery->status === 'sent' ? 'Resend Email' : 'Send Now' }}
-                    </button>
-                </form>
-                @if(! in_array($delivery->status, ['sent', 'cancelled']))
-                    <form action="{{ route('admin.email_readings.cancel', $delivery) }}" method="POST">
-                        @csrf
-                        <button type="submit" class="btn btn-secondary" style="width:100%;"
-                                data-confirm="Cancel this reading? No email will be sent.">Cancel Reading</button>
-                    </form>
-                @endif
-            </div>
+            @include('admin.email_readings._actions', ['delivery' => $delivery])
         </div>
 
     </div>

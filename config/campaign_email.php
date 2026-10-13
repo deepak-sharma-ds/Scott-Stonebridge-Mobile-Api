@@ -16,10 +16,45 @@ return [
         'CAMPAIGN_EMAIL_SYSTEM_PROMPT',
         'You are Scott Stonebridge, an award-winning UK psychic medium. '
         .'Write a warm, compelling marketing email promoting the given product. '
-        .'Use clear paragraphs, no headings, no markdown. '
         .'Do not include a greeting/salutation (e.g. "Dear ...") or a sign-off (e.g. "Warm blessings, ...") — '
         .'output only the body of the message itself, since the surrounding email template already supplies those.'
     ),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Shared formatting contract
+    |--------------------------------------------------------------------------
+    | The formatting contract instructs the model to structure campaign
+    | emails using markdown (headings, key messages, closing section, no
+    | greeting/sign-off). A product row in campaign_products may override
+    | `formatting_contract`.
+    */
+    'formatting_contract' => env(
+        'CAMPAIGN_EMAIL_FORMATTING_CONTRACT',
+        "Structure your response using Markdown:\n"
+        ."- Use markdown headings (## or ###) for each product highlight or main section.\n"
+        ."- Include short, one-line key message lines or takeaways (e.g. bold or blockquote).\n"
+        ."- End with a dedicated closing section headed '### From My Heart to Yours' with warm, encouraging parting words.\n"
+        ."- Do NOT include a greeting or salutation (e.g. 'Dear ...') — the email template already supplies it.\n"
+        ."- Do NOT include a sign-off or closing signature (e.g. 'Warm blessings, Scott') — the email template already supplies it.\n"
+        .'- Return ONLY the markdown email body. Do not include raw HTML.'
+    ),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Voice & tone rules
+    |--------------------------------------------------------------------------
+    | Rules governing tone, British spelling, varied sentence openings, and
+    | banned clichés, included in every campaign email generation.
+    */
+    'voice_rules' => env('CAMPAIGN_EMAIL_VOICE_RULES')
+        ? array_values(array_filter(array_map('trim', explode('|', (string) env('CAMPAIGN_EMAIL_VOICE_RULES')))))
+        : [
+            'Use British English spelling throughout (e.g. colour, realise, centre, honour).',
+            'Vary sentence openings — avoid starting consecutive sentences or paragraphs with repetitive phrasing (e.g. "I feel", "I see", "There is").',
+            'Avoid generic AI clichés and psychic tropes (e.g. "beacon of light", "tapestry of life", "delve into", "testament to", "as an AI").',
+            'Keep the tone deeply personal, warm, grounded, and compassionate.',
+        ],
 
     /*
     |--------------------------------------------------------------------------
@@ -105,6 +140,66 @@ return [
     */
     'cancel' => [
         'enabled' => (bool) env('CAMPAIGN_EMAIL_CANCEL_ENABLED', true),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | VIP tag
+    |--------------------------------------------------------------------------
+    | The Shopify product tag that marks a product as a Campaign (vip)
+    | product. Read during the unlisted sync and stored as
+    | `unlisted_products.is_vip`; order webhooks carry no product tags, so
+    | routing between the Reading and Campaign flows uses that local flag.
+    */
+    'vip_tag' => env('CAMPAIGN_EMAIL_VIP_TAG', 'vip'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Shopify Webhook HMAC (optional, disabled by default)
+    |--------------------------------------------------------------------------
+    | Independent of the reading flow's `email_reading.hmac_enabled`. When
+    | false the VerifyShopifyWebhookHmac middleware lets traffic through.
+    | The secret falls back to the shared SHOPIFY_WEBHOOK_SECRET.
+    */
+    'hmac_enabled' => (bool) env('CAMPAIGN_EMAIL_HMAC_ENABLED', false),
+    'shopify_webhook_secret' => env('CAMPAIGN_EMAIL_SHOPIFY_WEBHOOK_SECRET', env('SHOPIFY_WEBHOOK_SECRET')),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Testing allowlist (optional)
+    |--------------------------------------------------------------------------
+    | Same behaviour as email_reading.test_emails: when non-empty only orders
+    | whose customer email is listed are processed; every other order is
+    | recorded as an `ignored` webhook event. Empty (default) = no filter.
+    */
+    'test_emails' => array_values(array_filter(array_map(
+        fn ($e) => strtolower(trim((string) $e)),
+        explode(',', (string) env('CAMPAIGN_EMAIL_TEST_EMAILS', ''))
+    ))),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Due-delivery dispatcher
+    |--------------------------------------------------------------------------
+    | The delivery row (status + scheduled_at) is the single source of truth
+    | for when an email goes out — there are no long-delayed queue jobs. A
+    | scheduler command runs every minute, atomically claims due deliveries
+    | and dispatches an immediate send job for each claim.
+    |
+    | batch_size           max deliveries claimed per run.
+    | stuck_after_minutes  a delivery left in `sending` longer than this
+    |                      (worker crash, lost job) is recovered: finalized as
+    |                      sent if the mail already went out, otherwise
+    |                      released for re-dispatch. Keep it above the send
+    |                      job's total retry/backoff time.
+    | max_releases         how many times a stalled claim is auto-released
+    |                      before the delivery is marked failed and an admin
+    |                      is notified instead.
+    */
+    'dispatch' => [
+        'batch_size' => (int) env('CAMPAIGN_EMAIL_DISPATCH_BATCH', 100),
+        'stuck_after_minutes' => (int) env('CAMPAIGN_EMAIL_STUCK_AFTER_MINUTES', 15),
+        'max_releases' => (int) env('CAMPAIGN_EMAIL_MAX_RELEASES', 1),
     ],
 
 ];

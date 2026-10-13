@@ -10,7 +10,7 @@ return [
     | lets traffic through (useful in dev). Flip to true in production once
     | the webhook is registered and SHOPIFY_WEBHOOK_SECRET is set.
     */
-    'hmac_enabled' => env('SHOPIFY_WEBHOOK_HMAC_ENABLED', false),
+    'hmac_enabled' => (bool) env('SHOPIFY_WEBHOOK_HMAC_ENABLED', false),
     'shopify_webhook_secret' => env('SHOPIFY_WEBHOOK_SECRET'),
 
     /*
@@ -26,10 +26,44 @@ return [
         'READINGS_SYSTEM_PROMPT',
         'You are Scott Stonebridge, an award-winning UK psychic medium. '
         .'Write a warm, compassionate, well-structured email reading. '
-        .'Use clear paragraphs, no headings, no markdown. '
         .'Do not include a greeting/salutation (e.g. "Dear ...") or a sign-off (e.g. "Warm blessings, ...") — '
         .'output only the body of the reading itself, since the surrounding email template already supplies those.'
     ),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Shared formatting contract
+    |--------------------------------------------------------------------------
+    | The formatting contract instructs the model to structure readings using
+    | markdown (headings, key messages, closing section, no greeting/sign-off).
+    | A product row in email_reading_products may override `formatting_contract`.
+    */
+    'formatting_contract' => env(
+        'READINGS_FORMATTING_CONTRACT',
+        "Structure your response using Markdown:\n"
+        ."- Use markdown headings (## or ###) for each question, card, or main section.\n"
+        ."- Include short, one-line key message lines or takeaways (e.g. bold or blockquote).\n"
+        ."- End with a dedicated closing section headed '### From My Heart to Yours' with warm, encouraging parting words.\n"
+        ."- Do NOT include a greeting or salutation (e.g. 'Dear ...') — the email template already supplies it.\n"
+        ."- Do NOT include a sign-off or closing signature (e.g. 'Warm blessings, Scott') — the email template already supplies it.\n"
+        .'- Return ONLY the markdown reading body. Do not include raw HTML.'
+    ),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Voice & tone rules
+    |--------------------------------------------------------------------------
+    | Rules governing tone, British spelling, varied sentence openings, and
+    | banned clichés, included in every reading generation.
+    */
+    'voice_rules' => env('READINGS_VOICE_RULES')
+        ? array_values(array_filter(array_map('trim', explode('|', (string) env('READINGS_VOICE_RULES')))))
+        : [
+            'Use British English spelling throughout (e.g. colour, realise, centre, honour).',
+            'Vary sentence openings — avoid starting consecutive sentences or paragraphs with repetitive phrasing (e.g. "I feel", "I see", "There is").',
+            'Avoid generic AI clichés and psychic tropes (e.g. "beacon of light", "tapestry of life", "delve into", "testament to", "as an AI").',
+            'Keep the tone deeply personal, warm, grounded, and compassionate.',
+        ],
 
     /*
     |--------------------------------------------------------------------------
@@ -154,5 +188,30 @@ return [
         fn ($e) => strtolower(trim((string) $e)),
         explode(',', (string) env('READINGS_TEST_EMAILS', ''))
     ))),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Due-delivery dispatcher
+    |--------------------------------------------------------------------------
+    | The delivery row (status + scheduled_at) is the single source of truth
+    | for when an email goes out — there are no long-delayed queue jobs. A
+    | scheduler command runs every minute, atomically claims due deliveries
+    | and dispatches an immediate send job for each claim.
+    |
+    | batch_size           max deliveries claimed per run.
+    | stuck_after_minutes  a delivery left in `sending` longer than this
+    |                      (worker crash, lost job) is recovered: finalized as
+    |                      sent if the mail already went out, otherwise
+    |                      released for re-dispatch. Keep it above the send
+    |                      job's total retry/backoff time.
+    | max_releases         how many times a stalled claim is auto-released
+    |                      before the delivery is marked failed and an admin
+    |                      is notified instead.
+    */
+    'dispatch' => [
+        'batch_size' => (int) env('READINGS_DISPATCH_BATCH', 100),
+        'stuck_after_minutes' => (int) env('READINGS_STUCK_AFTER_MINUTES', 15),
+        'max_releases' => (int) env('READINGS_MAX_RELEASES', 1),
+    ],
 
 ];

@@ -33,7 +33,10 @@ final class InlineEmailStyles
         'hr' => 'border:none;border-top:1px solid #e5ddef;margin:20px 0;',
     ];
 
-    public static function apply(?string $html): string
+    /**
+     * @param  array<string,string>  $overrides  extra declarations per tag, appended after the base style so they win
+     */
+    public static function apply(?string $html, array $overrides = []): string
     {
         $html = trim((string) $html);
 
@@ -51,7 +54,8 @@ final class InlineEmailStyles
         foreach (self::TAG_STYLES as $tag => $style) {
             foreach ($xpath->query('//'.$tag) as $node) {
                 $existing = trim($node->getAttribute('style'));
-                $node->setAttribute('style', rtrim($style, ';').';'.($existing !== '' ? ' '.$existing : ''));
+                $base = isset($overrides[$tag]) ? rtrim($style, ';').';'.rtrim($overrides[$tag], ';') : $style;
+                $node->setAttribute('style', rtrim($base, ';').';'.($existing !== '' ? ' '.$existing : ''));
             }
         }
 

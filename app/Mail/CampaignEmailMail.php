@@ -4,8 +4,8 @@ namespace App\Mail;
 
 use App\Models\CampaignDelivery;
 use App\Models\CampaignProduct;
+use App\Support\EmailBodyHtml;
 use App\Support\InlineEmailStyles;
-use App\Support\PlainTextMailBody;
 use App\Support\TemplatePlaceholder;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -33,8 +33,8 @@ class CampaignEmailMail extends Mailable
     {
         $product = $this->delivery->campaignProduct;
         $vars = [
-            'productTitle' => $product?->product_title ?: 'your reading',
-            'campaignName' => $product?->marketingCampaign?->name ?: '',
+            'productTitle' => e($product?->product_title ?: 'your reading'),
+            'campaignName' => e($product?->marketingCampaign?->name ?: ''),
         ];
 
         return new Content(
@@ -42,7 +42,7 @@ class CampaignEmailMail extends Mailable
             with: [
                 'delivery' => $this->delivery,
                 'customerName' => $this->delivery->customer_name ?: 'Dear Friend',
-                'campaignBody' => PlainTextMailBody::toHtml((string) $product?->response?->body),
+                'campaignBody' => EmailBodyHtml::render((string) $product?->response?->body),
                 'headerImageUrl' => $this->headerImageUrl($product),
                 'emailContent' => $this->renderTemplateField($product?->email_content, $vars, $this->defaultContent()),
                 'emailFooter' => $this->renderTemplateField($product?->email_footer, $vars, $this->defaultFooter()),

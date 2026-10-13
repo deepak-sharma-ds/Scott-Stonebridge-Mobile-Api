@@ -55,7 +55,7 @@ class UnlistedProductController extends Controller
 
             return redirect()
                 ->route('admin.unlisted-products.index')
-                ->with('success', "Synced {$result['synced']} unlisted products ({$result['deactivated']} deactivated).");
+                ->with('success', "Synced {$result['synced']} unlisted products ({$result['created']} new).");
         } catch (Throwable $e) {
             report($e);
 

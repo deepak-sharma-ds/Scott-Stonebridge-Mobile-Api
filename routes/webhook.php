@@ -32,15 +32,15 @@ Route::prefix('webhook')->group(function () {
         ->name('webhook.shopify.reading.cancelled');
 
     Route::post('/order-paid-campaign', [CampaignPaidWebhookController::class, 'handle'])
-        ->middleware('shopify.hmac')
+        ->middleware('shopify.hmac:campaign_email')
         ->name('webhook.shopify.campaign');
 
     Route::post('/order-updated-campaign', [CampaignOrderUpdatedWebhookController::class, 'handle'])
-        ->middleware('shopify.hmac')
+        ->middleware('shopify.hmac:campaign_email')
         ->name('webhook.shopify.campaign.updated');
 
     Route::post('/order-cancelled-campaign', [CampaignOrderCancelledWebhookController::class, 'handle'])
-        ->middleware('shopify.hmac')
+        ->middleware('shopify.hmac:campaign_email')
         ->name('webhook.shopify.campaign.cancelled');
 
     /**

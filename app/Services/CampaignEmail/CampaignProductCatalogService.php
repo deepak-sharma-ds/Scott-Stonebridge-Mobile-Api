@@ -8,7 +8,7 @@ use App\Models\MarketingCampaign;
 use App\Models\UnlistedProduct;
 
 /**
- * Lists locally-synced Shopify Unlisted products eligible for linking to a
+ * Lists locally-synced Shopify Unlisted, vip-tagged products eligible for linking to a
  * marketing campaign, minus any already linked to the given campaign. Feeds
  * the admin product picker on the campaign show page. The catalog itself is
  * kept in sync with Shopify by UnlistedProductSyncService (see
@@ -25,6 +25,7 @@ class CampaignProductCatalogService
 
         return UnlistedProduct::query()
             ->published()
+            ->vip()
             ->whereNotIn('shopify_product_id', $linkedProductIds)
             ->orderBy('title')
             ->get()

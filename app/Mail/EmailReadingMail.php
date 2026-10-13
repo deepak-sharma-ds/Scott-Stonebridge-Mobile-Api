@@ -4,8 +4,8 @@ namespace App\Mail;
 
 use App\Models\EmailReadingDelivery;
 use App\Models\EmailReadingProduct;
+use App\Support\EmailBodyHtml;
 use App\Support\InlineEmailStyles;
-use App\Support\PlainTextMailBody;
 use App\Support\TemplatePlaceholder;
 use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
@@ -36,8 +36,8 @@ class EmailReadingMail extends Mailable
             ?: (string) config('email_reading.default_view', 'mail.email-reading');
         $customerName = $this->delivery->customer_name ?: 'Dear Friend';
         $vars = [
-            'productTitle' => $product?->name ?: 'your reading',
-            'customerName' => $customerName,
+            'productTitle' => e($product?->name ?: 'your reading'),
+            'customerName' => e($customerName),
         ];
 
         return new Content(
@@ -46,7 +46,7 @@ class EmailReadingMail extends Mailable
                 'delivery' => $this->delivery,
                 'product' => $product,
                 'customerName' => $customerName,
-                'readingBody' => PlainTextMailBody::toHtml((string) $this->delivery->ai_response),
+                'readingBody' => EmailBodyHtml::render((string) $this->delivery->ai_response),
                 'questions' => (array) $this->delivery->questions,
                 'headerImageUrl' => $this->headerImageUrl($product),
                 'emailContent' => InlineEmailStyles::apply(TemplatePlaceholder::render($product?->email_content, $vars, $this->defaultContent())),

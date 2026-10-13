@@ -77,3 +77,34 @@ Schedule::command('shopify:sync-unlisted-products')
     ->hourly()
     ->withoutOverlapping()
     ->name('sync-unlisted-products');
+
+/*
+|--------------------------------------------------------------------------
+| Email Reading + Campaign Email — due-delivery dispatchers
+|--------------------------------------------------------------------------
+|
+| The delivery row (status + scheduled_at) is the single source of truth for
+| when an email goes out. Every minute each dispatcher atomically claims due
+| deliveries and queues an immediate send job, and recovers deliveries stuck
+| in `sending`. Requires `php artisan schedule:run` in cron in production.
+| The health check alerts when due deliveries are not being picked up.
+|
+*/
+Schedule::command('readings:dispatch-due')
+    ->everyMinute()
+    ->withoutOverlapping(5)
+    ->name('readings-dispatch-due');
+
+Schedule::command('campaign-emails:dispatch-due')
+    ->everyMinute()
+    ->withoutOverlapping(5)
+    ->name('campaign-emails-dispatch-due');
+
+Schedule::command('email-automation:health')
+    ->everyFiveMinutes()
+    ->name('email-automation-health');
+
+Schedule::command('webhooks:retry')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->name('webhooks-retry-stale');

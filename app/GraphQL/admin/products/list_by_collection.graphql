@@ -1,0 +1,23 @@
+query listProductsByCollection($id: ID!, $first: Int!, $after: String) {
+  collection(id: $id) {
+    id
+    title
+    products(first: $first, after: $after) {
+      edges {
+        node {
+          id
+          title
+          status
+          featuredImage {
+            url
+            altText
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+}

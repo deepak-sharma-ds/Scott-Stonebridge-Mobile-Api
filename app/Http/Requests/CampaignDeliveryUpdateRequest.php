@@ -2,9 +2,7 @@
 
 namespace App\Http\Requests;
 
-use App\Models\CampaignDelivery;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class CampaignDeliveryUpdateRequest extends FormRequest
 {
@@ -24,7 +22,6 @@ class CampaignDeliveryUpdateRequest extends FormRequest
             'campaign_product_id' => ['nullable', 'integer', 'exists:campaign_products,id'],
             'scheduled_at' => ['nullable', 'date'],
             'expedited_at' => ['nullable', 'date'],
-            'status' => ['nullable', Rule::in(array_keys(CampaignDelivery::statusLabels()))],
         ];
     }
 

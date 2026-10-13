@@ -22,6 +22,7 @@ use App\Http\Controllers\Admin\ReportingController;
 use App\Http\Controllers\Admin\RichTextUploadController;
 use App\Http\Controllers\Admin\UnlistedProductController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\WebhookEventController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\RoleController;
 use Illuminate\Support\Facades\Route;
@@ -119,10 +120,14 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
             Route::post('/', [EmailReadingController::class, 'store'])->name('store');
             Route::get('/{delivery}', [EmailReadingController::class, 'show'])->name('show');
             Route::get('/{delivery}/edit', [EmailReadingController::class, 'edit'])->name('edit');
+            Route::match(['GET', 'POST'], '/{delivery}/preview', [EmailReadingController::class, 'preview'])->name('preview');
             Route::put('/{delivery}', [EmailReadingController::class, 'update'])->name('update');
             Route::post('/{delivery}/regenerate', [EmailReadingController::class, 'regenerate'])->name('regenerate');
             Route::post('/{delivery}/send', [EmailReadingController::class, 'sendNow'])->name('send');
             Route::post('/{delivery}/cancel', [EmailReadingController::class, 'cancel'])->name('cancel');
+            Route::post('/{delivery}/reactivate', [EmailReadingController::class, 'reactivate'])->name('reactivate');
+            Route::post('/{delivery}/mark-sent', [EmailReadingController::class, 'markSent'])->name('mark_sent');
+            Route::post('/{delivery}/retry-fulfillment', [EmailReadingController::class, 'retryFulfillment'])->name('retry_fulfillment');
             Route::delete('/{delivery}', [EmailReadingController::class, 'destroy'])->name('destroy');
         });
 
@@ -131,7 +136,14 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
 
         // Reading Products (email reading templates)
         Route::post('email-reading-products/test', [EmailReadingProductController::class, 'test'])->name('email-reading-products.test');
+        Route::match(['GET', 'POST'], 'email-reading-products/{emailReadingProduct}/preview', [EmailReadingProductController::class, 'preview'])->name('email-reading-products.preview');
+        Route::post('email-reading-products/{emailReadingProduct}/send-test', [EmailReadingProductController::class, 'sendTest'])->name('email-reading-products.send-test');
         Route::post('email-reading-products/{emailReadingProduct}/toggle', [EmailReadingProductController::class, 'toggleActive'])->name('email-reading-products.toggle');
+        // Reading Catalog Sync picker (collections -> products, no local mirror table — ADR 0018)
+        Route::get('email-reading-products/sync', [EmailReadingProductController::class, 'syncForm'])->name('email-reading-products.sync.form');
+        Route::get('email-reading-products/sync/collections', [EmailReadingProductController::class, 'syncCollections'])->name('email-reading-products.sync.collections');
+        Route::get('email-reading-products/sync/products', [EmailReadingProductController::class, 'syncProducts'])->name('email-reading-products.sync.products');
+        Route::post('email-reading-products/sync', [EmailReadingProductController::class, 'syncStore'])->name('email-reading-products.sync.store');
         Route::resource('email-reading-products', EmailReadingProductController::class)->except(['show']);
 
         // Unlisted Products (local catalog synced from Shopify — feeds the campaign product picker)
@@ -142,6 +154,10 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
         Route::get('marketing-campaigns/{marketingCampaign}/products/available', [CampaignProductController::class, 'available'])->name('marketing-campaigns.products.available');
         Route::post('marketing-campaigns/{marketingCampaign}/products', [CampaignProductController::class, 'store'])->name('marketing-campaigns.products.store');
         Route::delete('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}', [CampaignProductController::class, 'destroy'])->name('marketing-campaigns.products.destroy');
+        Route::match(['GET', 'POST'], 'marketing-campaigns/{marketingCampaign}/products/{campaignProduct}/preview', [CampaignProductController::class, 'preview'])->name('marketing-campaigns.products.preview');
+        Route::post('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}/send-test', [CampaignProductController::class, 'sendTest'])->name('marketing-campaigns.products.send-test');
+        Route::post('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}/generate', [CampaignProductController::class, 'generate'])->name('marketing-campaigns.products.generate');
+        Route::post('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}/validate-body', [CampaignProductController::class, 'validateBody'])->name('marketing-campaigns.products.validate-body');
         Route::post('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}/respond', [CampaignProductController::class, 'respond'])->name('marketing-campaigns.products.respond');
         Route::resource('marketing-campaigns', MarketingCampaignController::class);
 
@@ -151,10 +167,20 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
             Route::get('/export', [CampaignDeliveryController::class, 'export'])->name('export');
             Route::get('/{delivery}', [CampaignDeliveryController::class, 'show'])->name('show');
             Route::get('/{delivery}/edit', [CampaignDeliveryController::class, 'edit'])->name('edit');
+            Route::match(['GET', 'POST'], '/{delivery}/preview', [CampaignDeliveryController::class, 'preview'])->name('preview');
             Route::put('/{delivery}', [CampaignDeliveryController::class, 'update'])->name('update');
             Route::post('/{delivery}/send', [CampaignDeliveryController::class, 'send'])->name('send');
             Route::post('/{delivery}/cancel', [CampaignDeliveryController::class, 'cancel'])->name('cancel');
+            Route::post('/{delivery}/reactivate', [CampaignDeliveryController::class, 'reactivate'])->name('reactivate');
+            Route::post('/{delivery}/mark-sent', [CampaignDeliveryController::class, 'markSent'])->name('mark_sent');
+            Route::post('/{delivery}/retry-fulfillment', [CampaignDeliveryController::class, 'retryFulfillment'])->name('retry_fulfillment');
             Route::delete('/{delivery}', [CampaignDeliveryController::class, 'destroy'])->name('destroy');
+        });
+
+        // Webhook inbox (stored Shopify events + replay)
+        Route::prefix('webhook-events')->name('webhook_events.')->group(function () {
+            Route::get('/', [WebhookEventController::class, 'index'])->name('index');
+            Route::post('/{event}/replay', [WebhookEventController::class, 'replay'])->name('replay');
         });
     });
 

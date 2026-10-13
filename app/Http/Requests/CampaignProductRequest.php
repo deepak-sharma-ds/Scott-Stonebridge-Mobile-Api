@@ -33,6 +33,7 @@ class CampaignProductRequest extends FormRequest
             'email_content' => ['nullable', 'string'],
             'email_footer' => ['nullable', 'string'],
             'prompt_template' => ['nullable', 'string'],
+            'formatting_contract' => ['nullable', 'string'],
             'email_subject' => ['nullable', 'string', 'max:255'],
             'model' => ['nullable', 'string', 'max:255'],
             'max_tokens' => ['nullable', 'integer', 'min:1', 'max:8000'],

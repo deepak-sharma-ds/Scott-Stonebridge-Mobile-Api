@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\MarketingCampaignRequest;
+use App\Models\CampaignDelivery;
 use App\Models\CampaignProduct;
 use App\Models\MarketingCampaign;
 use App\Services\CampaignEmail\CampaignLinkGenerator;
@@ -54,9 +55,19 @@ class MarketingCampaignController extends Controller
                 $campaignProduct->id => $this->linkGenerator->generate($campaignProduct),
             ]);
 
+        // Unsent deliveries read the live response text at send time, so an
+        // edit to a response reaches every one of them. Surfaced in the form.
+        $unsentCounts = CampaignDelivery::query()
+            ->whereIn('campaign_product_id', $marketingCampaign->campaignProducts->pluck('id'))
+            ->whereIn('status', [CampaignDelivery::STATUS_PENDING, CampaignDelivery::STATUS_SENDING])
+            ->selectRaw('campaign_product_id, count(*) as total')
+            ->groupBy('campaign_product_id')
+            ->pluck('total', 'campaign_product_id');
+
         return view('admin.marketing_campaigns.show', [
             'campaign' => $marketingCampaign,
             'campaignLinks' => $campaignLinks,
+            'unsentCounts' => $unsentCounts,
         ]);
     }
 
