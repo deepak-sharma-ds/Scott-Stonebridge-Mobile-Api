@@ -11,6 +11,7 @@ use App\Models\EmailReadingProduct;
 use App\Support\GeneratedBodyValidationResult;
 use App\Support\GeneratedBodyValidator;
 use App\Support\MarkdownMailBody;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Log;
 use OpenAI\Laravel\Facades\OpenAI;
@@ -369,7 +370,7 @@ class EmailReadingGenerationService
             $answers
         );
 
-        $prompt = Blade::render($product->prompt_template, $data);
+        $prompt = $this->renderTemplate($product->prompt_template, $data);
 
         $result = $this->complete($this->buildSystemPrompt($product), $prompt, $model, $maxTokens);
         $result['content'] = MarkdownMailBody::toHtml($result['content']);
@@ -460,7 +461,28 @@ class EmailReadingGenerationService
             (array) $delivery->questions
         );
 
-        return Blade::render($template, $data);
+        return $this->renderTemplate($template, $data);
+    }
+
+    /**
+     * Render a prompt template with the customer's answers plus reserved date
+     * variables ($today, $current_year, $current_month) that answers cannot
+     * override. The result goes to the model, not a browser, so Blade's HTML
+     * escaping is undone: an apostrophe or ampersand must arrive as typed.
+     *
+     * @param  array<string,mixed>  $data
+     */
+    private function renderTemplate(string $template, array $data): string
+    {
+        $now = Carbon::now();
+
+        $rendered = Blade::render($template, array_merge($data, [
+            'today' => $now->format('j F Y'),
+            'current_year' => $now->format('Y'),
+            'current_month' => $now->format('F'),
+        ]));
+
+        return html_entity_decode($rendered, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }
 
     /**

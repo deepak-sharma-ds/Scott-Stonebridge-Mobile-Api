@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\EmailReadingProduct;
+use App\Support\ReadingPromptTemplates;
 use Illuminate\Database\Seeder;
 
 /**
@@ -18,15 +19,23 @@ use Illuminate\Database\Seeder;
  * One real ID is already known from the sample webhook payload:
  *   future-two-question = 7939025469614
  *
- * Each row's `prompt_template` is a baseline draft. The user/admin should
- * replace it with the final prompt before go-live (no code change needed —
- * edit the row).
+ * The 8 customer-facing products get their modality-specific `prompt_template`
+ * and `max_tokens` from App\Support\ReadingPromptTemplates (shared with the
+ * data migration that upgrades existing rows). `test-product` keeps its own
+ * baseline. Admins can still edit any row's prompt afterwards.
  */
 class EmailReadingProductSeeder extends Seeder
 {
     public function run(): void
     {
+        $prompts = collect(ReadingPromptTemplates::all())->keyBy('shopify_product_id');
+
         foreach ($this->products() as $row) {
+            if ($definition = $prompts->get($row['shopify_product_id'])) {
+                $row['prompt_template'] = $definition['prompt_template'];
+                $row['max_tokens'] = $definition['max_tokens'];
+            }
+
             EmailReadingProduct::updateOrCreate(
                 ['slug' => $row['slug']],
                 $row,
@@ -49,8 +58,6 @@ class EmailReadingProductSeeder extends Seeder
                     ['key' => 'Q2', 'label' => 'What do you want to know? The more information you provide the better.', 'required' => true],
                 ],
                 'email_subject' => 'Your Future Two Question Reading from Scott Stonebridge',
-                'prompt_template' => "Customer name: {{ \$customer_name }}.\n\nProvide a Future-focused email reading addressing these two questions:\n\nQuestion 1: {{ \$future_q1 ?? \$q1 ?? '' }}\nQuestion 2: {{ \$future_q2 ?? \$q2 ?? '' }}",
-                'max_tokens' => 1500,
                 'is_active' => true,
             ],
             [
@@ -63,8 +70,6 @@ class EmailReadingProductSeeder extends Seeder
                     ['key' => 'Q3', 'label' => 'What do you want to know? The more information you provide the better.', 'required' => true],
                 ],
                 'email_subject' => 'Your Gold Three Question Reading from Scott Stonebridge',
-                'prompt_template' => "Customer: {{ \$customer_name }}.\n\nGold-tier three question reading.\n\nQ1: {{ \$gold_q1 ?? \$q1 ?? '' }}\nQ2: {{ \$gold_q2 ?? \$q2 ?? '' }}\nQ3: {{ \$gold_q3 ?? \$q3 ?? '' }}",
-                'max_tokens' => 1800,
                 'is_active' => true,
             ],
             [
@@ -77,8 +82,6 @@ class EmailReadingProductSeeder extends Seeder
                     ['key' => 'Q3', 'label' => 'What do you want to know? The more information you provide the better.', 'required' => true],
                 ],
                 'email_subject' => 'Your Love & Relationships Reading from Scott Stonebridge',
-                'prompt_template' => "Customer: {{ \$customer_name }}.\n\nLove & relationships reading focused on: {{ \$love_focus ?? \$q1 ?? '' }}\n\nQuestion 1: {{ \$love_q1 ?? \$q2 ?? '' }}\nQuestion 2: {{ \$love_q2 ?? \$q3 ?? '' }}",
-                'max_tokens' => 1600,
                 'is_active' => true,
             ],
             [
@@ -91,8 +94,6 @@ class EmailReadingProductSeeder extends Seeder
                     ['key' => 'Q3', 'label' => 'What do you want to know? The more information you provide the better.', 'required' => true],
                 ],
                 'email_subject' => 'Your Messages From Heaven Reading from Scott Stonebridge',
-                'prompt_template' => "Customer: {{ \$customer_name }}.\n\nMessages from heaven (mediumship) reading.\nFocus: {{ \$spirit_focus ?? \$q1 ?? '' }}\n\nQuestion 1: {{ \$spirit_q1 ?? \$q2 ?? '' }}\nQuestion 2: {{ \$spirit_q2 ?? \$q3 ?? '' }}",
-                'max_tokens' => 1600,
                 'is_active' => true,
             ],
             [
@@ -107,8 +108,6 @@ class EmailReadingProductSeeder extends Seeder
                     ['key' => 'Q5', 'label' => 'What do you want to know? The more information you provide the better.', 'required' => true],
                 ],
                 'email_subject' => 'Your Platinum Five Question Reading from Scott Stonebridge',
-                'prompt_template' => "Customer: {{ \$customer_name }}.\n\nPlatinum-tier five question reading.\n\nQ1: {{ \$platinum_q1 ?? \$q1 ?? '' }}\nQ2: {{ \$platinum_q2 ?? \$q2 ?? '' }}\nQ3: {{ \$platinum_q3 ?? \$q3 ?? '' }}\nQ4: {{ \$platinum_q4 ?? \$q4 ?? '' }}\nQ5: {{ \$platinum_q5 ?? \$q5 ?? '' }}",
-                'max_tokens' => 2200,
                 'is_active' => true,
             ],
             [
@@ -119,8 +118,6 @@ class EmailReadingProductSeeder extends Seeder
                     ['key' => 'Q1', 'label' => 'What do you want to know? The more information you provide the better.', 'required' => true],
                 ],
                 'email_subject' => 'Your Silver One Question Reading from Scott Stonebridge',
-                'prompt_template' => "Customer: {{ \$customer_name }}.\n\nSilver-tier single question reading.\n\nQuestion: {{ \$silver_q1 ?? \$q1 ?? '' }}",
-                'max_tokens' => 1200,
                 'is_active' => true,
             ],
             [
@@ -133,8 +130,6 @@ class EmailReadingProductSeeder extends Seeder
                     ['key' => 'Q3', 'label' => 'What do you want to know? The more information you provide the better.', 'required' => true],
                 ],
                 'email_subject' => 'Your You & Me Love Reading from Scott Stonebridge',
-                'prompt_template' => "Customer: {{ \$customer_name }}.\n\nYou & Me love reading.\nPartner details: {{ \$partner_details ?? \$q1 ?? '' }}\nConnection: {{ \$connection ?? \$q2 ?? '' }}\nQuestion: {{ \$love_question ?? \$q3 ?? '' }}",
-                'max_tokens' => 1600,
                 'is_active' => true,
             ],
             [
@@ -147,8 +142,6 @@ class EmailReadingProductSeeder extends Seeder
                     ['key' => 'Q3', 'label' => 'Please provide your TIME OF BIRTH if known? Or put n/a', 'required' => true],
                 ],
                 'email_subject' => 'Your 12 Month Year Ahead Astrology Outlook from Scott Stonebridge',
-                'prompt_template' => "Customer: {{ \$customer_name }}.\n\nProvide an in-depth 12-month year-ahead astrology outlook.\nDOB: {{ \$dob ?? \$q1 ?? '' }}\nPlace of birth: {{ \$birth_city ?? \$q2 ?? '' }}\nTime of birth: {{ \$birth_time ?? \$q3 ?? 'n/a' }}\n\nOrganise the outlook month by month over the next 12 months.",
-                'max_tokens' => 2400,
                 'is_active' => true,
             ],
             [
