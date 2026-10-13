@@ -14,7 +14,7 @@ class GeneratedBodyValidatorTest extends TestCase
         return <<<'HTML'
 <h2>Your Question Answered</h2>
 <p>You have entered a period of transition where balance is key.</p>
-<blockquote>A calm mind reveals the path ahead.</blockquote>
+<p>A calm mind reveals the path ahead.</p>
 <p>Keep your focus on long-term growth.</p>
 <h3>From My Heart to Yours</h3>
 <p>Walk forward with confidence and know you are protected.</p>
@@ -38,7 +38,7 @@ HTML;
 
 You have entered a period of transition where balance is key.
 
-> A calm mind reveals the path ahead.
+A calm mind reveals the path ahead.
 
 Keep your focus on long-term growth.
 
@@ -51,6 +51,110 @@ MD;
 
         $this->assertTrue($result->isValid());
         $this->assertEmpty($result->problems());
+    }
+
+    public function test_html_blockquote_is_detected(): void
+    {
+        $html = <<<'HTML'
+<h2>Your Question Answered</h2>
+<blockquote>A calm mind reveals the path ahead.</blockquote>
+<h3>From My Heart to Yours</h3>
+<p>Walk forward with confidence.</p>
+HTML;
+
+        $result = GeneratedBodyValidator::validate($html, 'stop');
+
+        $this->assertFalse($result->isValid());
+        $this->assertTrue($result->hasProblem(GeneratedBodyValidator::PROBLEM_BLOCKQUOTE));
+    }
+
+    public function test_markdown_blockquote_is_detected(): void
+    {
+        $markdown = "## Your Question\n\n> A calm mind reveals the path ahead.\n\n### From My Heart to Yours\n\nWalk forward with confidence.";
+
+        $result = GeneratedBodyValidator::validate($markdown, 'stop');
+
+        $this->assertFalse($result->isValid());
+        $this->assertTrue($result->hasProblem(GeneratedBodyValidator::PROBLEM_BLOCKQUOTE));
+    }
+
+    public function test_html_table_is_detected(): void
+    {
+        $html = <<<'HTML'
+<h2>Your Cards</h2>
+<table><tr><td>Past</td><td>Future</td></tr></table>
+<h3>From My Heart to Yours</h3>
+<p>Walk forward with confidence.</p>
+HTML;
+
+        $result = GeneratedBodyValidator::validate($html, 'stop');
+
+        $this->assertFalse($result->isValid());
+        $this->assertTrue($result->hasProblem(GeneratedBodyValidator::PROBLEM_TABLE));
+    }
+
+    public function test_markdown_table_is_detected(): void
+    {
+        $markdown = "## Your Cards\n\n| Position | Card |\n| --- | --- |\n| Past | The Star |\n\n### From My Heart to Yours\n\nWalk forward with confidence.";
+
+        $result = GeneratedBodyValidator::validate($markdown, 'stop');
+
+        $this->assertFalse($result->isValid());
+        $this->assertTrue($result->hasProblem(GeneratedBodyValidator::PROBLEM_TABLE));
+    }
+
+    public function test_html_horizontal_rule_is_detected(): void
+    {
+        $html = <<<'HTML'
+<h2>Your Reading</h2>
+<p>A calm mind reveals the path ahead.</p>
+<hr>
+<h3>From My Heart to Yours</h3>
+<p>Walk forward with confidence.</p>
+HTML;
+
+        $result = GeneratedBodyValidator::validate($html, 'stop');
+
+        $this->assertFalse($result->isValid());
+        $this->assertTrue($result->hasProblem(GeneratedBodyValidator::PROBLEM_DIVIDER));
+    }
+
+    public function test_markdown_horizontal_rule_is_detected(): void
+    {
+        $markdown = "## Your Reading\n\nA calm mind reveals the path ahead.\n\n---\n\n### From My Heart to Yours\n\nWalk forward with confidence.";
+
+        $result = GeneratedBodyValidator::validate($markdown, 'stop');
+
+        $this->assertFalse($result->isValid());
+        $this->assertTrue($result->hasProblem(GeneratedBodyValidator::PROBLEM_DIVIDER));
+    }
+
+    public function test_bullet_and_numbered_lists_are_detected(): void
+    {
+        $bodies = [
+            "## Your Reading\n\n- Trust your instincts\n- Take your time\n\n### From My Heart to Yours\n\nBe well.",
+            "## Your Reading\n\n1. Trust your instincts\n2. Take your time\n\n### From My Heart to Yours\n\nBe well.",
+            '<h2>Your Reading</h2><ul><li>Trust your instincts</li></ul><h3>From My Heart to Yours</h3><p>Be well.</p>',
+            '<h2>Your Reading</h2><ol><li>Trust your instincts</li></ol><h3>From My Heart to Yours</h3><p>Be well.</p>',
+        ];
+
+        foreach ($bodies as $body) {
+            $result = GeneratedBodyValidator::validate($body, 'stop');
+
+            $this->assertTrue(
+                $result->hasProblem(GeneratedBodyValidator::PROBLEM_LIST),
+                "Failed to detect list in: {$body}"
+            );
+        }
+    }
+
+    public function test_a_letter_in_flowing_paragraphs_with_soft_headings_has_no_layout_problems(): void
+    {
+        $markdown = "### Your First Question\n\nThe Star appears here, and it speaks of healing.\n\nTake the next step slowly.\n\n### From My Heart to Yours\n\nWalk forward with confidence.";
+
+        $result = GeneratedBodyValidator::validate($markdown, 'stop');
+
+        $this->assertTrue($result->isValid());
     }
 
     public function test_truncation_is_detected_when_finish_reason_is_length(): void

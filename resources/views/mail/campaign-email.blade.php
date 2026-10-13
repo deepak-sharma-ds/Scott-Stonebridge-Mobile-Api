@@ -14,7 +14,7 @@
         .ss-body p { margin: 0 0 14px; }
         .ss-body p:last-child { margin-bottom: 0; }
         .ss-body ul, .ss-body ol { margin: 0 0 14px; padding-left: 22px; }
-        .ss-body blockquote { margin: 0 0 14px; padding: 6px 16px; border-left: 3px solid #d8cbe8; color: #6b5b7d; font-style: italic; }
+        .ss-body blockquote { margin: 0 0 14px; padding: 6px 16px; color: #6b5b7d; font-style: italic; }
         .ss-body table { border-collapse: collapse; width: 100%; margin: 0 0 14px; }
         .ss-body table td, .ss-body table th { border: 1px solid #e5ddef; padding: 8px; }
         .ss-body a { color: #6c3fa1; }

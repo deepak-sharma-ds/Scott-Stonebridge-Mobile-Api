@@ -12,6 +12,8 @@ namespace App\Support;
  *   2. Leftover markdown: unparsed markdown syntax remaining in the HTML
  *   3. Missing closing section: closing heading/section (e.g. 'From My Heart to Yours')
  *   4. Duplicated greeting or sign-off: greetings or signatures already supplied by template
+ *   5. Epistolary layout: blockquotes, tables, horizontal dividers and bullet/numbered
+ *      lists, which make a personal letter read as machine-generated
  */
 class GeneratedBodyValidator
 {
@@ -24,6 +26,14 @@ class GeneratedBodyValidator
     public const PROBLEM_DUPLICATED_GREETING = 'Response contains a greeting already supplied by the email template';
 
     public const PROBLEM_DUPLICATED_SIGNOFF = 'Response contains a sign-off already supplied by the email template';
+
+    public const PROBLEM_BLOCKQUOTE = 'Response contains a blockquote, which is not allowed in a personal letter';
+
+    public const PROBLEM_TABLE = 'Response contains a table, which is not allowed in a personal letter';
+
+    public const PROBLEM_DIVIDER = 'Response contains a horizontal divider, which is not allowed in a personal letter';
+
+    public const PROBLEM_LIST = 'Response contains a bullet or numbered list, which is not allowed in a personal letter';
 
     /**
      * Validates a generated body (HTML or markdown) and optional finish reason.
@@ -59,6 +69,22 @@ class GeneratedBodyValidator
                     self::PROBLEM_MISSING_CLOSING_SECTION
                 );
             }
+        }
+
+        if (self::hasBlockquote($html)) {
+            $problems[] = self::PROBLEM_BLOCKQUOTE;
+        }
+
+        if (self::hasTable($html)) {
+            $problems[] = self::PROBLEM_TABLE;
+        }
+
+        if (self::hasDivider($html)) {
+            $problems[] = self::PROBLEM_DIVIDER;
+        }
+
+        if (self::hasList($html)) {
+            $problems[] = self::PROBLEM_LIST;
         }
 
         if (self::hasDuplicatedGreeting($html)) {
@@ -117,6 +143,38 @@ class GeneratedBodyValidator
         }
 
         return false;
+    }
+
+    /**
+     * Detects blockquotes, which render as a vertical stripe in email clients.
+     */
+    public static function hasBlockquote(string $html): bool
+    {
+        return (bool) preg_match('/<blockquote\b/i', $html);
+    }
+
+    /**
+     * Detects tables, a structured layout that breaks the personal-letter feel.
+     */
+    public static function hasTable(string $html): bool
+    {
+        return (bool) preg_match('/<table\b/i', $html);
+    }
+
+    /**
+     * Detects horizontal rules (`<hr>`, which markdown `---` converts to).
+     */
+    public static function hasDivider(string $html): bool
+    {
+        return (bool) preg_match('/<hr\b/i', $html);
+    }
+
+    /**
+     * Detects bullet and numbered lists.
+     */
+    public static function hasList(string $html): bool
+    {
+        return (bool) preg_match('/<(?:ul|ol)\b/i', $html);
     }
 
     /**

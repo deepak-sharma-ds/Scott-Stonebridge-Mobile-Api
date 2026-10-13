@@ -31,6 +31,15 @@ class MarkdownMailBodyTest extends TestCase
         $this->assertStringContainsString('<li>Point 1</li>', $html);
     }
 
+    public function test_markdown_tables_and_dividers_convert_to_html_the_validator_can_detect(): void
+    {
+        $markdown = "| Position | Card |\n| --- | --- |\n| Past | The Star |\n\n---\n\nA closing paragraph.";
+        $html = MarkdownMailBody::toHtml($markdown);
+
+        $this->assertStringContainsString('<table>', $html);
+        $this->assertStringContainsString('<hr', $html);
+    }
+
     public function test_strips_raw_html_tags_and_drops_active_elements_with_content(): void
     {
         $markdown = "## Clean Heading\n\n<script>alert('xss')</script><div class=\"danger\">Text inside div</div>\n\nParagraph with <b>inline raw html</b>.";

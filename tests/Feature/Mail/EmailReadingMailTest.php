@@ -57,7 +57,7 @@ class EmailReadingMailTest extends TestCase
         $this->assertStringContainsString('Card One</h2>', $html);
         $this->assertStringContainsString('margin:28px 0 12px', $html);
         $this->assertStringContainsString('font-family:Arial', $html);
-        $this->assertStringContainsString('border-left:3px solid', $html);
+        $this->assertStringNotContainsString('border-left', $html);
         $this->assertStringContainsString('The answer is yes.', $html);
         $this->assertStringNotContainsString('steal()', $html);
         $this->assertStringNotContainsString('onclick', $html);

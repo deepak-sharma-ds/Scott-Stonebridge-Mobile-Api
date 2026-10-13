@@ -34,15 +34,18 @@ return [
     |--------------------------------------------------------------------------
     | Shared formatting contract
     |--------------------------------------------------------------------------
-    | The formatting contract instructs the model to structure readings using
-    | markdown (headings, key messages, closing section, no greeting/sign-off).
+    | The formatting contract instructs the model to write the reading as a
+    | warm personal letter in flowing paragraphs, with soft ### subheadings and
+    | a closing section. Blockquotes, tables, bullet lists and horizontal rules
+    | are forbidden so the email never looks machine-generated.
     | A product row in email_reading_products may override `formatting_contract`.
     */
     'formatting_contract' => env(
         'READINGS_FORMATTING_CONTRACT',
-        "Structure your response using Markdown:\n"
-        ."- Use markdown headings (## or ###) for each question, card, or main section.\n"
-        ."- Include short, one-line key message lines or takeaways (e.g. bold or blockquote).\n"
+        "Write the reading as a warm, personal letter in Markdown:\n"
+        ."- Write in natural flowing paragraphs, as if typing a heartfelt email to one person.\n"
+        ."- Use soft ### subheadings only to introduce each question, card, or main section. Keep them short and gentle.\n"
+        ."- Do NOT use blockquotes (lines starting with '>'), tables, bullet points, numbered lists, horizontal dividers ('---'), or decorative symbols. Weave every point into the paragraphs instead.\n"
         ."- End with a dedicated closing section headed '### From My Heart to Yours' with warm, encouraging parting words.\n"
         ."- Do NOT include a greeting or salutation (e.g. 'Dear ...') — the email template already supplies it.\n"
         ."- Do NOT include a sign-off or closing signature (e.g. 'Warm blessings, Scott') — the email template already supplies it.\n"
