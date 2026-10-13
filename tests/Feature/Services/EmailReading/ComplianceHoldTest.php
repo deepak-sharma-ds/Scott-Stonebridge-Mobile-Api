@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Tests\Feature\Services\EmailReading;
 
 use App\Jobs\EmailReading\NotifyComplianceHoldJob;
+use App\Jobs\EmailReading\NotifyReadingFailureJob;
 use App\Jobs\EmailReading\ProcessEmailReadingOrderJob;
 use App\Models\EmailReadingDelivery;
 use App\Models\EmailReadingProduct;
@@ -97,6 +98,40 @@ class ComplianceHoldTest extends TestCase
         $this->assertNull($delivery->ai_response);
         OpenAI::assertNotSent(Chat::class);
         Queue::assertPushed(NotifyComplianceHoldJob::class, fn (NotifyComplianceHoldJob $job): bool => $job->deliveryId === $delivery->id);
+    }
+
+    private function claimReply(): ChatResponse
+    {
+        return ChatResponse::fake(['choices' => [['message' => ['role' => 'assistant', 'content' => "### Your Health\n\nI diagnose a heart condition and you must stop your medication.\n\n### From My Heart to Yours\n\nBe well."], 'finish_reason' => 'stop']]]);
+    }
+
+    public function test_output_with_a_definitive_medical_claim_after_retry_enters_compliance_hold(): void
+    {
+        Queue::fake();
+        OpenAI::fake([$this->cleanModeration(), $this->claimReply(), $this->claimReply()]);
+        $delivery = $this->delivery('Will I feel more positive about life this year?');
+
+        $this->runJob($delivery);
+
+        $delivery->refresh();
+        $this->assertSame(EmailReadingDelivery::STATUS_COMPLIANCE_HOLD, $delivery->status);
+        $this->assertStringContainsString('medical claim', strtolower((string) $delivery->compliance_flagged_reason));
+        $this->assertNull($delivery->ai_response);
+        Queue::assertPushed(NotifyComplianceHoldJob::class);
+        Queue::assertNotPushed(NotifyReadingFailureJob::class);
+    }
+
+    public function test_a_clean_retry_after_a_medical_claim_is_generated_normally(): void
+    {
+        Queue::fake();
+        OpenAI::fake([$this->cleanModeration(), $this->claimReply(), $this->chatReply()]);
+        $delivery = $this->delivery('Will I feel more positive about life this year?');
+
+        $this->runJob($delivery);
+
+        $delivery->refresh();
+        $this->assertSame(EmailReadingDelivery::STATUS_GENERATED, $delivery->status);
+        $this->assertStringNotContainsString('diagnose', (string) $delivery->ai_response);
     }
 
     public function test_an_admin_reviewed_delivery_skips_the_gate(): void

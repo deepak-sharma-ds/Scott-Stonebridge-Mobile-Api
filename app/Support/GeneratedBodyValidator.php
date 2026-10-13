@@ -33,6 +33,15 @@ class GeneratedBodyValidator
 
     public const PROBLEM_DIVIDER = 'Response contains a horizontal divider, which is not allowed in a personal letter';
 
+    public const PROBLEM_MEDICAL_CLAIM = 'Response makes a definitive medical claim (diagnosis, cure or instruction about medication)';
+
+    private const MEDICAL_CLAIM_PATTERNS = [
+        '/\bI (?:can )?diagnos(?:e|ed)\b/i',
+        '/\byou (?:will|are going to|shall) be (?:cured|healed)\b/i',
+        '/\b(?:stop|cease|discontinue|come off) (?:taking )?your (?:medication|medicine|meds|tablets|pills|treatment|chemo\w*)\b/i',
+        '/\byou (?:have|are suffering from|are suffering with|are dying of) (?:a )?(?:cancer|tumou?rs?|leuk(?:a)?emia|diabetes|hiv|dementia|alzheimer\w*|multiple sclerosis|heart disease)\b/i',
+    ];
+
     public const PROBLEM_LIST = 'Response contains a bullet or numbered list, which is not allowed in a personal letter';
 
     /**
@@ -85,6 +94,10 @@ class GeneratedBodyValidator
 
         if (self::hasList($html)) {
             $problems[] = self::PROBLEM_LIST;
+        }
+
+        if (self::hasMedicalClaim($html)) {
+            $problems[] = self::PROBLEM_MEDICAL_CLAIM;
         }
 
         if (self::hasDuplicatedGreeting($html)) {
@@ -175,6 +188,32 @@ class GeneratedBodyValidator
     public static function hasList(string $html): bool
     {
         return (bool) preg_match('/<(?:ul|ol)\b/i', $html);
+    }
+
+    /**
+     * Detects definitive medical assertions (diagnosing, promising a cure,
+     * telling the reader to stop medication). A match preceded by a negation
+     * ("never stop your medication") is a safe deflection, not a claim.
+     */
+    public static function hasMedicalClaim(string $html): bool
+    {
+        $plain = (string) preg_replace('/<[^>]+>/', ' ', $html);
+
+        foreach (self::MEDICAL_CLAIM_PATTERNS as $pattern) {
+            if (! preg_match_all($pattern, $plain, $matches, PREG_OFFSET_CAPTURE)) {
+                continue;
+            }
+
+            foreach ($matches[0] as [$match, $offset]) {
+                $before = substr($plain, max(0, $offset - 30), min(30, $offset));
+
+                if (! preg_match('/\b(?:not|never|n\'t|nor|without)\s+(?:\w+\s+){0,2}$/i', $before)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**

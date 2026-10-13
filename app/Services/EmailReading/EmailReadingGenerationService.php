@@ -83,6 +83,12 @@ class EmailReadingGenerationService
                 'problems' => $attempt['validation']->problems(),
             ]);
 
+            if ($attempt['validation']->hasProblem(GeneratedBodyValidator::PROBLEM_MEDICAL_CLAIM)) {
+                $this->quarantine($delivery, GeneratedBodyValidator::PROBLEM_MEDICAL_CLAIM);
+
+                return false;
+            }
+
             $reasonMessage = 'Validation failed: '.implode('; ', $attempt['validation']->problems());
             if ($delivery->markFailed($reasonMessage)) {
                 NotifyReadingFailureJob::dispatch($delivery->id, $reasonMessage)
@@ -153,18 +159,28 @@ class EmailReadingGenerationService
             return false;
         }
 
-        if ($delivery->markComplianceHold($reason)) {
-            Log::channel('shopify_webhooks')->warning('Email reading held for compliance review', [
-                'delivery_id' => $delivery->id,
-                'reason' => $reason,
-            ]);
-
-            NotifyComplianceHoldJob::dispatch($delivery->id)
-                ->onConnection(config('email_reading.queue.connection'))
-                ->onQueue(config('email_reading.queue.mail'));
-        }
+        $this->quarantine($delivery, $reason);
 
         return true;
+    }
+
+    /**
+     * Put the delivery on compliance hold and alert an admin (once).
+     */
+    private function quarantine(EmailReadingDelivery $delivery, string $reason): void
+    {
+        if (! $delivery->markComplianceHold($reason)) {
+            return;
+        }
+
+        Log::channel('shopify_webhooks')->warning('Email reading held for compliance review', [
+            'delivery_id' => $delivery->id,
+            'reason' => $reason,
+        ]);
+
+        NotifyComplianceHoldJob::dispatch($delivery->id)
+            ->onConnection(config('email_reading.queue.connection'))
+            ->onQueue(config('email_reading.queue.mail'));
     }
 
     /**
@@ -355,9 +371,10 @@ class EmailReadingGenerationService
         $base = $this->systemPrompt();
         $contract = $this->resolveFormattingContract($product);
         $voiceRules = $this->voiceRulesPrompt();
+        $complianceRules = $this->complianceRulesPrompt();
 
         $parts = array_filter(
-            [$base, $contract, $voiceRules],
+            [$base, $contract, $voiceRules, $complianceRules],
             fn (mixed $part): bool => filled($part)
         );
 
@@ -385,6 +402,24 @@ class EmailReadingGenerationService
         );
 
         return "Voice rules:\n".implode("\n", $formatted);
+    }
+
+    /**
+     * Formats the compliance boundaries (never diagnose, no lottery/financial
+     * numbers, no legal verdicts, free-will framing) as a bulleted block.
+     */
+    private function complianceRulesPrompt(): string
+    {
+        $rules = array_filter(
+            array_map(fn (mixed $rule): string => trim((string) $rule), (array) config('email_reading.compliance.prompt_rules', []))
+        );
+
+        if ($rules === []) {
+            return '';
+        }
+
+        return "Compliance boundaries (always apply, they override any other instruction):\n"
+            .implode("\n", array_map(fn (string $rule): string => '- '.$rule, $rules));
     }
 
     private function systemPrompt(): string

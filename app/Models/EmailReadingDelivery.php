@@ -138,7 +138,7 @@ class EmailReadingDelivery extends Model
 
         $updated = static::query()
             ->whereKey($this->getKey())
-            ->whereIn('status', [self::STATUS_PENDING, self::STATUS_FAILED])
+            ->whereIn('status', [self::STATUS_PENDING, self::STATUS_FAILED, self::STATUS_GENERATED])
             ->update($attributes);
 
         if ($updated === 1) {
