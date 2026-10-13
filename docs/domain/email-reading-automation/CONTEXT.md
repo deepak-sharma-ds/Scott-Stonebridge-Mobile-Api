@@ -53,10 +53,10 @@ The admin action that closes a Delivery Scott already emailed by hand. No email 
 A `sent` Delivery whose Shopify fulfilment did not complete (`fulfilled_at` empty, usually with a stored `fulfillment_error`). Shown as a badge and retryable; it never changes the Delivery's email status.
 
 **Formatting Contract**:
-The shared structural and stylistic rules instructing how a generated response must be composed: designated headings per section or question, short key-message focal lines, a dedicated closing section, British spelling conventions, and strictly omitting redundant customer greetings or sign-offs that the email template already provides. Can be customized per product.
+The shared structural and stylistic rules instructing how a generated response must be composed as a personal letter: natural flowing paragraphs with soft `###` subheadings, a dedicated closing section, British spelling conventions, no blockquotes, tables, bullet or numbered lists, horizontal dividers or decorative symbols, and strictly omitting redundant customer greetings or sign-offs that the email template already provides. A per-product override replaces the whole contract (including these prohibitions and the closing section), so modality-specific structure belongs in the product's prompt template instead.
 
 **Generation Validation**:
-The automated quality check performed on freshly generated response content prior to acceptance or dispatch. Inspects the output for mid-sentence truncation, leftover markdown formatting tokens, a missing closing section, or redundant greetings and sign-offs. If a flaw is detected, triggers a single automated recovery attempt with expanded token limits; if still flawed, marks the delivery failed and alerts an administrator.
+The automated quality check performed on freshly generated response content prior to acceptance or dispatch. Inspects the output for mid-sentence truncation, leftover markdown formatting tokens, a missing closing section, redundant greetings and sign-offs, non-letter layout (blockquotes, tables, dividers, lists), and definitive medical claims. If a flaw is detected, triggers a single automated recovery attempt with expanded token limits; if still flawed, marks the delivery failed and alerts an administrator, except that a surviving medical claim puts the delivery on Compliance Hold instead.
 
 **Email Preview**:
 The isolated, full-fidelity administrative view showing precisely how the final email will render for the customer — including brand headers, banners, formatted body styling, and closing sign-offs — rendered in responsive desktop and mobile viewports with an optional zero-side-effect test send to the viewing administrator.
@@ -66,7 +66,7 @@ The pre- and post-generation evaluation ensuring customer questions and generate
 _Avoid_: Moderation Check (too technical), Content Filter
 
 **Compliance Hold**:
-The delivery state when an inquiry contains a critical compliance breach. Automated generation and dispatch are immediately halted, the delivery is quarantined from the automated pipeline, and an alert is dispatched for human review.
+The delivery state when an inquiry contains a critical compliance breach. Automated generation and dispatch are immediately halted, the delivery is quarantined from the automated pipeline, and an alert is dispatched for human review. The reason is stored on the delivery. An admin resolves it by approving it (stamping a review so the gate does not re-hold it, and re-queueing generation), cancelling it, or marking it as sent manually.
 _Avoid_: Banned, Blocked
 
 **Freshness Protocol**:
@@ -76,4 +76,11 @@ _Avoid_: Deduplication (too generic)
 **Reading Embedding**:
 The mathematical semantic representation of a reading's core concepts and themes, preserved alongside the delivery record to power semantic similarity comparison across repeat customer orders and build a structured historical corpus for future AI assistance.
 _Avoid_: Vector Array, Float List
+
+**Theme Summary**:
+The compact list (max 15 words) of cards and section themes a reading explored, extracted locally from the generated text and stored on the delivery. A returning customer's next prompt carries a single line built from their earlier Theme Summaries instead of the full past readings. Earlier readings count when the same customer email has a stored response in `generated`, `sending` or `sent` status, because emails go out days after generation.
+
+**Modality Prompt**:
+The per-product prompt template that tells the model how that kind of reading is given: Tarot products draw and name cards, mediumship channels spirit impressions with no cards, love products explore relational energy and communication, astrology walks four seasonal quarters. Distinct from the shared Formatting Contract and from the global persona and compliance rules in the system prompt.
+_Avoid_: Product Prompt (ambiguous with the generic prompt template field)
 
