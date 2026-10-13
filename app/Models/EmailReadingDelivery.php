@@ -49,6 +49,8 @@ class EmailReadingDelivery extends Model
         'fulfillment_error',
         'compliance_flagged_reason',
         'compliance_reviewed_at',
+        'theme_summary',
+        'embedding',
     ];
 
     protected function casts(): array
@@ -68,6 +70,7 @@ class EmailReadingDelivery extends Model
             'release_count' => 'integer',
             'sent_manually' => 'boolean',
             'compliance_reviewed_at' => 'datetime',
+            'embedding' => 'array',
         ];
     }
 

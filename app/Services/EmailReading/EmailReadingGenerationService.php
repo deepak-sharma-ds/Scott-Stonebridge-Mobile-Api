@@ -26,7 +26,10 @@ use Throwable;
  */
 class EmailReadingGenerationService
 {
-    public function __construct(private readonly ComplianceGateService $complianceGate) {}
+    public function __construct(
+        private readonly ComplianceGateService $complianceGate,
+        private readonly ReadingFreshnessService $freshness
+    ) {}
 
     /**
      * Generate and persist the reading.
@@ -53,7 +56,7 @@ class EmailReadingGenerationService
         $model = $product->model ?: (string) config('email_reading.openai_model');
         $maxTokens = (int) ($product->max_tokens ?: config('email_reading.max_tokens', 1500));
 
-        $prompt = $this->renderPrompt($product->prompt_template, $delivery);
+        $prompt = $this->buildUserPrompt($product->prompt_template, $delivery);
         $systemPrompt = $this->buildSystemPrompt($product);
         $contract = $this->resolveFormattingContract($product);
         $expectedClosing = $this->resolveExpectedClosingSection($contract);
@@ -99,6 +102,14 @@ class EmailReadingGenerationService
             return false;
         }
 
+        $embedding = null;
+
+        if ($this->freshnessEnabled()) {
+            [$attempt, $embedding] = $this->enforceFreshness(
+                $delivery, $attempt, $systemPrompt, $prompt, $model, $maxTokens, $expectedClosing
+            );
+        }
+
         $result = $attempt['result'];
         $html = $attempt['html'];
         $latencyMs = (int) round((microtime(true) - $start) * 1000);
@@ -117,6 +128,8 @@ class EmailReadingGenerationService
                 'model_used' => $result['model'],
                 'status' => EmailReadingDelivery::STATUS_GENERATED,
                 'error_message' => null,
+                'theme_summary' => $this->freshness->extractThemeSummary($html) ?: null,
+                'embedding' => $embedding === null ? null : json_encode($embedding),
             ]);
 
         if ($saved !== 1) {
@@ -138,6 +151,87 @@ class EmailReadingGenerationService
         ]);
 
         return true;
+    }
+
+    private function freshnessEnabled(): bool
+    {
+        return (bool) config('email_reading.freshness.enabled', true);
+    }
+
+    /**
+     * The rendered product prompt, plus the compact "previous themes" line
+     * for a returning customer.
+     */
+    private function buildUserPrompt(string $template, EmailReadingDelivery $delivery): string
+    {
+        $prompt = $this->renderPrompt($template, $delivery);
+        $themeLine = $this->freshnessEnabled() ? $this->freshness->themeLine($delivery) : null;
+
+        return $themeLine === null ? $prompt : $prompt."\n\n".$themeLine;
+    }
+
+    /**
+     * Freshness Protocol: embed the accepted reading and compare it with the
+     * customer's earlier readings. Above the similarity threshold the reading
+     * is regenerated ONCE with a presence penalty; a valid retry replaces it
+     * (even if still similar), an invalid one is discarded. An embeddings
+     * outage skips the check entirely.
+     *
+     * @param  array{result:array<string,mixed>,html:string,validation:GeneratedBodyValidationResult}  $attempt
+     * @return array{0:array{result:array<string,mixed>,html:string,validation:GeneratedBodyValidationResult},1:list<float>|null}
+     */
+    private function enforceFreshness(
+        EmailReadingDelivery $delivery,
+        array $attempt,
+        string $systemPrompt,
+        string $prompt,
+        string $model,
+        int $maxTokens,
+        ?string $expectedClosing
+    ): array {
+        $embedding = $this->freshness->embed($attempt['html']);
+        $previous = $this->freshness->previousReadings($delivery);
+
+        if ($embedding === null || $previous->isEmpty()) {
+            return [$attempt, $embedding];
+        }
+
+        $threshold = (float) config('email_reading.freshness.similarity_threshold', 0.85);
+        $similarity = $this->freshness->highestSimilarity($embedding, $previous);
+
+        if ($similarity <= $threshold) {
+            return [$attempt, $embedding];
+        }
+
+        Log::channel('shopify_webhooks')->info('Email reading too similar to an earlier one; regenerating once', [
+            'delivery_id' => $delivery->id,
+            'similarity' => round($similarity, 4),
+        ]);
+
+        $retry = $this->generateAndValidate(
+            $delivery,
+            $systemPrompt,
+            $prompt,
+            $model,
+            $maxTokens,
+            $expectedClosing,
+            (float) config('email_reading.freshness.retry_presence_penalty', 0.5)
+        );
+
+        if ($retry['validation']->isInvalid()) {
+            return [$attempt, $embedding];
+        }
+
+        $retryEmbedding = $this->freshness->embed($retry['html']);
+
+        if ($retryEmbedding !== null
+            && $this->freshness->highestSimilarity($retryEmbedding, $previous) > $threshold) {
+            Log::channel('shopify_webhooks')->warning('Email reading still similar after freshness retry; keeping retry', [
+                'delivery_id' => $delivery->id,
+            ]);
+        }
+
+        return [$retry, $retryEmbedding];
     }
 
     /**
@@ -194,10 +288,11 @@ class EmailReadingGenerationService
         string $prompt,
         string $model,
         int $maxTokens,
-        ?string $expectedClosing
+        ?string $expectedClosing,
+        float $presencePenalty = 0.0
     ): array {
         try {
-            $result = $this->complete($systemPrompt, $prompt, $model, $maxTokens);
+            $result = $this->complete($systemPrompt, $prompt, $model, $maxTokens, null, $presencePenalty);
         } catch (Throwable $e) {
             Log::channel('shopify_webhooks')->error('Email reading OpenAI call failed', [
                 'delivery_id' => $delivery->id,
@@ -238,7 +333,7 @@ class EmailReadingGenerationService
         $model = $product->model ?: (string) config('email_reading.openai_model');
         $maxTokens = (int) ($product->max_tokens ?: config('email_reading.max_tokens', 1500));
 
-        $prompt = $this->renderPrompt($product->prompt_template, $delivery);
+        $prompt = $this->buildUserPrompt($product->prompt_template, $delivery);
 
         $result = $this->complete($this->buildSystemPrompt($product), $prompt, $model, $maxTokens, $adminInstruction);
         $html = MarkdownMailBody::toHtml($result['content']);
@@ -288,7 +383,7 @@ class EmailReadingGenerationService
      *
      * @return array{content:string,prompt_tokens:int,completion_tokens:int,model:string,finish_reason:string}
      */
-    private function complete(string $system, string $user, string $model, int $maxTokens, ?string $adminInstruction = null): array
+    private function complete(string $system, string $user, string $model, int $maxTokens, ?string $adminInstruction = null, float $presencePenalty = 0.0): array
     {
         $messages = [
             ['role' => 'system', 'content' => $system],
@@ -303,12 +398,18 @@ class EmailReadingGenerationService
             ];
         }
 
-        $response = OpenAI::chat()->create([
+        $request = [
             'model' => $model,
             'messages' => $messages,
             'temperature' => 0.7,
             'max_tokens' => $maxTokens,
-        ]);
+        ];
+
+        if ($presencePenalty > 0) {
+            $request['presence_penalty'] = $presencePenalty;
+        }
+
+        $response = OpenAI::chat()->create($request);
 
         $choice = $response->choices[0] ?? null;
         $content = trim((string) ($choice->message->content ?? ''));

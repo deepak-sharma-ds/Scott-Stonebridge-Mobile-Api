@@ -84,6 +84,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Freshness protocol
+    |--------------------------------------------------------------------------
+    | Returning customers must not receive recycled readings. Their earlier
+    | readings (any product, stored response, not cancelled/failed/held) feed:
+    |   1. a compact "previous themes" line added to the prompt, and
+    |   2. a semantic check: the new reading's embedding is compared with the
+    |      stored embeddings; above `similarity_threshold` the reading is
+    |      regenerated ONCE with `retry_presence_penalty`, and the retry result
+    |      is kept either way.
+    |
+    | history_limit   how many earlier readings are considered (newest first).
+    */
+    'freshness' => [
+        'enabled' => (bool) env('READINGS_FRESHNESS_ENABLED', true),
+        'history_limit' => (int) env('READINGS_FRESHNESS_HISTORY', 5),
+        'similarity_threshold' => (float) env('READINGS_FRESHNESS_THRESHOLD', 0.85),
+        'retry_presence_penalty' => (float) env('READINGS_FRESHNESS_PRESENCE_PENALTY', 0.5),
+        'embedding_model' => env('READINGS_EMBEDDING_MODEL', 'text-embedding-3-small'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Voice & tone rules
     |--------------------------------------------------------------------------
     | Rules governing tone, British spelling, varied sentence openings, and
