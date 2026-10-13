@@ -17,6 +17,7 @@ class CampaignProduct extends Model
         'email_content',
         'email_footer',
         'prompt_template',
+        'formatting_contract',
         'email_subject',
         'model',
         'max_tokens',

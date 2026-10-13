@@ -6,6 +6,7 @@
     $badgeFor = [
         'pending'   => 'warning',
         'generated' => 'info',
+        'sending'   => 'info',
         'sent'      => 'success',
         'failed'    => 'danger',
         'cancelled' => 'secondary',
@@ -91,6 +92,9 @@
                                 <x-admin.badge :type="$badgeFor[$delivery->status] ?? 'secondary'">
                                     {{ $statuses[$delivery->status] ?? ucfirst($delivery->status) }}
                                 </x-admin.badge>
+                                @if($delivery->needsFulfillment())
+                                    <x-admin.badge type="warning">Unfulfilled</x-admin.badge>
+                                @endif
                             </td>
                             <td style="font-size:0.8125rem;color:var(--text-secondary);">{{ $delivery->model_used ?: '—' }}</td>
                             <td class="text-center" style="font-size:0.8125rem;color:var(--text-secondary);">
@@ -107,6 +111,7 @@
                                     <a href="{{ route('admin.email_readings.show', $delivery) }}" class="btn btn-sm btn-secondary">View</a>
                                     <a href="{{ route('admin.email_readings.edit', $delivery) }}" class="btn btn-sm btn-warning">Edit</a>
 
+                                    @if(! in_array($delivery->status, ['sending', 'cancelled']))
                                     <form action="{{ route('admin.email_readings.send', $delivery) }}" method="POST" style="display:inline;">
                                         @csrf
                                         <button type="submit" class="btn btn-sm btn-success"
@@ -115,7 +120,9 @@
                                         </button>
                                     </form>
 
-                                    @if(! in_array($delivery->status, ['sent', 'cancelled']))
+                                    @endif
+
+                                    @if(! in_array($delivery->status, ['sent', 'cancelled', 'sending']))
                                         <form action="{{ route('admin.email_readings.cancel', $delivery) }}" method="POST" style="display:inline;">
                                             @csrf
                                             <button type="submit" class="btn btn-sm btn-secondary"

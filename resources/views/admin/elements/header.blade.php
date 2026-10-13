@@ -239,7 +239,8 @@
         @php
             $campaignActive = request()->routeIs('admin.marketing-campaigns.*')
                         || request()->routeIs('admin.campaign_deliveries.*')
-                        || request()->routeIs('admin.unlisted-products.*');
+                        || request()->routeIs('admin.unlisted-products.*')
+                        || request()->routeIs('admin.webhook_events.*');
         @endphp
 
         <div x-data="{ open: {{ $campaignActive ? 'true' : 'false' }} }">
@@ -286,6 +287,13 @@
                             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
                         </svg>
                         Deliveries
+                    </a>
+                    <a href="{{ route('admin.webhook_events.index') }}"
+                       class="admin-nav-sublink {{ request()->routeIs('admin.webhook_events.*') ? 'active' : '' }}">
+                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                        Webhook Events
                     </a>
                 </div>
             </div>

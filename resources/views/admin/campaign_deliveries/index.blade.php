@@ -6,11 +6,12 @@
     $badgeFor = [
         'pending'   => 'warning',
         'generated' => 'info',
+        'sending'   => 'info',
         'sent'      => 'success',
         'failed'    => 'danger',
         'cancelled' => 'secondary',
     ];
-    $cancellable = ['pending', 'generated', 'failed'];
+    $cancellable = ['pending', 'failed'];
 @endphp
 
 @section('content')
@@ -98,6 +99,9 @@
                                 <x-admin.badge :type="$badgeFor[$delivery->status] ?? 'secondary'">
                                     {{ $statuses[$delivery->status] ?? ucfirst($delivery->status) }}
                                 </x-admin.badge>
+                                @if($delivery->needsFulfillment())
+                                    <x-admin.badge type="warning">Unfulfilled</x-admin.badge>
+                                @endif
                             </td>
                             <td style="font-size:0.8125rem;color:var(--text-secondary);">
                                 {{ $delivery->scheduled_at?->format('d M Y H:i') ?? '—' }}
@@ -110,6 +114,7 @@
                                     <a href="{{ route('admin.campaign_deliveries.show', $delivery) }}" class="btn btn-sm btn-secondary">View</a>
                                     <a href="{{ route('admin.campaign_deliveries.edit', $delivery) }}" class="btn btn-sm btn-warning">Edit</a>
 
+                                    @if(! in_array($delivery->status, ['sending', 'cancelled']))
                                     <form action="{{ route('admin.campaign_deliveries.send', $delivery) }}" method="POST" style="display:inline;">
                                         @csrf
                                         <button type="submit" class="btn btn-sm btn-success"
@@ -117,6 +122,8 @@
                                             {{ $delivery->status === 'sent' ? 'Resend' : 'Send' }}
                                         </button>
                                     </form>
+
+                                    @endif
 
                                     @if(in_array($delivery->status, $cancellable, true))
                                         <form action="{{ route('admin.campaign_deliveries.cancel', $delivery) }}" method="POST" style="display:inline;">
@@ -126,7 +133,7 @@
                                         </form>
                                     @endif
 
-                                    @if($delivery->status !== 'sent')
+                                    @if(! in_array($delivery->status, ['sent', 'sending']))
                                         <form action="{{ route('admin.campaign_deliveries.destroy', $delivery) }}" method="POST" style="display:inline;">
                                             @csrf
                                             @method('DELETE')

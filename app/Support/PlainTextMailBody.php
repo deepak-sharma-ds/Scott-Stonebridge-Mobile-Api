@@ -13,6 +13,15 @@ final class PlainTextMailBody
 {
     public static function toHtml(string $text): string
     {
+        return InlineEmailStyles::apply(self::toParagraphs($text));
+    }
+
+    /**
+     * Plain text to unstyled, escaped paragraph HTML — the shape stored for
+     * a response body before it is styled for email.
+     */
+    public static function toParagraphs(string $text): string
+    {
         $text = trim($text);
 
         if ($text === '') {
@@ -21,11 +30,9 @@ final class PlainTextMailBody
 
         $paragraphs = preg_split('/\n\s*\n/', $text) ?: [$text];
 
-        $html = implode('', array_map(
+        return implode('', array_map(
             fn (string $paragraph) => '<p>'.nl2br(e(trim($paragraph))).'</p>',
             $paragraphs
         ));
-
-        return InlineEmailStyles::apply($html);
     }
 }

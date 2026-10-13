@@ -1,7 +1,9 @@
 <?php
 
 use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
@@ -20,6 +22,18 @@ return new class extends Migration
      */
     public function up(): void
     {
+        // Non-MySQL drivers (the SQLite test database) have no MODIFY syntax;
+        // Laravel 11's native change() covers them. MySQL keeps the raw SQL.
+        if (DB::getDriverName() !== 'mysql') {
+            Schema::table('email_reading_products', function (Blueprint $table) {
+                $table->json('questions_schema')->nullable()->change();
+                $table->longText('prompt_template')->nullable()->change();
+                $table->string('email_subject')->nullable()->change();
+            });
+
+            return;
+        }
+
         DB::statement('ALTER TABLE email_reading_products MODIFY questions_schema JSON NULL');
         DB::statement('ALTER TABLE email_reading_products MODIFY prompt_template LONGTEXT NULL');
         DB::statement('ALTER TABLE email_reading_products MODIFY email_subject VARCHAR(255) NULL');
@@ -30,6 +44,16 @@ return new class extends Migration
      */
     public function down(): void
     {
+        if (DB::getDriverName() !== 'mysql') {
+            Schema::table('email_reading_products', function (Blueprint $table) {
+                $table->json('questions_schema')->nullable(false)->change();
+                $table->longText('prompt_template')->nullable(false)->change();
+                $table->string('email_subject')->nullable(false)->change();
+            });
+
+            return;
+        }
+
         DB::statement('ALTER TABLE email_reading_products MODIFY questions_schema JSON NOT NULL');
         DB::statement('ALTER TABLE email_reading_products MODIFY prompt_template LONGTEXT NOT NULL');
         DB::statement('ALTER TABLE email_reading_products MODIFY email_subject VARCHAR(255) NOT NULL');

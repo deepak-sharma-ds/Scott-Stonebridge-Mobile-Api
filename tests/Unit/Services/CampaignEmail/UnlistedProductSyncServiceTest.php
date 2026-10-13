@@ -12,11 +12,12 @@ class UnlistedProductSyncServiceTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function productNode(int $id, string $title, bool $published = true): array
+    private function productNode(int $id, string $title, bool $published = true, array $tags = []): array
     {
         return [
             'id' => "gid://shopify/Product/{$id}",
             'title' => $title,
+            'tags' => $tags,
             'publishedOnCurrentPublication' => $published,
             'featuredImage' => ['url' => "https://cdn.shopify.test/{$id}.jpg", 'altText' => null],
             'variants' => [
@@ -45,7 +46,7 @@ class UnlistedProductSyncServiceTest extends TestCase
 
         $result = $this->app->make(UnlistedProductSyncService::class)->sync();
 
-        $this->assertSame(['synced' => 1, 'deactivated' => 0], $result);
+        $this->assertSame(['synced' => 1, 'created' => 1], $result);
         $this->assertDatabaseHas('unlisted_products', [
             'shopify_product_id' => 111,
             'title' => 'Love Reading',
@@ -125,27 +126,89 @@ class UnlistedProductSyncServiceTest extends TestCase
         ]);
     }
 
-    public function test_a_product_missing_from_the_sync_is_deactivated_not_deleted(): void
+    private function mockProducts(array $nodes): void
     {
-        UnlistedProduct::create(['shopify_product_id' => 999, 'title' => 'No Longer Unlisted', 'is_published' => true]);
-
-        $this->mock(AdminApiClientInterface::class, function ($mock) {
+        $this->mock(AdminApiClientInterface::class, function ($mock) use ($nodes) {
             $mock->shouldReceive('query')
                 ->once()
                 ->with('admin/products/list_unlisted', ['first' => 250])
                 ->andReturn([
                     'data' => [
                         'products' => [
-                            'edges' => [],
+                            'edges' => array_map(fn ($node) => ['node' => $node], $nodes),
                             'pageInfo' => ['hasNextPage' => false, 'endCursor' => null],
                         ],
                     ],
                 ]);
         });
+    }
 
-        $result = $this->app->make(UnlistedProductSyncService::class)->sync();
+    public function test_a_product_missing_from_the_sync_is_left_untouched(): void
+    {
+        UnlistedProduct::create(['shopify_product_id' => 999, 'title' => 'No Longer Unlisted', 'is_published' => true]);
 
-        $this->assertSame(1, $result['deactivated']);
-        $this->assertDatabaseHas('unlisted_products', ['shopify_product_id' => 999, 'is_published' => false]);
+        $this->mockProducts([]);
+
+        $this->app->make(UnlistedProductSyncService::class)->sync();
+
+        $this->assertDatabaseHas('unlisted_products', ['shopify_product_id' => 999, 'is_published' => true]);
+    }
+
+    public function test_an_empty_or_partial_response_never_unpublishes_the_catalog(): void
+    {
+        UnlistedProduct::create(['shopify_product_id' => 111, 'title' => 'A', 'is_published' => true]);
+        UnlistedProduct::create(['shopify_product_id' => 222, 'title' => 'B', 'is_published' => true]);
+
+        $this->mockProducts([$this->productNode(111, 'A')]);
+
+        $this->app->make(UnlistedProductSyncService::class)->sync();
+
+        $this->assertSame(2, UnlistedProduct::where('is_published', true)->count());
+    }
+
+    public function test_resync_never_overwrites_the_admin_controlled_published_flag(): void
+    {
+        UnlistedProduct::create(['shopify_product_id' => 111, 'title' => 'Old', 'is_published' => false]);
+
+        $this->mockProducts([$this->productNode(111, 'New', published: true)]);
+
+        $this->app->make(UnlistedProductSyncService::class)->sync();
+
+        $this->assertDatabaseHas('unlisted_products', [
+            'shopify_product_id' => 111,
+            'title' => 'New',
+            'is_published' => false,
+        ]);
+    }
+
+    public function test_a_newly_seen_product_is_created_published(): void
+    {
+        $this->mockProducts([$this->productNode(111, 'Fresh', published: false)]);
+
+        $this->app->make(UnlistedProductSyncService::class)->sync();
+
+        $this->assertDatabaseHas('unlisted_products', ['shopify_product_id' => 111, 'is_published' => true]);
+    }
+
+    public function test_vip_flag_follows_the_shopify_tag_in_both_directions(): void
+    {
+        $this->mockProducts([$this->productNode(111, 'Vip One', tags: ['Featured', 'VIP'])]);
+        $this->app->make(UnlistedProductSyncService::class)->sync();
+        $this->assertDatabaseHas('unlisted_products', ['shopify_product_id' => 111, 'is_vip' => true]);
+
+        $this->mockProducts([$this->productNode(111, 'Vip One', tags: ['Featured'])]);
+        $this->app->make(UnlistedProductSyncService::class)->sync();
+        $this->assertDatabaseHas('unlisted_products', ['shopify_product_id' => 111, 'is_vip' => false]);
+    }
+
+    public function test_a_graphql_error_response_throws_instead_of_silently_succeeding(): void
+    {
+        $this->mock(AdminApiClientInterface::class, function ($mock) {
+            $mock->shouldReceive('query')->once()->andReturn(['errors' => [['message' => 'Throttled']]]);
+        });
+
+        $this->expectException(\RuntimeException::class);
+
+        $this->app->make(UnlistedProductSyncService::class)->sync();
     }
 }

@@ -37,7 +37,7 @@ class SyncUnlistedProductsCommandTest extends TestCase
         });
 
         $this->artisan('shopify:sync-unlisted-products')
-            ->expectsOutputToContain('Synced 1 unlisted products (0 deactivated).')
+            ->expectsOutputToContain('Synced 1 unlisted products (1 new).')
             ->assertExitCode(0);
 
         $this->assertDatabaseHas('unlisted_products', ['shopify_product_id' => 111, 'title' => 'Love Reading']);

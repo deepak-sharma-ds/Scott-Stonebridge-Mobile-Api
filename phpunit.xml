@@ -35,5 +35,10 @@
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
+        <!-- Keep a developer's local .env (live-testing allowlists, HMAC) out of the test run. -->
+        <env name="READINGS_TEST_EMAILS" value=""/>
+        <env name="CAMPAIGN_EMAIL_TEST_EMAILS" value=""/>
+        <env name="SHOPIFY_WEBHOOK_HMAC_ENABLED" value="false"/>
+        <env name="CAMPAIGN_EMAIL_HMAC_ENABLED" value="false"/>
     </php>
 </phpunit>

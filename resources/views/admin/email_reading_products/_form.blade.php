@@ -146,6 +146,16 @@
         </small>
     </div>
 
+    <div class="mb-3">
+        <label for="formatting_contract" class="form-label">Formatting Contract Override <small style="color:var(--text-muted);">(optional; leave blank to use the shared contract)</small></label>
+        <textarea name="formatting_contract" id="formatting_contract" class="form-control" rows="6" x-model="formattingContract"
+            style="font-family:monospace;font-size:0.8125rem;"
+            placeholder="{{ config('email_reading.formatting_contract') }}">{{ old('formatting_contract', $p->formatting_contract ?? '') }}</textarea>
+        <small style="color:var(--text-muted);display:block;margin-top:0.375rem;">
+            Markdown instructions defining structure (headings, key messages, closing section). Overrides the shared contract for this product only.
+        </small>
+    </div>
+
     {{-- Live prompt test --}}
     <div class="card p-4"
         style="background:var(--color-primary-muted);border:1px solid var(--card-border);margin-bottom:1rem;">
@@ -170,9 +180,19 @@
             <span x-show="testInfo" x-text="testInfo"
                 style="font-size:0.75rem;color:var(--text-muted);margin-left:0.5rem;"></span>
         </div>
-        <div x-show="testOutput"
-            style="white-space:pre-wrap;line-height:1.7;background:#fff;border:1px solid var(--card-border);border-radius:10px;padding:1rem;font-size:0.9375rem;"
-            x-text="testOutput"></div>
+        @if ($p)
+            <div x-show="testOutput"
+                class="alert alert-info"
+                style="margin-top:0.75rem;padding:0.75rem 1rem;border-radius:8px;font-size:0.875rem;background:#eef7ff;border:1px solid #b8daff;color:#004085;">
+                ✓ Prompt test generated successfully. The reading output is rendered in the live email preview.
+            </div>
+        @else
+            <div x-show="testOutput"
+                class="alert alert-success"
+                style="margin-top:0.75rem;padding:0.75rem 1rem;border-radius:8px;font-size:0.875rem;">
+                ✓ Prompt test generated successfully. (Full email preview is available on the edit page once saved).
+            </div>
+        @endif
     </div>
 
     <div class="mt-2" style="display:flex;gap:0.5rem;">
@@ -199,6 +219,7 @@
                     required: true
                 }],
             promptTemplate: @js(old('prompt_template', $p->prompt_template ?? '')),
+            formattingContract: @js(old('formatting_contract', $p->formatting_contract ?? '')),
             model: @js(old('model', $p->model ?? '')),
             maxTokens: {{ (int) old('max_tokens', $p->max_tokens ?? 1500) }},
             testName: '',
@@ -248,6 +269,7 @@
                         },
                         body: JSON.stringify({
                             prompt_template: this.promptTemplate,
+                            formatting_contract: this.formattingContract || null,
                             model: this.model || null,
                             max_tokens: this.maxTokens || null,
                             customer_name: this.testName || null,
@@ -260,6 +282,12 @@
                     }
                     this.testOutput = data.content;
                     this.testInfo = (data.model || '') + ' · ' + (data.completion_tokens || 0) + ' tokens';
+                    window.dispatchEvent(new CustomEvent('email-preview-refresh', {
+                        detail: {
+                            body: data.content,
+                            customer_name: this.testName || null,
+                        }
+                    }));
                 } catch (e) {
                     this.testInfo = e.message;
                     if (window.adminNotify) window.adminNotify(e.message, 'error');

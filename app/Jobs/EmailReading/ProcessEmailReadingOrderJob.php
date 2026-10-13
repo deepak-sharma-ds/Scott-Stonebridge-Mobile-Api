@@ -46,11 +46,11 @@ class ProcessEmailReadingOrderJob implements ShouldQueue
         $missing = $this->missingRequiredQuestions($delivery);
         if (! empty($missing)) {
             $message = 'Missing required questions: '.implode(', ', $missing);
-            $delivery->markFailed($message);
-
-            NotifyReadingFailureJob::dispatch($delivery->id, $message)
-                ->onConnection(config('email_reading.queue.connection'))
-                ->onQueue(config('email_reading.queue.mail'));
+            if ($delivery->markFailed($message)) {
+                NotifyReadingFailureJob::dispatch($delivery->id, $message)
+                    ->onConnection(config('email_reading.queue.connection'))
+                    ->onQueue(config('email_reading.queue.mail'));
+            }
 
             Log::channel('shopify_webhooks')->warning('Reading delivery missing required questions', [
                 'delivery_id' => $delivery->id,
@@ -60,21 +60,11 @@ class ProcessEmailReadingOrderJob implements ShouldQueue
             return;
         }
 
-        try {
-            $service->generate($delivery);
-        } catch (Throwable $e) {
-            throw $e;
-        }
-
-        $send = SendEmailReadingJob::dispatch($delivery->id)
-            ->onConnection(config('email_reading.queue.connection'))
-            ->onQueue(config('email_reading.queue.mail'));
-
-        // Hold the send until the per-order scheduled time (random 3-7 days,
-        // persisted at row creation). Null/past schedule => send immediately.
-        if ($delivery->scheduled_at && $delivery->scheduled_at->isFuture()) {
-            $send->delay($delivery->scheduled_at);
-        }
+        // generate() persists the reading and flips the delivery to
+        // `generated` only if it is still unclaimed. Sending is owned by the
+        // due-delivery dispatcher, which reads the live scheduled_at, so a
+        // reschedule/expedite/cancel that lands while OpenAI runs is honoured.
+        $service->generate($delivery);
     }
 
     public function failed(Throwable $e): void
@@ -84,11 +74,11 @@ class ProcessEmailReadingOrderJob implements ShouldQueue
             return;
         }
 
-        $delivery->markFailed($e->getMessage());
-
-        NotifyReadingFailureJob::dispatch($delivery->id, $e->getMessage())
-            ->onConnection(config('email_reading.queue.connection'))
-            ->onQueue(config('email_reading.queue.mail'));
+        if ($delivery->markFailed($e->getMessage())) {
+            NotifyReadingFailureJob::dispatch($delivery->id, $e->getMessage())
+                ->onConnection(config('email_reading.queue.connection'))
+                ->onQueue(config('email_reading.queue.mail'));
+        }
     }
 
     /**

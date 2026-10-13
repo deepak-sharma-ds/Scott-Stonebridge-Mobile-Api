@@ -16,6 +16,7 @@ class EmailReadingProduct extends Model
         'email_footer',
         'questions_schema',
         'prompt_template',
+        'formatting_contract',
         'email_subject',
         'email_view',
         'model',

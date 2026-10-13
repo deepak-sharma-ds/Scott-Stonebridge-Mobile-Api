@@ -28,7 +28,7 @@ class SyncUnlistedProductsCommand extends Command
     {
         $result = $sync->sync();
 
-        $this->info("Synced {$result['synced']} unlisted products ({$result['deactivated']} deactivated).");
+        $this->info("Synced {$result['synced']} unlisted products ({$result['created']} new).");
 
         return self::SUCCESS;
     }

@@ -2,9 +2,7 @@
 
 namespace App\Http\Requests;
 
-use App\Models\EmailReadingDelivery;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class EmailReadingDeliveryUpdateRequest extends FormRequest
 {
@@ -24,7 +22,6 @@ class EmailReadingDeliveryUpdateRequest extends FormRequest
             'scheduled_at' => ['nullable', 'date'],
             'expedited_at' => ['nullable', 'date'],
             'ai_response' => ['nullable', 'string'],
-            'status' => ['nullable', Rule::in(array_keys(EmailReadingDelivery::statusLabels()))],
         ];
     }
 

@@ -7,18 +7,26 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Symfony\Component\HttpFoundation\Response;
 
+/**
+ * Optional Shopify webhook HMAC verification, configured per module.
+ *
+ * Usage: `shopify.hmac` (reading flow, config namespace `email_reading`) or
+ * `shopify.hmac:campaign_email`. Each namespace has its own `hmac_enabled`
+ * flag (default false) and `shopify_webhook_secret`. When disabled the
+ * request passes through unverified.
+ */
 class VerifyShopifyWebhookHmac
 {
-    public function handle(Request $request, Closure $next): Response
+    public function handle(Request $request, Closure $next, string $configNamespace = 'email_reading'): Response
     {
-        if (! config('email_reading.hmac_enabled', false)) {
+        if (! config("{$configNamespace}.hmac_enabled", false)) {
             $request->attributes->set('shopify_hmac_valid', false);
             $request->attributes->set('shopify_hmac_skipped', true);
 
             return $next($request);
         }
 
-        $secret = (string) config('email_reading.shopify_webhook_secret');
+        $secret = (string) config("{$configNamespace}.shopify_webhook_secret");
         $headerHmac = (string) $request->header('X-Shopify-Hmac-Sha256', '');
 
         if ($secret === '' || $headerHmac === '') {
@@ -36,7 +44,6 @@ class VerifyShopifyWebhookHmac
         if (! hash_equals($computed, $headerHmac)) {
             Log::channel('shopify_webhooks')->warning('Shopify HMAC mismatch', [
                 'path' => $request->path(),
-                'order_id' => $request->input('id'),
             ]);
 
             return response()->json(['message' => 'Unauthorized'], 401);

@@ -47,6 +47,22 @@ class EmailReadingMailTest extends TestCase
         $this->assertStringContainsString('Motor Neurone Disease Association', $html);
     }
 
+    public function test_a_rich_text_body_renders_with_inline_styles_and_is_sanitized(): void
+    {
+        $delivery = $this->delivery();
+        $delivery->update(['ai_response' => '<h2>Card One</h2><p>Spirit says <a href="https://example.com">hello</a>.</p><blockquote>The answer is yes.</blockquote><script>steal()</script><p onclick="x()">Tap</p>']);
+
+        $html = (new EmailReadingMail($delivery->refresh()))->render();
+
+        $this->assertStringContainsString('Card One</h2>', $html);
+        $this->assertStringContainsString('margin:28px 0 12px', $html);
+        $this->assertStringContainsString('font-family:Arial', $html);
+        $this->assertStringContainsString('border-left:3px solid', $html);
+        $this->assertStringContainsString('The answer is yes.', $html);
+        $this->assertStringNotContainsString('steal()', $html);
+        $this->assertStringNotContainsString('onclick', $html);
+    }
+
     public function test_renders_admin_authored_content_and_footer_with_placeholders(): void
     {
         $delivery = $this->delivery([
@@ -58,6 +74,18 @@ class EmailReadingMailTest extends TestCase
 
         $this->assertStringContainsString('Custom intro for VIP Guardian Angel Reading.', $html);
         $this->assertStringContainsString('Custom footer for Jane Doe.', $html);
+    }
+
+    public function test_a_customer_supplied_name_cannot_inject_html_through_template_placeholders(): void
+    {
+        $delivery = $this->delivery(['email_footer' => 'Footer for {{ $customerName }}.']);
+        $delivery->update(['customer_name' => '<a href="https://evil.example">Click</a><script>x()</script>']);
+
+        $html = (new EmailReadingMail($delivery->refresh()))->render();
+
+        $this->assertStringNotContainsString('<a href="https://evil.example">', $html);
+        $this->assertStringNotContainsString('<script>x()</script>', $html);
+        $this->assertStringContainsString('&lt;a href=', $html);
     }
 
     public function test_uses_the_uploaded_header_image_when_present(): void
