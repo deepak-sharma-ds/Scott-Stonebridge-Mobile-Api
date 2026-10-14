@@ -20,6 +20,7 @@ class OpenClientClassifierTest extends TestCase
             'apple webkit from a normal address' => ['Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148', '81.2.69.142', 'direct'],
             'outlook desktop' => ['Microsoft Office/16.0 (Windows NT 10.0; Microsoft Outlook 16.0.14326; Pro)', '81.2.69.142', 'direct'],
             'chrome webmail' => ['Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0 Safari/537.36', '81.2.69.142', 'direct'],
+            'apple relay with surrounding whitespace' => ['Mozilla/5.0 (Macintosh)', ' 17.58.12.9 ', 'proxy'],
             'missing user agent' => [null, null, 'direct'],
             'proxy token is case insensitive' => ['googleimageproxy', null, 'proxy'],
         ];

@@ -22,6 +22,7 @@ class OpenClientClassifier
     public static function classify(?string $userAgent, ?string $ip): string
     {
         $agent = strtolower((string) $userAgent);
+        $ip = trim((string) $ip);
 
         foreach (self::PROXY_USER_AGENT_TOKENS as $token) {
             if (str_contains($agent, $token)) {
@@ -29,7 +30,7 @@ class OpenClientClassifier
             }
         }
 
-        if ($ip !== null && explode('.', $ip)[0] === self::APPLE_RELAY_FIRST_OCTET && str_contains($ip, '.')) {
+        if (str_contains($ip, '.') && explode('.', $ip)[0] === self::APPLE_RELAY_FIRST_OCTET) {
             return self::PROXY;
         }
 

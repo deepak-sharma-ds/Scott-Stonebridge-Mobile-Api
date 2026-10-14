@@ -51,12 +51,23 @@ class EmailTrackingController extends Controller
 
         $now = Carbon::now();
 
-        $delivery->increment('open_count', 1, [
+        $clientType = OpenClientClassifier::classify($request->userAgent(), $request->ip());
+
+        $attributes = [
             'opened_at' => $delivery->opened_at ?? $now,
             'last_opened_at' => $now,
-            'opened_client_type' => OpenClientClassifier::classify($request->userAgent(), $request->ip()),
-            'opened_ip' => $request->ip(),
-            'opened_user_agent' => Str::limit((string) $request->userAgent(), self::USER_AGENT_LIMIT, ''),
-        ]);
+        ];
+
+        // A direct open is the strongest evidence of a human reading the email:
+        // a later proxy fetch is counted but must not overwrite its details.
+        if ($delivery->opened_client_type !== OpenClientClassifier::DIRECT || $clientType === OpenClientClassifier::DIRECT) {
+            $attributes += [
+                'opened_client_type' => $clientType,
+                'opened_ip' => $request->ip(),
+                'opened_user_agent' => Str::limit((string) $request->userAgent(), self::USER_AGENT_LIMIT, ''),
+            ];
+        }
+
+        $delivery->increment('open_count', 1, $attributes);
     }
 }

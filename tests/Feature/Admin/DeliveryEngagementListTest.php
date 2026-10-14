@@ -163,4 +163,45 @@ class DeliveryEngagementListTest extends TestCase
         $this->assertStringNotContainsString('direct@example.com', $csv);
         $this->assertStringNotContainsString('proxy@example.com', $csv);
     }
+
+    #[DataProvider('deliveryKinds')]
+    public function test_the_unopened_filter_only_lists_sent_deliveries(string $kind): void
+    {
+        $this->delivery($kind, 'sent-unopened@example.com');
+        $this->delivery($kind, 'pending@example.com', ['status' => 'pending']);
+        $this->delivery($kind, 'failed@example.com', ['status' => 'failed']);
+
+        $this->index($kind, ['engagement' => 'unopened'])->assertOk()
+            ->assertSee('sent-unopened@example.com')
+            ->assertDontSee('pending@example.com')
+            ->assertDontSee('failed@example.com');
+    }
+
+    #[DataProvider('deliveryKinds')]
+    public function test_the_csv_export_includes_engagement_and_delivery_proof_columns(string $kind): void
+    {
+        $this->delivery($kind, 'proxy@example.com', [
+            'opened_at' => '2026-10-15 09:00:00',
+            'last_opened_at' => '2026-10-15 09:00:00',
+            'open_count' => 1,
+            'opened_client_type' => 'proxy',
+            'message_id' => 'abc123@scottstonebridge.com',
+        ]);
+        $this->delivery($kind, 'unopened@example.com');
+        $url = $kind === 'campaign' ? route('admin.campaign_deliveries.export') : route('admin.email_readings.export');
+
+        $csv = $this->actingAs(User::factory()->create())->get($url)->streamedContent();
+        $rows = array_map('str_getcsv', array_filter(explode("\n", $csv)));
+        $header = array_shift($rows);
+        $byEmail = [];
+        foreach ($rows as $row) {
+            $byEmail[$row[array_search('Customer Email', $header)]] = array_combine($header, $row);
+        }
+
+        $this->assertSame('Opened (Proxy)', $byEmail['proxy@example.com']['Engagement']);
+        $this->assertSame('2026-10-15 09:00:00', $byEmail['proxy@example.com']['Opened At']);
+        $this->assertSame('abc123@scottstonebridge.com', $byEmail['proxy@example.com']['Message-ID']);
+        $this->assertSame('Unopened', $byEmail['unopened@example.com']['Engagement']);
+        $this->assertSame('', $byEmail['unopened@example.com']['Opened At']);
+    }
 }

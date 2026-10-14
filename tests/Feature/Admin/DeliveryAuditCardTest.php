@@ -68,7 +68,7 @@ class DeliveryAuditCardTest extends TestCase
     {
         $delivery = $this->delivery($kind, [
             'message_id' => 'abc123@scottstonebridge.com',
-            'smtp_response' => '< 250 2.0.0 OK 1760000000 x.1 - gsmtp',
+            'smtp_response' => '250 2.0.0 OK  1760000000 x.1 - gsmtp',
             'dispatched_at' => '2026-10-14 12:30:45',
         ]);
 
@@ -76,7 +76,7 @@ class DeliveryAuditCardTest extends TestCase
             ->assertSee('Delivery &amp; Legal Audit Trail', false)
             ->assertSee('Delivered (250 OK)')
             ->assertSee('abc123@scottstonebridge.com')
-            ->assertSee('250 2.0.0 OK 1760000000 x.1 - gsmtp')
+            ->assertSee('250 2.0.0 OK  1760000000 x.1 - gsmtp')
             ->assertSee('14 Oct 2026 12:30:45');
     }
 
@@ -177,5 +177,26 @@ class DeliveryAuditCardTest extends TestCase
         $this->show($kind, $delivery)->assertOk()
             ->assertDontSee('<script>x()</script>', false)
             ->assertDontSee('<b>bold</b>', false);
+    }
+
+    #[DataProvider('deliveryKinds')]
+    public function test_only_a_real_250_reply_counts_as_delivered(string $kind): void
+    {
+        $failed = $this->delivery($kind, ['message_id' => 'f@x', 'smtp_response' => '550 5.1.1 User unknown; reference 250918']);
+        $this->show($kind, $failed)->assertOk()->assertDontSee('Delivered (250 OK)')->assertSee('Pending / Sent');
+
+        $accepted = $this->delivery($kind, ['shopify_line_item_id' => 502, 'message_id' => 'a@x', 'smtp_response' => '250 2.0.0 OK  1760000000 abc.512 - gsmtp']);
+        $this->show($kind, $accepted)->assertOk()->assertSee('Delivered (250 OK)');
+    }
+
+    #[DataProvider('deliveryKinds')]
+    public function test_a_sent_delivery_without_proof_explains_why(string $kind): void
+    {
+        $delivery = $this->delivery($kind);
+
+        $this->show($kind, $delivery)->assertOk()->assertSee('No delivery proof was recorded for this send');
+
+        $pending = $this->delivery($kind, ['shopify_line_item_id' => 502, 'status' => 'pending']);
+        $this->show($kind, $pending)->assertOk()->assertDontSee('No delivery proof was recorded');
     }
 }

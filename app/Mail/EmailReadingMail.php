@@ -13,6 +13,7 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Mail\Mailables\Headers;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Str;
 
 class EmailReadingMail extends Mailable
 {
@@ -104,10 +105,19 @@ class EmailReadingMail extends Mailable
             return new Headers;
         }
 
-        return new Headers(text: [
+        return new Headers(messageId: $this->newMessageId(), text: [
             'X-Delivery-Type' => 'reading',
             'X-Delivery-Id' => (string) $this->delivery->getKey(),
         ]);
+    }
+
+    /**
+     * An explicit RFC Message-ID, so the stored Delivery Proof is exactly the
+     * identifier the message carries (and Google's Email Log Search can find).
+     */
+    private function newMessageId(): string
+    {
+        return Str::uuid()->toString().'@'.(Str::after((string) config('mail.from.address'), '@') ?: 'localhost');
     }
 
     /**

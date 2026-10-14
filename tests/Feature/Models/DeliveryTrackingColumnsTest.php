@@ -131,23 +131,24 @@ class DeliveryTrackingColumnsTest extends TestCase
     }
 
     #[DataProvider('deliveryModels')]
-    public function test_the_migration_backfills_a_unique_token_for_existing_rows(string $model, string $table, string $parentKey): void
+    public function test_the_migration_backfills_a_unique_token_for_every_existing_row_beyond_one_batch(string $model, string $table, string $parentKey): void
     {
         $migration = require database_path('migrations/2026_10_14_100000_add_tracking_and_audit_columns_to_delivery_tables.php');
         $migration->down();
 
-        foreach ([1, 2, 3] as $lineItemId) {
-            DB::table($table)->insert(array_map(fn ($value) => is_array($value) ? json_encode($value) : $value, $this->rowAttributes($parentKey, $lineItemId)) + [
+        $total = 2350;
+        foreach (array_chunk(range(1, $total), 100) as $lineItemIds) {
+            DB::table($table)->insert(array_map(fn (int $lineItemId) => array_map(fn ($value) => is_array($value) ? json_encode($value) : $value, $this->rowAttributes($parentKey, $lineItemId)) + [
                 'created_at' => now(),
                 'updated_at' => now(),
-            ]);
+            ], $lineItemIds));
         }
 
         $migration->up();
 
         $tokens = DB::table($table)->pluck('tracking_token');
-        $this->assertCount(3, $tokens);
-        $this->assertCount(3, $tokens->unique());
+        $this->assertCount($total, $tokens);
+        $this->assertCount($total, $tokens->unique());
         $tokens->each(fn ($token) => $this->assertTrue(Str::isUuid($token)));
         $this->assertSame(0, (int) DB::table($table)->min('open_count'));
     }

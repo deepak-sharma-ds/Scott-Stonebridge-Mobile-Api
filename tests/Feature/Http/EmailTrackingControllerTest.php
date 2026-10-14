@@ -134,7 +134,7 @@ class EmailTrackingControllerTest extends TestCase
     {
         Carbon::setTestNow('2026-10-14 12:00:00');
         $delivery = $this->readingDelivery();
-        $this->open($delivery->tracking_token);
+        $this->open($delivery->tracking_token, self::PROXY_AGENT, '66.249.84.1');
 
         Carbon::setTestNow('2026-10-14 12:00:30');
         $this->open($delivery->tracking_token, self::PROXY_AGENT, '66.249.84.1');
@@ -180,5 +180,36 @@ class EmailTrackingControllerTest extends TestCase
         $this->open($delivery->tracking_token, str_repeat('A', 5000))->assertOk();
 
         $this->assertSame(1, $delivery->refresh()->open_count);
+    }
+
+    public function test_a_later_proxy_fetch_does_not_downgrade_a_direct_open(): void
+    {
+        Carbon::setTestNow('2026-10-14 12:00:00');
+        $delivery = $this->readingDelivery();
+        $this->open($delivery->tracking_token, self::DIRECT_AGENT, '81.2.69.142');
+
+        Carbon::setTestNow('2026-10-14 12:05:00');
+        $this->open($delivery->tracking_token, self::PROXY_AGENT, '66.249.84.1');
+
+        $delivery->refresh();
+        $this->assertSame('direct', $delivery->opened_client_type);
+        $this->assertSame('81.2.69.142', $delivery->opened_ip);
+        $this->assertSame(self::DIRECT_AGENT, $delivery->opened_user_agent);
+        $this->assertSame(2, $delivery->open_count);
+        $this->assertSame('2026-10-14 12:05:00', $delivery->last_opened_at->format('Y-m-d H:i:s'));
+    }
+
+    public function test_a_direct_fetch_upgrades_an_earlier_proxy_open(): void
+    {
+        Carbon::setTestNow('2026-10-14 12:00:00');
+        $delivery = $this->campaignDelivery();
+        $this->open($delivery->tracking_token, self::PROXY_AGENT, '66.249.84.1');
+
+        Carbon::setTestNow('2026-10-14 12:05:00');
+        $this->open($delivery->tracking_token, self::DIRECT_AGENT, '81.2.69.142');
+
+        $delivery->refresh();
+        $this->assertSame('direct', $delivery->opened_client_type);
+        $this->assertSame('81.2.69.142', $delivery->opened_ip);
     }
 }

@@ -210,6 +210,7 @@ class EmailReadingAdminService
             'ID', 'Order ID', 'Product', 'Customer Name', 'Customer Email',
             'Status', 'Model', 'Prompt Tokens', 'Completion Tokens',
             'Scheduled At', 'Sent At', 'Created At',
+            'Engagement', 'Opened At', 'Message-ID',
         ];
 
         $callback = function () use ($filters, $columns) {
@@ -238,6 +239,9 @@ class EmailReadingAdminService
                             $row->scheduled_at?->toDateTimeString(),
                             $row->sent_at?->toDateTimeString(),
                             $row->created_at?->toDateTimeString(),
+                            $row->engagementLabel(),
+                            $row->opened_at?->toDateTimeString(),
+                            $row->message_id,
                         ]);
                     }
                 });

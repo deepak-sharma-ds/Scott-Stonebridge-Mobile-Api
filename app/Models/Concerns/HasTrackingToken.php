@@ -2,7 +2,9 @@
 
 namespace App\Models\Concerns;
 
+use App\Support\OpenClientClassifier;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Str;
 
 /**
@@ -14,7 +16,7 @@ trait HasTrackingToken
 {
     protected static function bootHasTrackingToken(): void
     {
-        static::creating(function ($delivery): void {
+        static::creating(function (Model $delivery): void {
             if (empty($delivery->tracking_token)) {
                 $delivery->tracking_token = (string) Str::uuid();
             }
@@ -31,15 +33,32 @@ trait HasTrackingToken
             return 'unopened';
         }
 
-        return $this->opened_client_type === 'proxy' ? 'proxy' : 'direct';
+        return $this->opened_client_type === OpenClientClassifier::PROXY
+            ? OpenClientClassifier::PROXY
+            : OpenClientClassifier::DIRECT;
     }
 
     /**
-     * Whether the recipient's mail server acknowledged the message (SMTP 250).
+     * Whether the recipient's mail server acknowledged the message: the stored
+     * response starts with the SMTP reply code 250 (not merely contains the digits).
      */
     public function hasSmtpAcceptance(): bool
     {
-        return str_contains((string) $this->smtp_response, '250');
+        return (bool) preg_match('/^(?:\[[^\]]*\] < )?250[ -]/m', (string) $this->smtp_response);
+    }
+
+    /**
+     * Engagement label for exports; blank for a delivery that was never sent.
+     */
+    public function engagementLabel(): string
+    {
+        $status = $this->engagementStatus();
+
+        if ($status === 'unopened' && $this->status !== static::STATUS_SENT) {
+            return '';
+        }
+
+        return static::engagementFilterLabels()[$status];
     }
 
     /**
@@ -50,9 +69,9 @@ trait HasTrackingToken
     {
         return match ($engagement) {
             'opened' => $query->whereNotNull('opened_at'),
-            'direct' => $query->where('opened_client_type', 'direct'),
-            'proxy' => $query->where('opened_client_type', 'proxy'),
-            'unopened' => $query->whereNull('opened_at'),
+            'direct' => $query->where('opened_client_type', OpenClientClassifier::DIRECT),
+            'proxy' => $query->where('opened_client_type', OpenClientClassifier::PROXY),
+            'unopened' => $query->where('status', 'sent')->whereNull('opened_at'),
             default => $query,
         };
     }

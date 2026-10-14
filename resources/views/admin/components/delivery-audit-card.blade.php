@@ -7,7 +7,9 @@
 @php
     $engagement = $delivery->engagementStatus();
     $history = (array) $delivery->send_history;
-    $format = fn ($value) => $value ? \Illuminate\Support\Carbon::parse($value)->format('d M Y H:i:s') : '—';
+    $format = fn ($value) => $value
+        ? \Illuminate\Support\Carbon::parse($value)->setTimezone(config('app.timezone'))->format('d M Y H:i:s')
+        : '—';
     $label = 'color:var(--text-muted);';
     $value = 'margin:0.125rem 0 0;color:var(--text-primary);';
 @endphp
@@ -33,6 +35,9 @@
                     <dt style="{{ $label }}">Accepted by mail server at</dt>
                     <dd style="{{ $value }}">{{ $format($delivery->dispatched_at) }}</dd>
                 </div>
+                @if($delivery->status === $delivery::STATUS_SENT && empty($delivery->message_id))
+                    <div style="color:var(--text-muted);">No delivery proof was recorded for this send (it was sent before delivery tracking existed, or marked as sent manually).</div>
+                @endif
                 <div>
                     <dt style="{{ $label }}">RFC Message-ID</dt>
                     <dd style="{{ $value }}"><code style="word-break:break-all;">{{ $delivery->message_id ?: '—' }}</code></dd>

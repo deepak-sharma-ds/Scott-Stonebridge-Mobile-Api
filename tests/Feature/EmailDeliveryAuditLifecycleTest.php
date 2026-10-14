@@ -190,11 +190,11 @@ class EmailDeliveryAuditLifecycleTest extends TestCase
         $this->assertStringContainsString($token, $this->lastMessage()->getHtmlBody());
         $this->assertNotSame($firstMessageId, $delivery->message_id);
         $this->assertSame('2026-10-15 09:30:00', $delivery->dispatched_at->format('Y-m-d H:i:s'));
-        $this->assertSame([[
-            'dispatched_at' => '2026-10-14 12:00:00',
-            'message_id' => $firstMessageId,
-            'smtp_response' => $firstSmtp,
-        ]], $delivery->send_history);
+        $this->assertCount(1, $delivery->send_history);
+        $entry = $delivery->send_history[0];
+        $this->assertSame($firstMessageId, $entry['message_id']);
+        $this->assertSame($firstSmtp, $entry['smtp_response']);
+        $this->assertSame('2026-10-14 12:00:00', Carbon::parse($entry['dispatched_at'])->format('Y-m-d H:i:s'));
 
         $this->actingAs(User::factory()->create())->get($this->showUrl($kind, $delivery))
             ->assertOk()

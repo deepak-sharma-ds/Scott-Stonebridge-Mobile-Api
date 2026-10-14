@@ -32,11 +32,15 @@ return new class extends Migration
                 $table->text('opened_user_agent')->nullable();
             });
 
-            DB::table($table)->whereNull('tracking_token')->orderBy('id')->each(
-                fn (object $row) => DB::table($table)
-                    ->where('id', $row->id)
-                    ->update(['tracking_token' => (string) Str::uuid()])
-            );
+            // Paged by id: updated rows leave the whereNull() set, so offset
+            // paging (chunk/each) would skip every second batch.
+            DB::table($table)->whereNull('tracking_token')->chunkById(1000, function ($rows) use ($table): void {
+                foreach ($rows as $row) {
+                    DB::table($table)
+                        ->where('id', $row->id)
+                        ->update(['tracking_token' => (string) Str::uuid()]);
+                }
+            });
 
             Schema::table($table, function (Blueprint $table) {
                 $table->unique('tracking_token');
