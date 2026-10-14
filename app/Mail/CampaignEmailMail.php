@@ -18,7 +18,11 @@ class CampaignEmailMail extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public CampaignDelivery $delivery) {}
+    /**
+     * @param  bool  $tracked  false for admin previews of a saved delivery, which
+     *                         must not tag the message or embed the open-tracking pixel
+     */
+    public function __construct(public CampaignDelivery $delivery, public bool $tracked = true) {}
 
     public function envelope(): Envelope
     {
@@ -42,6 +46,7 @@ class CampaignEmailMail extends Mailable
             view: 'mail.campaign-email',
             with: [
                 'delivery' => $this->delivery,
+                'trackingToken' => $this->trackingToken(),
                 'customerName' => $this->delivery->customer_name ?: 'Dear Friend',
                 'campaignBody' => EmailBodyHtml::render((string) $product?->response?->body),
                 'headerImageUrl' => $this->headerImageUrl($product),
@@ -98,7 +103,7 @@ class CampaignEmailMail extends Mailable
      */
     public function headers(): Headers
     {
-        if (! $this->delivery->exists) {
+        if ($this->trackingToken() === null) {
             return new Headers;
         }
 
@@ -106,6 +111,17 @@ class CampaignEmailMail extends Mailable
             'X-Delivery-Type' => 'campaign',
             'X-Delivery-Id' => (string) $this->delivery->getKey(),
         ]);
+    }
+
+    /**
+     * Only a saved, customer-facing delivery is tracked; unsaved preview and
+     * "Send Test to Me" deliveries have no row to record against.
+     */
+    private function trackingToken(): ?string
+    {
+        return $this->tracked && $this->delivery->exists
+            ? $this->delivery->tracking_token
+            : null;
     }
 
     public function attachments(): array

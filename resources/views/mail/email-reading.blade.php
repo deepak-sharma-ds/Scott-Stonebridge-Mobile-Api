@@ -58,5 +58,9 @@
             </td>
         </tr>
     </table>
+    @if (! empty($trackingToken))
+        {{-- Open-tracking pixel --}}
+        <img src="{{ route('email.track', ['token' => $trackingToken]) }}" alt="" width="1" height="1" border="0" style="display:none !important;" />
+    @endif
 </body>
 </html>

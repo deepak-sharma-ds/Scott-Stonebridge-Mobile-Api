@@ -81,7 +81,7 @@ class CampaignDeliveryController extends Controller
             }
         }
 
-        $mailable = new CampaignEmailMail($previewDelivery);
+        $mailable = new CampaignEmailMail($previewDelivery, tracked: false);
         $html = $mailable->render();
 
         return response($html, 200, ['Content-Type' => 'text/html; charset=UTF-8']);

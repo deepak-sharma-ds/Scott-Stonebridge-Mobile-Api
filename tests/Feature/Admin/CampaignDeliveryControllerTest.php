@@ -310,7 +310,8 @@ class CampaignDeliveryControllerTest extends TestCase
             ->assertHeader('Content-Type', 'text/html; charset=UTF-8')
             ->assertSee('Special offer for')
             ->assertSee('Campaign Special')
-            ->assertSee('Special offer text.');
+            ->assertSee('Special offer text.')
+            ->assertDontSee('/track/email/', false);
 
         $fresh = $delivery->fresh();
         $this->assertSame(CampaignDelivery::STATUS_PENDING, $fresh->status);

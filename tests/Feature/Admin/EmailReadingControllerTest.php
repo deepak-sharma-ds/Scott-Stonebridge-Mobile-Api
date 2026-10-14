@@ -416,7 +416,8 @@ class EmailReadingControllerTest extends TestCase
             ->assertHeader('Content-Type', 'text/html; charset=UTF-8')
             ->assertSee('Original Customer')
             ->assertSee('Stored Reading')
-            ->assertSee('Original body copy.');
+            ->assertSee('Original body copy.')
+            ->assertDontSee('/track/email/', false);
 
         $fresh = $delivery->fresh();
         $this->assertSame(EmailReadingDelivery::STATUS_GENERATED, $fresh->status);

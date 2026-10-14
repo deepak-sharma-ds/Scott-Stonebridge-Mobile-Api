@@ -18,7 +18,11 @@ class EmailReadingMail extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public EmailReadingDelivery $delivery) {}
+    /**
+     * @param  bool  $tracked  false for admin previews of a saved delivery, which
+     *                         must not tag the message or embed the open-tracking pixel
+     */
+    public function __construct(public EmailReadingDelivery $delivery, public bool $tracked = true) {}
 
     public function envelope(): Envelope
     {
@@ -45,6 +49,7 @@ class EmailReadingMail extends Mailable
             view: $view,
             with: [
                 'delivery' => $this->delivery,
+                'trackingToken' => $this->trackingToken(),
                 'product' => $product,
                 'customerName' => $customerName,
                 'readingBody' => EmailBodyHtml::render((string) $this->delivery->ai_response),
@@ -95,7 +100,7 @@ class EmailReadingMail extends Mailable
      */
     public function headers(): Headers
     {
-        if (! $this->delivery->exists) {
+        if ($this->trackingToken() === null) {
             return new Headers;
         }
 
@@ -103,6 +108,17 @@ class EmailReadingMail extends Mailable
             'X-Delivery-Type' => 'reading',
             'X-Delivery-Id' => (string) $this->delivery->getKey(),
         ]);
+    }
+
+    /**
+     * Only a saved, customer-facing delivery is tracked; unsaved preview and
+     * "Send Test to Me" deliveries have no row to record against.
+     */
+    private function trackingToken(): ?string
+    {
+        return $this->tracked && $this->delivery->exists
+            ? $this->delivery->tracking_token
+            : null;
     }
 
     public function attachments(): array

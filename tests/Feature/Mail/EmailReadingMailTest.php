@@ -139,4 +139,32 @@ class EmailReadingMailTest extends TestCase
         $this->assertFalse($headers->has('X-Delivery-Type'));
         $this->assertFalse($headers->has('X-Delivery-Id'));
     }
+
+    public function test_a_customer_email_embeds_the_hidden_tracking_pixel_for_its_token(): void
+    {
+        $delivery = $this->delivery();
+
+        $html = (new EmailReadingMail($delivery))->render();
+
+        $this->assertStringContainsString('<img src="'.route('email.track', $delivery->tracking_token).'"', $html);
+        $this->assertStringContainsString('width="1" height="1"', $html);
+    }
+
+    public function test_an_unsaved_preview_delivery_embeds_no_tracking_pixel(): void
+    {
+        $this->delivery();
+
+        $html = (new EmailReadingMail(EmailReadingDelivery::make(['customer_email' => 'x@example.com', 'ai_response' => 'Body'])))->render();
+
+        $this->assertStringNotContainsString('/track/email/', $html);
+    }
+
+    public function test_untracked_rendering_of_a_saved_delivery_embeds_no_pixel_and_no_headers(): void
+    {
+        $delivery = $this->delivery();
+        $mailable = new EmailReadingMail($delivery, tracked: false);
+
+        $this->assertStringNotContainsString('/track/email/', $mailable->render());
+        $this->assertFalse($this->sentHeaders($mailable)->has('X-Delivery-Type'));
+    }
 }
