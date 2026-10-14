@@ -19,4 +19,25 @@ trait HasTrackingToken
             }
         });
     }
+
+    /**
+     * Engagement as shown to admins: `unopened`, `direct` or `proxy`. Kept
+     * apart from the delivery status, which is the fulfilment state.
+     */
+    public function engagementStatus(): string
+    {
+        if ($this->opened_at === null) {
+            return 'unopened';
+        }
+
+        return $this->opened_client_type === 'proxy' ? 'proxy' : 'direct';
+    }
+
+    /**
+     * Whether the recipient's mail server acknowledged the message (SMTP 250).
+     */
+    public function hasSmtpAcceptance(): bool
+    {
+        return str_contains((string) $this->smtp_response, '250');
+    }
 }

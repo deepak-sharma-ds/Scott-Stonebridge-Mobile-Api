@@ -69,6 +69,8 @@
                 @endif
             </div>
 
+            @include('admin.components.delivery-audit-card', ['delivery' => $delivery])
+
             @include('admin.components.email-preview', [
                 'previewUrl' => route('admin.campaign_deliveries.preview', $delivery),
                 'title' => 'Email Preview',
