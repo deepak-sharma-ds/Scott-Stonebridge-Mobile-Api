@@ -21,7 +21,7 @@ class DeliveryTrackingColumnsTest extends TestCase
 
     private const TRACKING_COLUMNS = [
         'tracking_token', 'message_id', 'smtp_response', 'send_history',
-        'opened_at', 'last_opened_at', 'open_count',
+        'dispatched_at', 'opened_at', 'last_opened_at', 'open_count',
         'opened_client_type', 'opened_ip', 'opened_user_agent',
     ];
 
