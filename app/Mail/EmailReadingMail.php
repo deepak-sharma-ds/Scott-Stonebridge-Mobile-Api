@@ -11,6 +11,7 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Mail\Mailables\Headers;
 use Illuminate\Queue\SerializesModels;
 
 class EmailReadingMail extends Mailable
@@ -85,6 +86,23 @@ class EmailReadingMail extends Mailable
             <p>With love and light,</p>
             <p>Scott xx</p>
             TEXT;
+    }
+
+    /**
+     * Tags a customer delivery so the MessageSent listener can attach Delivery
+     * Proof to it. Unsaved preview and "Send Test to Me" deliveries have no
+     * row to update, so they carry no tracking headers.
+     */
+    public function headers(): Headers
+    {
+        if (! $this->delivery->exists) {
+            return new Headers;
+        }
+
+        return new Headers(text: [
+            'X-Delivery-Type' => 'reading',
+            'X-Delivery-Id' => (string) $this->delivery->getKey(),
+        ]);
     }
 
     public function attachments(): array

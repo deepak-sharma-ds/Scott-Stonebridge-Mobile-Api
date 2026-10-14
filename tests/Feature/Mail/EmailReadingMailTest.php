@@ -6,6 +6,9 @@ use App\Mail\EmailReadingMail;
 use App\Models\EmailReadingDelivery;
 use App\Models\EmailReadingProduct;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Mail\Mailable;
+use Illuminate\Support\Facades\Mail;
+use Symfony\Component\Mime\Header\Headers;
 use Tests\TestCase;
 
 class EmailReadingMailTest extends TestCase
@@ -105,5 +108,35 @@ class EmailReadingMailTest extends TestCase
         $html = (new EmailReadingMail($delivery))->render();
 
         $this->assertStringContainsString('configuration-images/logo.png', $html);
+    }
+
+    private function sentHeaders(Mailable $mailable): Headers
+    {
+        Mail::to('buyer@example.com')->send($mailable);
+
+        $messages = app('mailer')->getSymfonyTransport()->messages();
+
+        return $messages->last()->getOriginalMessage()->getHeaders();
+    }
+
+    public function test_a_persisted_delivery_is_tagged_with_its_type_and_id_headers(): void
+    {
+        $delivery = $this->delivery();
+
+        $headers = $this->sentHeaders(new EmailReadingMail($delivery));
+
+        $this->assertSame('reading', $headers->get('X-Delivery-Type')->getBodyAsString());
+        $this->assertSame((string) $delivery->id, $headers->get('X-Delivery-Id')->getBodyAsString());
+    }
+
+    public function test_an_unsaved_preview_delivery_is_not_tagged(): void
+    {
+        $this->delivery();
+        $preview = EmailReadingDelivery::make(['customer_email' => 'x@example.com', 'customer_name' => 'Test', 'ai_response' => 'Body']);
+
+        $headers = $this->sentHeaders(new EmailReadingMail($preview));
+
+        $this->assertFalse($headers->has('X-Delivery-Type'));
+        $this->assertFalse($headers->has('X-Delivery-Id'));
     }
 }

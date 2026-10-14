@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasTrackingToken;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class EmailReadingDelivery extends Model
 {
+    use HasTrackingToken;
+
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_GENERATED = 'generated';
@@ -51,6 +54,16 @@ class EmailReadingDelivery extends Model
         'compliance_reviewed_at',
         'theme_summary',
         'embedding',
+        'tracking_token',
+        'message_id',
+        'smtp_response',
+        'send_history',
+        'opened_at',
+        'last_opened_at',
+        'open_count',
+        'opened_client_type',
+        'opened_ip',
+        'opened_user_agent',
     ];
 
     protected function casts(): array
@@ -71,6 +84,10 @@ class EmailReadingDelivery extends Model
             'sent_manually' => 'boolean',
             'compliance_reviewed_at' => 'datetime',
             'embedding' => 'array',
+            'send_history' => 'array',
+            'opened_at' => 'datetime',
+            'last_opened_at' => 'datetime',
+            'open_count' => 'integer',
         ];
     }
 
