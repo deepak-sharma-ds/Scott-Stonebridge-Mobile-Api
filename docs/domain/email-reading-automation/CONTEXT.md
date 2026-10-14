@@ -59,7 +59,7 @@ The shared structural and stylistic rules instructing how a generated response m
 The automated quality check performed on freshly generated response content prior to acceptance or dispatch. Inspects the output for mid-sentence truncation, leftover markdown formatting tokens, a missing closing section, redundant greetings and sign-offs, non-letter layout (blockquotes, tables, dividers, lists), and definitive medical claims. If a flaw is detected, triggers a single automated recovery attempt with expanded token limits; if still flawed, marks the delivery failed and alerts an administrator, except that a surviving medical claim puts the delivery on Compliance Hold instead.
 
 **Email Preview**:
-The isolated, full-fidelity administrative view showing precisely how the final email will render for the customer — including brand headers, banners, formatted body styling, and closing sign-offs — rendered in responsive desktop and mobile viewports with an optional zero-side-effect test send to the viewing administrator.
+The isolated, full-fidelity administrative view showing precisely how the final email will render for the customer — including brand headers, banners, formatted body styling, and closing sign-offs — rendered in responsive desktop and mobile viewports with an optional zero-side-effect test send to the viewing administrator. Previews and test sends are never tracked: no Delivery Proof headers and no tracking pixel.
 
 **Compliance Gate**:
 The pre- and post-generation evaluation ensuring customer questions and generated reading guidance adhere to legal, safety, and industry boundaries. Inquiries are classified into standard spiritual inquiries, sensitive topics requiring gentle deflection with professional disclaimers (general emotional wellbeing, personal dilemmas), and critical compliance breaches (medical diagnoses/prescriptions, pregnancy health outcomes, self-harm, suicide, criminal accusations, and gambling/investment picks).
@@ -83,4 +83,31 @@ The compact list (max 15 words) of cards and section themes a reading explored, 
 **Modality Prompt**:
 The per-product prompt template that tells the model how that kind of reading is given: Tarot products draw and name cards, mediumship channels spirit impressions with no cards, love products explore relational energy and communication, astrology walks four seasonal quarters. Distinct from the shared Formatting Contract and from the global persona and compliance rules in the system prompt.
 _Avoid_: Product Prompt (ambiguous with the generic prompt template field)
+
+**Delivery Proof**:
+The verifiable, server-to-server confirmation captured upon mail dispatch: the unique RFC message identifier and the recipient mail exchange server's acceptance handshake code, establishing that the email was successfully accepted by the recipient's mail provider, plus the moment of acceptance (`dispatched_at`). Serves as primary technical fulfillment evidence in payment disputes and regulatory compliance audits.
+_Avoid_: Sent Status, Mail Log
+
+**Open Tracking**:
+The measurement of client-side recipient engagement via a unique tracking token and transparent pixel embedded in the email, recording the initial open timestamp, subsequent interaction count, and client metadata. Serves as operational customer-engagement visibility.
+_Avoid_: Read Receipt, Spy Pixel
+
+**Tracking Token**:
+The permanent UUID on a delivery that identifies its open-tracking pixel. It never changes, so opening any copy of the email, including a resend, records engagement against the same delivery.
+_Avoid_: Open ID, Pixel ID
+
+**Direct Open**:
+An open event initiated directly by a human recipient's mail application, indicating authentic, unproxied client interaction.
+_Avoid_: Real Open
+
+**Proxy Open**:
+An open event initiated by an intermediary privacy proxy or automated security cache (such as Apple Mail Privacy Protection or Google Image Proxy), indicating that email assets were loaded via an external proxy network upon arrival.
+_Avoid_: Fake Open, Bot Open
+
+**Send History**:
+The chronological, immutable audit log of all mail transmissions associated with a single delivery. Each record captures the dispatch timestamp, RFC message identifier, and SMTP server handshake response, preserving proof of timely fulfillment even after administrative resends.
+_Avoid_: Resend Log, Retry Counter
+
+
+
 
