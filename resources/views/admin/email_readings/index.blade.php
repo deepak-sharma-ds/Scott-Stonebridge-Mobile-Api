@@ -44,6 +44,15 @@
                     @endforeach
                 </select>
             </div>
+            <div style="min-width:170px;">
+                <label class="form-label">Engagement</label>
+                <select name="engagement" class="form-control">
+                    <option value="">All Engagement</option>
+                    @foreach($engagements as $value => $label)
+                        <option value="{{ $value }}" @selected(($filters['engagement'] ?? '') === $value)>{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
             <div style="min-width:150px;">
                 <label class="form-label">From</label>
                 <input type="date" name="from" value="{{ $filters['from'] ?? '' }}" class="form-control">
@@ -93,6 +102,7 @@
                                 <x-admin.badge :type="$badgeFor[$delivery->status] ?? 'secondary'">
                                     {{ $statuses[$delivery->status] ?? ucfirst($delivery->status) }}
                                 </x-admin.badge>
+                                @include('admin.components.engagement-pill', ['delivery' => $delivery])
                                 @if($delivery->needsFulfillment())
                                     <x-admin.badge type="warning">Unfulfilled</x-admin.badge>
                                 @endif

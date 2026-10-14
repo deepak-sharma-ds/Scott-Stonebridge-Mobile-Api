@@ -238,6 +238,7 @@ class CampaignDeliveryAdminService
         return CampaignDelivery::with(['campaignProduct.marketingCampaign', 'campaignProduct.response'])
             ->status($filters['status'] ?? null)
             ->search($filters['search'] ?? null)
+            ->engagement($filters['engagement'] ?? null)
             ->campaign(! empty($filters['campaign']) ? (int) $filters['campaign'] : null)
             ->when(! empty($filters['from']), fn ($q) => $q->whereDate('created_at', '>=', $filters['from']))
             ->when(! empty($filters['to']), fn ($q) => $q->whereDate('created_at', '<=', $filters['to']));

@@ -27,12 +27,13 @@ class EmailReadingController extends Controller
 
     public function index(Request $request)
     {
-        $filters = $request->only(['status', 'search', 'from', 'to']);
+        $filters = $request->only(['status', 'search', 'engagement', 'from', 'to']);
         $deliveries = $this->service->paginateDeliveries($filters);
 
         return view('admin.email_readings.index', [
             'deliveries' => $deliveries,
             'statuses' => EmailReadingDelivery::statusLabels(),
+            'engagements' => EmailReadingDelivery::engagementFilterLabels(),
             'filters' => $filters,
         ]);
     }
@@ -246,6 +247,6 @@ class EmailReadingController extends Controller
 
     public function export(Request $request): StreamedResponse
     {
-        return $this->service->exportCsv($request->only(['status', 'search', 'from', 'to']));
+        return $this->service->exportCsv($request->only(['status', 'search', 'engagement', 'from', 'to']));
     }
 }

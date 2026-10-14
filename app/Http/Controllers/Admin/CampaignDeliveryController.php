@@ -24,12 +24,13 @@ class CampaignDeliveryController extends Controller
 
     public function index(Request $request)
     {
-        $filters = $request->only(['status', 'search', 'campaign', 'from', 'to']);
+        $filters = $request->only(['status', 'search', 'engagement', 'campaign', 'from', 'to']);
         $deliveries = $this->service->paginateDeliveries($filters);
 
         return view('admin.campaign_deliveries.index', [
             'deliveries' => $deliveries,
             'statuses' => CampaignDelivery::statusLabels(),
+            'engagements' => CampaignDelivery::engagementFilterLabels(),
             'campaigns' => MarketingCampaign::orderBy('name')->get(),
             'filters' => $filters,
         ]);
@@ -182,6 +183,6 @@ class CampaignDeliveryController extends Controller
 
     public function export(Request $request): StreamedResponse
     {
-        return $this->service->exportCsv($request->only(['status', 'search', 'campaign', 'from', 'to']));
+        return $this->service->exportCsv($request->only(['status', 'search', 'engagement', 'campaign', 'from', 'to']));
     }
 }

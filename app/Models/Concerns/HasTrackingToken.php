@@ -2,6 +2,7 @@
 
 namespace App\Models\Concerns;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 
 /**
@@ -39,5 +40,35 @@ trait HasTrackingToken
     public function hasSmtpAcceptance(): bool
     {
         return str_contains((string) $this->smtp_response, '250');
+    }
+
+    /**
+     * Filter by engagement: `opened` (any), `direct`, `proxy` or `unopened`.
+     * An empty or unrecognised value leaves the query untouched.
+     */
+    public function scopeEngagement(Builder $query, ?string $engagement): Builder
+    {
+        return match ($engagement) {
+            'opened' => $query->whereNotNull('opened_at'),
+            'direct' => $query->where('opened_client_type', 'direct'),
+            'proxy' => $query->where('opened_client_type', 'proxy'),
+            'unopened' => $query->whereNull('opened_at'),
+            default => $query,
+        };
+    }
+
+    /**
+     * Options for the admin engagement filter dropdown.
+     *
+     * @return array<string,string>
+     */
+    public static function engagementFilterLabels(): array
+    {
+        return [
+            'opened' => 'Opened (Any)',
+            'direct' => 'Opened (Direct)',
+            'proxy' => 'Opened (Proxy)',
+            'unopened' => 'Unopened',
+        ];
     }
 }
