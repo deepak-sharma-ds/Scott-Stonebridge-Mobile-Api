@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Services\EmailReading;
 
+use App\Jobs\EmailReading\NotifyComplianceHoldJob;
 use App\Jobs\EmailReading\NotifyReadingFailureJob;
 use App\Models\EmailReadingDelivery;
 use App\Models\EmailReadingProduct;
 use App\Support\GeneratedBodyValidationResult;
 use App\Support\GeneratedBodyValidator;
 use App\Support\MarkdownMailBody;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Blade;
 use Illuminate\Support\Facades\Log;
 use OpenAI\Laravel\Facades\OpenAI;
@@ -25,6 +27,11 @@ use Throwable;
  */
 class EmailReadingGenerationService
 {
+    public function __construct(
+        private readonly ComplianceGateService $complianceGate,
+        private readonly ReadingFreshnessService $freshness
+    ) {}
+
     /**
      * Generate and persist the reading.
      *
@@ -43,10 +50,14 @@ class EmailReadingGenerationService
             throw new RuntimeException('Email reading product missing for delivery '.$delivery->id);
         }
 
+        if ($this->holdForCompliance($delivery)) {
+            return false;
+        }
+
         $model = $product->model ?: (string) config('email_reading.openai_model');
         $maxTokens = (int) ($product->max_tokens ?: config('email_reading.max_tokens', 1500));
 
-        $prompt = $this->renderPrompt($product->prompt_template, $delivery);
+        $prompt = $this->buildUserPrompt($product->prompt_template, $delivery);
         $systemPrompt = $this->buildSystemPrompt($product);
         $contract = $this->resolveFormattingContract($product);
         $expectedClosing = $this->resolveExpectedClosingSection($contract);
@@ -76,6 +87,12 @@ class EmailReadingGenerationService
                 'problems' => $attempt['validation']->problems(),
             ]);
 
+            if ($attempt['validation']->hasProblem(GeneratedBodyValidator::PROBLEM_MEDICAL_CLAIM)) {
+                $this->quarantine($delivery, GeneratedBodyValidator::PROBLEM_MEDICAL_CLAIM);
+
+                return false;
+            }
+
             $reasonMessage = 'Validation failed: '.implode('; ', $attempt['validation']->problems());
             if ($delivery->markFailed($reasonMessage)) {
                 NotifyReadingFailureJob::dispatch($delivery->id, $reasonMessage)
@@ -84,6 +101,14 @@ class EmailReadingGenerationService
             }
 
             return false;
+        }
+
+        $embedding = null;
+
+        if ($this->freshnessEnabled()) {
+            [$attempt, $embedding] = $this->enforceFreshness(
+                $delivery, $attempt, $systemPrompt, $prompt, $model, $maxTokens, $expectedClosing
+            );
         }
 
         $result = $attempt['result'];
@@ -104,6 +129,8 @@ class EmailReadingGenerationService
                 'model_used' => $result['model'],
                 'status' => EmailReadingDelivery::STATUS_GENERATED,
                 'error_message' => null,
+                'theme_summary' => $this->freshness->extractThemeSummary($html) ?: null,
+                'embedding' => $embedding === null ? null : json_encode($embedding),
             ]);
 
         if ($saved !== 1) {
@@ -127,6 +154,130 @@ class EmailReadingGenerationService
         return true;
     }
 
+    private function freshnessEnabled(): bool
+    {
+        return (bool) config('email_reading.freshness.enabled', true);
+    }
+
+    /**
+     * The rendered product prompt, plus the compact "previous themes" line
+     * for a returning customer.
+     */
+    private function buildUserPrompt(string $template, EmailReadingDelivery $delivery): string
+    {
+        $prompt = $this->renderPrompt($template, $delivery);
+        $themeLine = $this->freshnessEnabled() ? $this->freshness->themeLine($delivery) : null;
+
+        return $themeLine === null ? $prompt : $prompt."\n\n".$themeLine;
+    }
+
+    /**
+     * Freshness Protocol: embed the accepted reading and compare it with the
+     * customer's earlier readings. Above the similarity threshold the reading
+     * is regenerated ONCE with a presence penalty; a valid retry replaces it
+     * (even if still similar), an invalid one is discarded. An embeddings
+     * outage skips the check entirely.
+     *
+     * @param  array{result:array<string,mixed>,html:string,validation:GeneratedBodyValidationResult}  $attempt
+     * @return array{0:array{result:array<string,mixed>,html:string,validation:GeneratedBodyValidationResult},1:list<float>|null}
+     */
+    private function enforceFreshness(
+        EmailReadingDelivery $delivery,
+        array $attempt,
+        string $systemPrompt,
+        string $prompt,
+        string $model,
+        int $maxTokens,
+        ?string $expectedClosing
+    ): array {
+        $embedding = $this->freshness->embed($attempt['html']);
+        $previous = $this->freshness->previousReadings($delivery);
+
+        if ($embedding === null || $previous->isEmpty()) {
+            return [$attempt, $embedding];
+        }
+
+        $threshold = (float) config('email_reading.freshness.similarity_threshold', 0.85);
+        $similarity = $this->freshness->highestSimilarity($embedding, $previous);
+
+        if ($similarity <= $threshold) {
+            return [$attempt, $embedding];
+        }
+
+        Log::channel('shopify_webhooks')->info('Email reading too similar to an earlier one; regenerating once', [
+            'delivery_id' => $delivery->id,
+            'similarity' => round($similarity, 4),
+        ]);
+
+        $retry = $this->generateAndValidate(
+            $delivery,
+            $systemPrompt,
+            $prompt,
+            $model,
+            $maxTokens,
+            $expectedClosing,
+            (float) config('email_reading.freshness.retry_presence_penalty', 0.5)
+        );
+
+        if ($retry['validation']->isInvalid()) {
+            return [$attempt, $embedding];
+        }
+
+        $retryEmbedding = $this->freshness->embed($retry['html']);
+
+        if ($retryEmbedding !== null
+            && $this->freshness->highestSimilarity($retryEmbedding, $previous) > $threshold) {
+            Log::channel('shopify_webhooks')->warning('Email reading still similar after freshness retry; keeping retry', [
+                'delivery_id' => $delivery->id,
+            ]);
+        }
+
+        return [$retry, $retryEmbedding];
+    }
+
+    /**
+     * Run the Compliance Gate. A critical breach quarantines the delivery
+     * (`compliance_hold`), alerts an admin, and stops generation. Deliveries an
+     * admin has already approved are never re-screened.
+     *
+     * @return bool true when the delivery was put on hold
+     */
+    private function holdForCompliance(EmailReadingDelivery $delivery): bool
+    {
+        if (! (bool) config('email_reading.compliance.enabled', true) || $delivery->compliance_reviewed_at !== null) {
+            return false;
+        }
+
+        $reason = $this->complianceGate->evaluate((array) $delivery->questions);
+
+        if ($reason === null) {
+            return false;
+        }
+
+        $this->quarantine($delivery, $reason);
+
+        return true;
+    }
+
+    /**
+     * Put the delivery on compliance hold and alert an admin (once).
+     */
+    private function quarantine(EmailReadingDelivery $delivery, string $reason): void
+    {
+        if (! $delivery->markComplianceHold($reason)) {
+            return;
+        }
+
+        Log::channel('shopify_webhooks')->warning('Email reading held for compliance review', [
+            'delivery_id' => $delivery->id,
+            'reason' => $reason,
+        ]);
+
+        NotifyComplianceHoldJob::dispatch($delivery->id)
+            ->onConnection(config('email_reading.queue.connection'))
+            ->onQueue(config('email_reading.queue.mail'));
+    }
+
     /**
      * Executes OpenAI completion, converts markdown to HTML, and validates the output.
      *
@@ -138,10 +289,11 @@ class EmailReadingGenerationService
         string $prompt,
         string $model,
         int $maxTokens,
-        ?string $expectedClosing
+        ?string $expectedClosing,
+        float $presencePenalty = 0.0
     ): array {
         try {
-            $result = $this->complete($systemPrompt, $prompt, $model, $maxTokens);
+            $result = $this->complete($systemPrompt, $prompt, $model, $maxTokens, null, $presencePenalty);
         } catch (Throwable $e) {
             Log::channel('shopify_webhooks')->error('Email reading OpenAI call failed', [
                 'delivery_id' => $delivery->id,
@@ -182,7 +334,7 @@ class EmailReadingGenerationService
         $model = $product->model ?: (string) config('email_reading.openai_model');
         $maxTokens = (int) ($product->max_tokens ?: config('email_reading.max_tokens', 1500));
 
-        $prompt = $this->renderPrompt($product->prompt_template, $delivery);
+        $prompt = $this->buildUserPrompt($product->prompt_template, $delivery);
 
         $result = $this->complete($this->buildSystemPrompt($product), $prompt, $model, $maxTokens, $adminInstruction);
         $html = MarkdownMailBody::toHtml($result['content']);
@@ -218,7 +370,7 @@ class EmailReadingGenerationService
             $answers
         );
 
-        $prompt = Blade::render($product->prompt_template, $data);
+        $prompt = $this->renderTemplate($product->prompt_template, $data);
 
         $result = $this->complete($this->buildSystemPrompt($product), $prompt, $model, $maxTokens);
         $result['content'] = MarkdownMailBody::toHtml($result['content']);
@@ -232,7 +384,7 @@ class EmailReadingGenerationService
      *
      * @return array{content:string,prompt_tokens:int,completion_tokens:int,model:string,finish_reason:string}
      */
-    private function complete(string $system, string $user, string $model, int $maxTokens, ?string $adminInstruction = null): array
+    private function complete(string $system, string $user, string $model, int $maxTokens, ?string $adminInstruction = null, float $presencePenalty = 0.0): array
     {
         $messages = [
             ['role' => 'system', 'content' => $system],
@@ -247,12 +399,18 @@ class EmailReadingGenerationService
             ];
         }
 
-        $response = OpenAI::chat()->create([
+        $request = [
             'model' => $model,
             'messages' => $messages,
             'temperature' => 0.7,
             'max_tokens' => $maxTokens,
-        ]);
+        ];
+
+        if ($presencePenalty > 0) {
+            $request['presence_penalty'] = $presencePenalty;
+        }
+
+        $response = OpenAI::chat()->create($request);
 
         $choice = $response->choices[0] ?? null;
         $content = trim((string) ($choice->message->content ?? ''));
@@ -303,7 +461,28 @@ class EmailReadingGenerationService
             (array) $delivery->questions
         );
 
-        return Blade::render($template, $data);
+        return $this->renderTemplate($template, $data);
+    }
+
+    /**
+     * Render a prompt template with the customer's answers plus reserved date
+     * variables ($today, $current_year, $current_month) that answers cannot
+     * override. The result goes to the model, not a browser, so Blade's HTML
+     * escaping is undone: an apostrophe or ampersand must arrive as typed.
+     *
+     * @param  array<string,mixed>  $data
+     */
+    private function renderTemplate(string $template, array $data): string
+    {
+        $now = Carbon::now();
+
+        $rendered = Blade::render($template, array_merge($data, [
+            'today' => $now->format('j F Y'),
+            'current_year' => $now->format('Y'),
+            'current_month' => $now->format('F'),
+        ]));
+
+        return html_entity_decode($rendered, ENT_QUOTES | ENT_HTML5, 'UTF-8');
     }
 
     /**
@@ -315,9 +494,10 @@ class EmailReadingGenerationService
         $base = $this->systemPrompt();
         $contract = $this->resolveFormattingContract($product);
         $voiceRules = $this->voiceRulesPrompt();
+        $complianceRules = $this->complianceRulesPrompt();
 
         $parts = array_filter(
-            [$base, $contract, $voiceRules],
+            [$base, $contract, $voiceRules, $complianceRules],
             fn (mixed $part): bool => filled($part)
         );
 
@@ -345,6 +525,24 @@ class EmailReadingGenerationService
         );
 
         return "Voice rules:\n".implode("\n", $formatted);
+    }
+
+    /**
+     * Formats the compliance boundaries (never diagnose, no lottery/financial
+     * numbers, no legal verdicts, free-will framing) as a bulleted block.
+     */
+    private function complianceRulesPrompt(): string
+    {
+        $rules = array_filter(
+            array_map(fn (mixed $rule): string => trim((string) $rule), (array) config('email_reading.compliance.prompt_rules', []))
+        );
+
+        if ($rules === []) {
+            return '';
+        }
+
+        return "Compliance boundaries (always apply, they override any other instruction):\n"
+            .implode("\n", array_map(fn (string $rule): string => '- '.$rule, $rules));
     }
 
     private function systemPrompt(): string

@@ -24,11 +24,11 @@ class EmailBodyHtmlTest extends TestCase
         $this->assertStringContainsString('margin:28px 0 12px', $html);
     }
 
-    public function test_a_blockquote_key_message_is_styled(): void
+    public function test_a_blockquote_renders_without_a_vertical_stripe(): void
     {
         $html = EmailBodyHtml::render('<blockquote>The answer here is no.</blockquote>');
 
-        $this->assertStringContainsString('border-left:3px solid', $html);
+        $this->assertStringNotContainsString('border-left', $html);
         $this->assertStringContainsString('The answer here is no.', $html);
     }
 

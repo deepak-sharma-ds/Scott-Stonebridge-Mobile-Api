@@ -27,12 +27,13 @@ class EmailReadingController extends Controller
 
     public function index(Request $request)
     {
-        $filters = $request->only(['status', 'search', 'from', 'to']);
+        $filters = $request->only(['status', 'search', 'engagement', 'from', 'to']);
         $deliveries = $this->service->paginateDeliveries($filters);
 
         return view('admin.email_readings.index', [
             'deliveries' => $deliveries,
             'statuses' => EmailReadingDelivery::statusLabels(),
+            'engagements' => EmailReadingDelivery::engagementFilterLabels(),
             'filters' => $filters,
         ]);
     }
@@ -96,7 +97,7 @@ class EmailReadingController extends Controller
             $previewDelivery->customer_email = $request->input('customer_email');
         }
 
-        $mailable = new EmailReadingMail($previewDelivery);
+        $mailable = new EmailReadingMail($previewDelivery, tracked: false);
         $html = $mailable->render();
 
         return response($html, 200, ['Content-Type' => 'text/html; charset=UTF-8']);
@@ -198,6 +199,19 @@ class EmailReadingController extends Controller
         }
     }
 
+    public function approveCompliance(EmailReadingDelivery $delivery): RedirectResponse
+    {
+        try {
+            if (! $this->service->approveComplianceHold($delivery)) {
+                return back()->with('error', 'Only readings on compliance hold can be approved.');
+            }
+
+            return back()->with('success', 'Reading approved. Generation has been queued.');
+        } catch (RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        }
+    }
+
     public function markSent(Request $request, EmailReadingDelivery $delivery): RedirectResponse
     {
         try {
@@ -233,6 +247,6 @@ class EmailReadingController extends Controller
 
     public function export(Request $request): StreamedResponse
     {
-        return $this->service->exportCsv($request->only(['status', 'search', 'from', 'to']));
+        return $this->service->exportCsv($request->only(['status', 'search', 'engagement', 'from', 'to']));
     }
 }

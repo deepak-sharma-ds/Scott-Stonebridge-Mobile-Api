@@ -24,8 +24,8 @@ return [
     'max_tokens' => env('READINGS_MAX_TOKENS', 1500),
     'system_prompt' => env(
         'READINGS_SYSTEM_PROMPT',
-        'You are Scott Stonebridge, an award-winning UK psychic medium. '
-        .'Write a warm, compassionate, well-structured email reading. '
+        'You are Scott Stonebridge, an award-winning UK psychic medium writing a personal email reading to one client. '
+        .'Your voice is warm, down-to-earth, compassionate and empowering, never dramatic or fearful. '
         .'Do not include a greeting/salutation (e.g. "Dear ...") or a sign-off (e.g. "Warm blessings, ...") — '
         .'output only the body of the reading itself, since the surrounding email template already supplies those.'
     ),
@@ -34,20 +34,75 @@ return [
     |--------------------------------------------------------------------------
     | Shared formatting contract
     |--------------------------------------------------------------------------
-    | The formatting contract instructs the model to structure readings using
-    | markdown (headings, key messages, closing section, no greeting/sign-off).
+    | The formatting contract instructs the model to write the reading as a
+    | warm personal letter in flowing paragraphs, with soft ### subheadings and
+    | a closing section. Blockquotes, tables, bullet lists and horizontal rules
+    | are forbidden so the email never looks machine-generated.
     | A product row in email_reading_products may override `formatting_contract`.
     */
     'formatting_contract' => env(
         'READINGS_FORMATTING_CONTRACT',
-        "Structure your response using Markdown:\n"
-        ."- Use markdown headings (## or ###) for each question, card, or main section.\n"
-        ."- Include short, one-line key message lines or takeaways (e.g. bold or blockquote).\n"
+        "Write the reading as a warm, personal letter in Markdown:\n"
+        ."- Write in natural flowing paragraphs, as if typing a heartfelt email to one person.\n"
+        ."- Use soft ### subheadings only to introduce each question, card, or main section. Keep them short and gentle.\n"
+        ."- Do NOT use blockquotes (lines starting with '>'), tables, bullet points, numbered lists, horizontal dividers ('---'), or decorative symbols. Weave every point into the paragraphs instead.\n"
         ."- End with a dedicated closing section headed '### From My Heart to Yours' with warm, encouraging parting words.\n"
         ."- Do NOT include a greeting or salutation (e.g. 'Dear ...') — the email template already supplies it.\n"
         ."- Do NOT include a sign-off or closing signature (e.g. 'Warm blessings, Scott') — the email template already supplies it.\n"
         .'- Return ONLY the markdown reading body. Do not include raw HTML.'
     ),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Compliance gate
+    |--------------------------------------------------------------------------
+    | Customer answers are screened BEFORE generation. A critical breach puts
+    | the delivery in `compliance_hold` (no generation, no email) and alerts an
+    | admin. Local patterns run first; the free OpenAI Moderation endpoint is
+    | the second pass and fails open if unavailable.
+    |
+    | moderation_categories  Moderation categories that trigger a hold.
+    */
+    'compliance' => [
+        'enabled' => (bool) env('READINGS_COMPLIANCE_ENABLED', true),
+        // Boundaries appended to EVERY reading's system prompt (kept separate
+        // from the persona and the formatting contract so neither a product
+        // contract override nor a persona edit can drop them). Pipe-delimited
+        // env override, same as voice_rules.
+        'prompt_rules' => env('READINGS_COMPLIANCE_RULES')
+            ? array_values(array_filter(array_map('trim', explode('|', (string) env('READINGS_COMPLIANCE_RULES')))))
+            : [
+                'Never diagnose any illness or condition, never predict medical outcomes, and never tell the client to start, stop or change medication or treatment. When health worries come up, offer gentle spiritual comfort and encourage them to speak to their doctor or a qualified healthcare professional.',
+                'Never give lottery numbers, gambling tips or investment, tax or financial predictions. If money worries come up, offer reassurance and suggest speaking to a qualified financial adviser.',
+                'Never comment on who is guilty or the likely outcome of any police matter, court case or trial, and never give legal advice. Suggest a solicitor for legal matters.',
+                'Never encourage self-harm. If the client sounds distressed or hopeless, respond with care and gently encourage them to reach out to loved ones, their GP or the Samaritans (116 123 in the UK).',
+                'Frame the future as possibilities shaped by the client\'s own free will and choices, never as fixed or guaranteed fate, and never frighten the client with predictions of death, illness or disaster.',
+            ],
+        'moderation_model' => env('READINGS_MODERATION_MODEL', 'omni-moderation-latest'),
+        'moderation_categories' => ['self-harm', 'self-harm/intent', 'self-harm/instructions', 'illicit/violent'],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Freshness protocol
+    |--------------------------------------------------------------------------
+    | Returning customers must not receive recycled readings. Their earlier
+    | readings (any product, stored response, not cancelled/failed/held) feed:
+    |   1. a compact "previous themes" line added to the prompt, and
+    |   2. a semantic check: the new reading's embedding is compared with the
+    |      stored embeddings; above `similarity_threshold` the reading is
+    |      regenerated ONCE with `retry_presence_penalty`, and the retry result
+    |      is kept either way.
+    |
+    | history_limit   how many earlier readings are considered (newest first).
+    */
+    'freshness' => [
+        'enabled' => (bool) env('READINGS_FRESHNESS_ENABLED', true),
+        'history_limit' => (int) env('READINGS_FRESHNESS_HISTORY', 5),
+        'similarity_threshold' => (float) env('READINGS_FRESHNESS_THRESHOLD', 0.85),
+        'retry_presence_penalty' => (float) env('READINGS_FRESHNESS_PRESENCE_PENALTY', 0.5),
+        'embedding_model' => env('READINGS_EMBEDDING_MODEL', 'text-embedding-3-small'),
+    ],
 
     /*
     |--------------------------------------------------------------------------

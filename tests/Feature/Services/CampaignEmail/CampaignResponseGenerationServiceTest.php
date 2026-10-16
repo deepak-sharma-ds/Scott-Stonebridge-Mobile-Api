@@ -59,6 +59,27 @@ class CampaignResponseGenerationServiceTest extends TestCase
         });
     }
 
+    public function test_default_contract_asks_for_a_personal_letter_and_forbids_ai_visual_tells(): void
+    {
+        $this->fakeReply("## Crystal Pendant\n\nSpecial message.");
+        $product = $this->campaignProduct();
+
+        app(CampaignResponseGenerationService::class)->generate($product);
+
+        OpenAI::assertSent(Chat::class, function (string $method, array $parameters): bool {
+            $systemMessage = strtolower(collect($parameters['messages'])->firstWhere('role', 'system')['content'] ?? '');
+
+            return str_contains($systemMessage, 'personal letter')
+                && str_contains($systemMessage, 'flowing paragraphs')
+                && str_contains($systemMessage, '###')
+                && str_contains($systemMessage, 'do not use blockquotes')
+                && str_contains($systemMessage, 'tables')
+                && str_contains($systemMessage, 'bullet')
+                && str_contains($systemMessage, 'horizontal')
+                && ! str_contains($systemMessage, 'bold or blockquote');
+        });
+    }
+
     public function test_system_prompt_uses_product_formatting_contract_override_when_present(): void
     {
         $this->fakeReply("## Custom Campaign Product\n\nContent.");

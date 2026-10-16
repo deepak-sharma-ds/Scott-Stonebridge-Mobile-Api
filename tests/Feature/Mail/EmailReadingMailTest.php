@@ -6,6 +6,9 @@ use App\Mail\EmailReadingMail;
 use App\Models\EmailReadingDelivery;
 use App\Models\EmailReadingProduct;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Mail\Mailable;
+use Illuminate\Support\Facades\Mail;
+use Symfony\Component\Mime\Header\Headers;
 use Tests\TestCase;
 
 class EmailReadingMailTest extends TestCase
@@ -57,7 +60,7 @@ class EmailReadingMailTest extends TestCase
         $this->assertStringContainsString('Card One</h2>', $html);
         $this->assertStringContainsString('margin:28px 0 12px', $html);
         $this->assertStringContainsString('font-family:Arial', $html);
-        $this->assertStringContainsString('border-left:3px solid', $html);
+        $this->assertStringNotContainsString('border-left', $html);
         $this->assertStringContainsString('The answer is yes.', $html);
         $this->assertStringNotContainsString('steal()', $html);
         $this->assertStringNotContainsString('onclick', $html);
@@ -105,5 +108,63 @@ class EmailReadingMailTest extends TestCase
         $html = (new EmailReadingMail($delivery))->render();
 
         $this->assertStringContainsString('configuration-images/logo.png', $html);
+    }
+
+    private function sentHeaders(Mailable $mailable): Headers
+    {
+        Mail::to('buyer@example.com')->send($mailable);
+
+        $messages = app('mailer')->getSymfonyTransport()->messages();
+
+        return $messages->last()->getOriginalMessage()->getHeaders();
+    }
+
+    public function test_a_persisted_delivery_is_tagged_with_its_type_and_id_headers(): void
+    {
+        $delivery = $this->delivery();
+
+        $headers = $this->sentHeaders(new EmailReadingMail($delivery));
+
+        $this->assertSame('reading', $headers->get('X-Delivery-Type')->getBodyAsString());
+        $this->assertSame((string) $delivery->id, $headers->get('X-Delivery-Id')->getBodyAsString());
+    }
+
+    public function test_an_unsaved_preview_delivery_is_not_tagged(): void
+    {
+        $this->delivery();
+        $preview = EmailReadingDelivery::make(['customer_email' => 'x@example.com', 'customer_name' => 'Test', 'ai_response' => 'Body']);
+
+        $headers = $this->sentHeaders(new EmailReadingMail($preview));
+
+        $this->assertFalse($headers->has('X-Delivery-Type'));
+        $this->assertFalse($headers->has('X-Delivery-Id'));
+    }
+
+    public function test_a_customer_email_embeds_the_hidden_tracking_pixel_for_its_token(): void
+    {
+        $delivery = $this->delivery();
+
+        $html = (new EmailReadingMail($delivery))->render();
+
+        $this->assertStringContainsString('<img src="'.route('email.track', $delivery->tracking_token).'"', $html);
+        $this->assertStringContainsString('width="1" height="1"', $html);
+    }
+
+    public function test_an_unsaved_preview_delivery_embeds_no_tracking_pixel(): void
+    {
+        $this->delivery();
+
+        $html = (new EmailReadingMail(EmailReadingDelivery::make(['customer_email' => 'x@example.com', 'ai_response' => 'Body'])))->render();
+
+        $this->assertStringNotContainsString('/track/email/', $html);
+    }
+
+    public function test_untracked_rendering_of_a_saved_delivery_embeds_no_pixel_and_no_headers(): void
+    {
+        $delivery = $this->delivery();
+        $mailable = new EmailReadingMail($delivery, tracked: false);
+
+        $this->assertStringNotContainsString('/track/email/', $mailable->render());
+        $this->assertFalse($this->sentHeaders($mailable)->has('X-Delivery-Type'));
     }
 }

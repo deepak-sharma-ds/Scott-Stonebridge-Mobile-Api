@@ -71,6 +71,64 @@ class EmailReadingGenerationServiceTest extends TestCase
         });
     }
 
+    public function test_default_contract_asks_for_a_personal_letter_and_forbids_ai_visual_tells(): void
+    {
+        $this->fakeReply($this->validMarkdown());
+        $delivery = $this->delivery();
+
+        app(EmailReadingGenerationService::class)->generate($delivery->load('product'));
+
+        OpenAI::assertSent(Chat::class, function (string $method, array $parameters): bool {
+            $systemMessage = strtolower(collect($parameters['messages'])->firstWhere('role', 'system')['content'] ?? '');
+
+            return str_contains($systemMessage, 'personal letter')
+                && str_contains($systemMessage, 'flowing paragraphs')
+                && str_contains($systemMessage, '###')
+                && str_contains($systemMessage, 'do not use blockquotes')
+                && str_contains($systemMessage, 'tables')
+                && str_contains($systemMessage, 'bullet')
+                && str_contains($systemMessage, 'horizontal')
+                && ! str_contains($systemMessage, 'bold or blockquote');
+        });
+    }
+
+    public function test_system_prompt_carries_the_persona_and_compliance_boundaries(): void
+    {
+        $this->fakeReply($this->validMarkdown());
+        $delivery = $this->delivery();
+
+        app(EmailReadingGenerationService::class)->generate($delivery->load('product'));
+
+        OpenAI::assertSent(Chat::class, function (string $method, array $parameters): bool {
+            $system = strtolower(collect($parameters['messages'])->firstWhere('role', 'system')['content'] ?? '');
+
+            return str_contains($system, 'scott stonebridge')
+                && str_contains($system, 'compassion')
+                && str_contains($system, 'never diagnose')
+                && str_contains($system, 'lottery')
+                && str_contains($system, 'trial')
+                && str_contains($system, 'free will')
+                && str_contains($system, 'doctor')
+                && str_contains($system, 'solicitor')
+                && str_contains($system, 'financial adviser')
+                && ! str_contains($system, 'tarot');
+        });
+    }
+
+    public function test_compliance_boundaries_stay_in_the_prompt_when_a_product_overrides_the_contract(): void
+    {
+        $this->fakeReply("## Custom\n\nContent.");
+        $delivery = $this->delivery(['formatting_contract' => 'SPECIAL PRODUCT CONTRACT']);
+
+        app(EmailReadingGenerationService::class)->generate($delivery->load('product'));
+
+        OpenAI::assertSent(Chat::class, function (string $method, array $parameters): bool {
+            $system = strtolower(collect($parameters['messages'])->firstWhere('role', 'system')['content'] ?? '');
+
+            return str_contains($system, 'special product contract') && str_contains($system, 'never diagnose');
+        });
+    }
+
     public function test_system_prompt_uses_product_formatting_contract_override_when_present(): void
     {
         $this->fakeReply("## Custom\n\nContent.");

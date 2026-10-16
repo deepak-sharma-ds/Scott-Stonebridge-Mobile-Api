@@ -33,6 +33,7 @@ class EmailReadingAdminService
         return EmailReadingDelivery::with('product')
             ->status($filters['status'] ?? null)
             ->search($filters['search'] ?? null)
+            ->engagement($filters['engagement'] ?? null)
             ->when(! empty($filters['from']), fn ($q) => $q->whereDate('created_at', '>=', $filters['from']))
             ->when(! empty($filters['to']), fn ($q) => $q->whereDate('created_at', '<=', $filters['to']))
             ->latest()
@@ -120,6 +121,18 @@ class EmailReadingAdminService
     }
 
     /**
+     * Approve a reading held by the Compliance Gate and re-queue generation.
+     *
+     * @return bool false when the reading is not on compliance hold
+     *
+     * @throws RuntimeException when the delivery is being sent right now
+     */
+    public function approveComplianceHold(EmailReadingDelivery $delivery): bool
+    {
+        return $this->lifecycle->approveComplianceHold($delivery);
+    }
+
+    /**
      * Close a reading Scott already emailed by hand (no email is sent).
      *
      * @throws RuntimeException when the delivery cannot be closed from its current state
@@ -197,6 +210,7 @@ class EmailReadingAdminService
             'ID', 'Order ID', 'Product', 'Customer Name', 'Customer Email',
             'Status', 'Model', 'Prompt Tokens', 'Completion Tokens',
             'Scheduled At', 'Sent At', 'Created At',
+            'Engagement', 'Opened At', 'Message-ID',
         ];
 
         $callback = function () use ($filters, $columns) {
@@ -206,6 +220,7 @@ class EmailReadingAdminService
             EmailReadingDelivery::with('product')
                 ->status($filters['status'] ?? null)
                 ->search($filters['search'] ?? null)
+                ->engagement($filters['engagement'] ?? null)
                 ->when(! empty($filters['from']), fn ($q) => $q->whereDate('created_at', '>=', $filters['from']))
                 ->when(! empty($filters['to']), fn ($q) => $q->whereDate('created_at', '<=', $filters['to']))
                 ->latest()
@@ -224,6 +239,9 @@ class EmailReadingAdminService
                             $row->scheduled_at?->toDateTimeString(),
                             $row->sent_at?->toDateTimeString(),
                             $row->created_at?->toDateTimeString(),
+                            $row->engagementLabel(),
+                            $row->opened_at?->toDateTimeString(),
+                            $row->message_id,
                         ]);
                     }
                 });

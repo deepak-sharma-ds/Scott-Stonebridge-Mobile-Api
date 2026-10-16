@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasTrackingToken;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class EmailReadingDelivery extends Model
 {
+    use HasTrackingToken;
+
     public const STATUS_PENDING = 'pending';
 
     public const STATUS_GENERATED = 'generated';
@@ -20,6 +23,9 @@ class EmailReadingDelivery extends Model
     public const STATUS_FAILED = 'failed';
 
     public const STATUS_CANCELLED = 'cancelled';
+
+    /** Quarantined by the Compliance Gate: no generation, no email until an admin decides. */
+    public const STATUS_COMPLIANCE_HOLD = 'compliance_hold';
 
     protected $fillable = [
         'shopify_order_id',
@@ -44,6 +50,21 @@ class EmailReadingDelivery extends Model
         'release_count',
         'sent_manually',
         'fulfillment_error',
+        'compliance_flagged_reason',
+        'compliance_reviewed_at',
+        'theme_summary',
+        'embedding',
+        'tracking_token',
+        'message_id',
+        'smtp_response',
+        'send_history',
+        'dispatched_at',
+        'opened_at',
+        'last_opened_at',
+        'open_count',
+        'opened_client_type',
+        'opened_ip',
+        'opened_user_agent',
     ];
 
     protected function casts(): array
@@ -62,6 +83,13 @@ class EmailReadingDelivery extends Model
             'claimed_at' => 'datetime',
             'release_count' => 'integer',
             'sent_manually' => 'boolean',
+            'compliance_reviewed_at' => 'datetime',
+            'embedding' => 'array',
+            'send_history' => 'array',
+            'dispatched_at' => 'datetime',
+            'opened_at' => 'datetime',
+            'last_opened_at' => 'datetime',
+            'open_count' => 'integer',
         ];
     }
 
@@ -113,7 +141,33 @@ class EmailReadingDelivery extends Model
             self::STATUS_SENT => 'Sent',
             self::STATUS_FAILED => 'Failed',
             self::STATUS_CANCELLED => 'Cancelled',
+            self::STATUS_COMPLIANCE_HOLD => 'Compliance Hold',
         ];
+    }
+
+    /**
+     * Atomically quarantine a not-yet-generated delivery for admin review.
+     * Never overrides a terminal or in-flight state. Returns whether the row
+     * was actually updated.
+     */
+    public function markComplianceHold(string $reason): bool
+    {
+        $attributes = [
+            'status' => self::STATUS_COMPLIANCE_HOLD,
+            'compliance_flagged_reason' => mb_substr($reason, 0, 500),
+            'error_message' => null,
+        ];
+
+        $updated = static::query()
+            ->whereKey($this->getKey())
+            ->whereIn('status', [self::STATUS_PENDING, self::STATUS_FAILED, self::STATUS_GENERATED])
+            ->update($attributes);
+
+        if ($updated === 1) {
+            $this->forceFill($attributes)->syncOriginal();
+        }
+
+        return $updated === 1;
     }
 
     /**

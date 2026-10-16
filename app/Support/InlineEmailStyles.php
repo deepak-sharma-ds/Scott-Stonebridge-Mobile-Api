@@ -25,7 +25,7 @@ final class InlineEmailStyles
         'ul' => 'margin:0 0 14px;padding-left:22px;',
         'ol' => 'margin:0 0 14px;padding-left:22px;',
         'li' => 'margin:0 0 6px;',
-        'blockquote' => 'margin:0 0 14px;padding:6px 16px;border-left:3px solid #d8cbe8;color:#6b5b7d;font-style:italic;',
+        'blockquote' => 'margin:0 0 14px;padding:6px 16px;color:#6b5b7d;font-style:italic;',
         'table' => 'border-collapse:collapse;width:100%;margin:0 0 14px;',
         'td' => 'border:1px solid #e5ddef;padding:8px;',
         'th' => 'border:1px solid #e5ddef;padding:8px;text-align:left;',

@@ -173,6 +173,7 @@ class CampaignDeliveryAdminService
             'ID', 'Order ID', 'Line Item ID', 'Campaign Name', 'Campaign Key', 'Product',
             'Customer Name', 'Customer Email', 'Status', 'Error Message',
             'Scheduled At', 'Sent At', 'Fulfilled At', 'Created At',
+            'Engagement', 'Opened At', 'Message-ID',
         ];
 
         $callback = function () use ($filters, $columns) {
@@ -200,6 +201,9 @@ class CampaignDeliveryAdminService
                             $row->sent_at?->toDateTimeString(),
                             $row->fulfilled_at?->toDateTimeString(),
                             $row->created_at?->toDateTimeString(),
+                            $row->engagementLabel(),
+                            $row->opened_at?->toDateTimeString(),
+                            $row->message_id,
                         ]);
                     }
                 });
@@ -238,6 +242,7 @@ class CampaignDeliveryAdminService
         return CampaignDelivery::with(['campaignProduct.marketingCampaign', 'campaignProduct.response'])
             ->status($filters['status'] ?? null)
             ->search($filters['search'] ?? null)
+            ->engagement($filters['engagement'] ?? null)
             ->campaign(! empty($filters['campaign']) ? (int) $filters['campaign'] : null)
             ->when(! empty($filters['from']), fn ($q) => $q->whereDate('created_at', '>=', $filters['from']))
             ->when(! empty($filters['to']), fn ($q) => $q->whereDate('created_at', '<=', $filters['to']));

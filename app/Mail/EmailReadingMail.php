@@ -11,13 +11,19 @@ use Illuminate\Bus\Queueable;
 use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Mail\Mailables\Headers;
 use Illuminate\Queue\SerializesModels;
+use Illuminate\Support\Str;
 
 class EmailReadingMail extends Mailable
 {
     use Queueable, SerializesModels;
 
-    public function __construct(public EmailReadingDelivery $delivery) {}
+    /**
+     * @param  bool  $tracked  false for admin previews of a saved delivery, which
+     *                         must not tag the message or embed the open-tracking pixel
+     */
+    public function __construct(public EmailReadingDelivery $delivery, public bool $tracked = true) {}
 
     public function envelope(): Envelope
     {
@@ -44,6 +50,7 @@ class EmailReadingMail extends Mailable
             view: $view,
             with: [
                 'delivery' => $this->delivery,
+                'trackingToken' => $this->trackingToken(),
                 'product' => $product,
                 'customerName' => $customerName,
                 'readingBody' => EmailBodyHtml::render((string) $this->delivery->ai_response),
@@ -85,6 +92,43 @@ class EmailReadingMail extends Mailable
             <p>With love and light,</p>
             <p>Scott xx</p>
             TEXT;
+    }
+
+    /**
+     * Tags a customer delivery so the MessageSent listener can attach Delivery
+     * Proof to it. Unsaved preview and "Send Test to Me" deliveries have no
+     * row to update, so they carry no tracking headers.
+     */
+    public function headers(): Headers
+    {
+        if ($this->trackingToken() === null) {
+            return new Headers;
+        }
+
+        return new Headers(messageId: $this->newMessageId(), text: [
+            'X-Delivery-Type' => 'reading',
+            'X-Delivery-Id' => (string) $this->delivery->getKey(),
+        ]);
+    }
+
+    /**
+     * An explicit RFC Message-ID, so the stored Delivery Proof is exactly the
+     * identifier the message carries (and Google's Email Log Search can find).
+     */
+    private function newMessageId(): string
+    {
+        return Str::uuid()->toString().'@'.(Str::after((string) config('mail.from.address'), '@') ?: 'localhost');
+    }
+
+    /**
+     * Only a saved, customer-facing delivery is tracked; unsaved preview and
+     * "Send Test to Me" deliveries have no row to record against.
+     */
+    private function trackingToken(): ?string
+    {
+        return $this->tracked && $this->delivery->exists
+            ? $this->delivery->tracking_token
+            : null;
     }
 
     public function attachments(): array

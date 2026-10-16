@@ -14,7 +14,7 @@ class GeneratedBodyValidatorTest extends TestCase
         return <<<'HTML'
 <h2>Your Question Answered</h2>
 <p>You have entered a period of transition where balance is key.</p>
-<blockquote>A calm mind reveals the path ahead.</blockquote>
+<p>A calm mind reveals the path ahead.</p>
 <p>Keep your focus on long-term growth.</p>
 <h3>From My Heart to Yours</h3>
 <p>Walk forward with confidence and know you are protected.</p>
@@ -38,7 +38,7 @@ HTML;
 
 You have entered a period of transition where balance is key.
 
-> A calm mind reveals the path ahead.
+A calm mind reveals the path ahead.
 
 Keep your focus on long-term growth.
 
@@ -51,6 +51,149 @@ MD;
 
         $this->assertTrue($result->isValid());
         $this->assertEmpty($result->problems());
+    }
+
+    public function test_html_blockquote_is_detected(): void
+    {
+        $html = <<<'HTML'
+<h2>Your Question Answered</h2>
+<blockquote>A calm mind reveals the path ahead.</blockquote>
+<h3>From My Heart to Yours</h3>
+<p>Walk forward with confidence.</p>
+HTML;
+
+        $result = GeneratedBodyValidator::validate($html, 'stop');
+
+        $this->assertFalse($result->isValid());
+        $this->assertTrue($result->hasProblem(GeneratedBodyValidator::PROBLEM_BLOCKQUOTE));
+    }
+
+    public function test_markdown_blockquote_is_detected(): void
+    {
+        $markdown = "## Your Question\n\n> A calm mind reveals the path ahead.\n\n### From My Heart to Yours\n\nWalk forward with confidence.";
+
+        $result = GeneratedBodyValidator::validate($markdown, 'stop');
+
+        $this->assertFalse($result->isValid());
+        $this->assertTrue($result->hasProblem(GeneratedBodyValidator::PROBLEM_BLOCKQUOTE));
+    }
+
+    public function test_html_table_is_detected(): void
+    {
+        $html = <<<'HTML'
+<h2>Your Cards</h2>
+<table><tr><td>Past</td><td>Future</td></tr></table>
+<h3>From My Heart to Yours</h3>
+<p>Walk forward with confidence.</p>
+HTML;
+
+        $result = GeneratedBodyValidator::validate($html, 'stop');
+
+        $this->assertFalse($result->isValid());
+        $this->assertTrue($result->hasProblem(GeneratedBodyValidator::PROBLEM_TABLE));
+    }
+
+    public function test_markdown_table_is_detected(): void
+    {
+        $markdown = "## Your Cards\n\n| Position | Card |\n| --- | --- |\n| Past | The Star |\n\n### From My Heart to Yours\n\nWalk forward with confidence.";
+
+        $result = GeneratedBodyValidator::validate($markdown, 'stop');
+
+        $this->assertFalse($result->isValid());
+        $this->assertTrue($result->hasProblem(GeneratedBodyValidator::PROBLEM_TABLE));
+    }
+
+    public function test_html_horizontal_rule_is_detected(): void
+    {
+        $html = <<<'HTML'
+<h2>Your Reading</h2>
+<p>A calm mind reveals the path ahead.</p>
+<hr>
+<h3>From My Heart to Yours</h3>
+<p>Walk forward with confidence.</p>
+HTML;
+
+        $result = GeneratedBodyValidator::validate($html, 'stop');
+
+        $this->assertFalse($result->isValid());
+        $this->assertTrue($result->hasProblem(GeneratedBodyValidator::PROBLEM_DIVIDER));
+    }
+
+    public function test_markdown_horizontal_rule_is_detected(): void
+    {
+        $markdown = "## Your Reading\n\nA calm mind reveals the path ahead.\n\n---\n\n### From My Heart to Yours\n\nWalk forward with confidence.";
+
+        $result = GeneratedBodyValidator::validate($markdown, 'stop');
+
+        $this->assertFalse($result->isValid());
+        $this->assertTrue($result->hasProblem(GeneratedBodyValidator::PROBLEM_DIVIDER));
+    }
+
+    public function test_bullet_and_numbered_lists_are_detected(): void
+    {
+        $bodies = [
+            "## Your Reading\n\n- Trust your instincts\n- Take your time\n\n### From My Heart to Yours\n\nBe well.",
+            "## Your Reading\n\n1. Trust your instincts\n2. Take your time\n\n### From My Heart to Yours\n\nBe well.",
+            '<h2>Your Reading</h2><ul><li>Trust your instincts</li></ul><h3>From My Heart to Yours</h3><p>Be well.</p>',
+            '<h2>Your Reading</h2><ol><li>Trust your instincts</li></ol><h3>From My Heart to Yours</h3><p>Be well.</p>',
+        ];
+
+        foreach ($bodies as $body) {
+            $result = GeneratedBodyValidator::validate($body, 'stop');
+
+            $this->assertTrue(
+                $result->hasProblem(GeneratedBodyValidator::PROBLEM_LIST),
+                "Failed to detect list in: {$body}"
+            );
+        }
+    }
+
+    public function test_a_letter_in_flowing_paragraphs_with_soft_headings_has_no_layout_problems(): void
+    {
+        $markdown = "### Your First Question\n\nThe Star appears here, and it speaks of healing.\n\nTake the next step slowly.\n\n### From My Heart to Yours\n\nWalk forward with confidence.";
+
+        $result = GeneratedBodyValidator::validate($markdown, 'stop');
+
+        $this->assertTrue($result->isValid());
+    }
+
+    public function test_definitive_medical_claims_are_detected(): void
+    {
+        $claims = [
+            'I diagnose a serious blood condition from what I sense.',
+            'You will be cured of this illness within the year.',
+            'You should stop your medication, the spirits say you no longer need it.',
+            'The cards confirm you have cancer and it is spreading.',
+            'I can diagnose what is wrong with your heart.',
+        ];
+
+        foreach ($claims as $claim) {
+            $html = "<h3>Your Health</h3><p>{$claim}</p><h3>From My Heart to Yours</h3><p>Be well.</p>";
+
+            $this->assertTrue(
+                GeneratedBodyValidator::validate($html, 'stop')->hasProblem(GeneratedBodyValidator::PROBLEM_MEDICAL_CLAIM),
+                "Failed to detect medical claim: {$claim}"
+            );
+        }
+    }
+
+    public function test_compassionate_deflection_to_professionals_is_not_flagged(): void
+    {
+        $safe = [
+            'I cannot diagnose anything, so please speak to your doctor about these worries.',
+            'Please never stop your medication without talking to your GP first.',
+            'Do not stop taking your tablets because of anything I say; your doctor knows best.',
+            'I sense a lot of worry around your health, and a gentle check-up would bring peace of mind.',
+        ];
+
+        foreach ($safe as $text) {
+            $html = "<h3>Your Health</h3><p>{$text}</p><h3>From My Heart to Yours</h3><p>Be well.</p>";
+
+            $this->assertFalse(
+                GeneratedBodyValidator::validate($html, 'stop')->hasProblem(GeneratedBodyValidator::PROBLEM_MEDICAL_CLAIM),
+                "False positive on: {$text}"
+            );
+        }
     }
 
     public function test_truncation_is_detected_when_finish_reason_is_length(): void

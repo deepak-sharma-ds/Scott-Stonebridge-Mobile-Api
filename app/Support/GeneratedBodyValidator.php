@@ -12,6 +12,8 @@ namespace App\Support;
  *   2. Leftover markdown: unparsed markdown syntax remaining in the HTML
  *   3. Missing closing section: closing heading/section (e.g. 'From My Heart to Yours')
  *   4. Duplicated greeting or sign-off: greetings or signatures already supplied by template
+ *   5. Epistolary layout: blockquotes, tables, horizontal dividers and bullet/numbered
+ *      lists, which make a personal letter read as machine-generated
  */
 class GeneratedBodyValidator
 {
@@ -24,6 +26,23 @@ class GeneratedBodyValidator
     public const PROBLEM_DUPLICATED_GREETING = 'Response contains a greeting already supplied by the email template';
 
     public const PROBLEM_DUPLICATED_SIGNOFF = 'Response contains a sign-off already supplied by the email template';
+
+    public const PROBLEM_BLOCKQUOTE = 'Response contains a blockquote, which is not allowed in a personal letter';
+
+    public const PROBLEM_TABLE = 'Response contains a table, which is not allowed in a personal letter';
+
+    public const PROBLEM_DIVIDER = 'Response contains a horizontal divider, which is not allowed in a personal letter';
+
+    public const PROBLEM_MEDICAL_CLAIM = 'Response makes a definitive medical claim (diagnosis, cure or instruction about medication)';
+
+    private const MEDICAL_CLAIM_PATTERNS = [
+        '/\bI (?:can )?diagnos(?:e|ed)\b/i',
+        '/\byou (?:will|are going to|shall) be (?:cured|healed)\b/i',
+        '/\b(?:stop|cease|discontinue|come off) (?:taking )?your (?:medication|medicine|meds|tablets|pills|treatment|chemo\w*)\b/i',
+        '/\byou (?:have|are suffering from|are suffering with|are dying of) (?:a )?(?:cancer|tumou?rs?|leuk(?:a)?emia|diabetes|hiv|dementia|alzheimer\w*|multiple sclerosis|heart disease)\b/i',
+    ];
+
+    public const PROBLEM_LIST = 'Response contains a bullet or numbered list, which is not allowed in a personal letter';
 
     /**
      * Validates a generated body (HTML or markdown) and optional finish reason.
@@ -59,6 +78,26 @@ class GeneratedBodyValidator
                     self::PROBLEM_MISSING_CLOSING_SECTION
                 );
             }
+        }
+
+        if (self::hasBlockquote($html)) {
+            $problems[] = self::PROBLEM_BLOCKQUOTE;
+        }
+
+        if (self::hasTable($html)) {
+            $problems[] = self::PROBLEM_TABLE;
+        }
+
+        if (self::hasDivider($html)) {
+            $problems[] = self::PROBLEM_DIVIDER;
+        }
+
+        if (self::hasList($html)) {
+            $problems[] = self::PROBLEM_LIST;
+        }
+
+        if (self::hasMedicalClaim($html)) {
+            $problems[] = self::PROBLEM_MEDICAL_CLAIM;
         }
 
         if (self::hasDuplicatedGreeting($html)) {
@@ -114,6 +153,64 @@ class GeneratedBodyValidator
 
         if (preg_match('/\[[^\]]+\]\([^\)]+\)/', $plain)) {
             return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Detects blockquotes, which render as a vertical stripe in email clients.
+     */
+    public static function hasBlockquote(string $html): bool
+    {
+        return (bool) preg_match('/<blockquote\b/i', $html);
+    }
+
+    /**
+     * Detects tables, a structured layout that breaks the personal-letter feel.
+     */
+    public static function hasTable(string $html): bool
+    {
+        return (bool) preg_match('/<table\b/i', $html);
+    }
+
+    /**
+     * Detects horizontal rules (`<hr>`, which markdown `---` converts to).
+     */
+    public static function hasDivider(string $html): bool
+    {
+        return (bool) preg_match('/<hr\b/i', $html);
+    }
+
+    /**
+     * Detects bullet and numbered lists.
+     */
+    public static function hasList(string $html): bool
+    {
+        return (bool) preg_match('/<(?:ul|ol)\b/i', $html);
+    }
+
+    /**
+     * Detects definitive medical assertions (diagnosing, promising a cure,
+     * telling the reader to stop medication). A match preceded by a negation
+     * ("never stop your medication") is a safe deflection, not a claim.
+     */
+    public static function hasMedicalClaim(string $html): bool
+    {
+        $plain = (string) preg_replace('/<[^>]+>/', ' ', $html);
+
+        foreach (self::MEDICAL_CLAIM_PATTERNS as $pattern) {
+            if (! preg_match_all($pattern, $plain, $matches, PREG_OFFSET_CAPTURE)) {
+                continue;
+            }
+
+            foreach ($matches[0] as [$match, $offset]) {
+                $before = substr($plain, max(0, $offset - 30), min(30, $offset));
+
+                if (! preg_match('/\b(?:not|never|n\'t|nor|without)\s+(?:\w+\s+){0,2}$/i', $before)) {
+                    return true;
+                }
+            }
         }
 
         return false;

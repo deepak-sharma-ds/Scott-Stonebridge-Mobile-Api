@@ -39,6 +39,7 @@ class EmailReadingDeliveryLifecycle
         EmailReadingDelivery::STATUS_GENERATED,
         EmailReadingDelivery::STATUS_FAILED,
         EmailReadingDelivery::STATUS_CANCELLED,
+        EmailReadingDelivery::STATUS_COMPLIANCE_HOLD,
     ];
 
     public function __construct(
@@ -135,6 +136,10 @@ class EmailReadingDeliveryLifecycle
     {
         $this->assertNotSending($delivery);
 
+        if ($delivery->status === EmailReadingDelivery::STATUS_COMPLIANCE_HOLD) {
+            throw new RuntimeException('This reading is on compliance hold ('.$delivery->compliance_flagged_reason.'). Approve it, cancel it or mark it as sent manually first.');
+        }
+
         if ($delivery->status === EmailReadingDelivery::STATUS_CANCELLED) {
             throw new RuntimeException('This reading is cancelled. Reactivate it before sending.');
         }
@@ -146,6 +151,9 @@ class EmailReadingDeliveryLifecycle
         if (trim((string) $delivery->ai_response) === '') {
             if (! $this->generation->generate($delivery)) {
                 $delivery->refresh();
+                if ($delivery->status === EmailReadingDelivery::STATUS_COMPLIANCE_HOLD) {
+                    throw new RuntimeException('This reading was put on compliance hold: '.$delivery->compliance_flagged_reason);
+                }
                 if ($delivery->status === EmailReadingDelivery::STATUS_FAILED && filled($delivery->error_message)) {
                     throw new RuntimeException($delivery->error_message);
                 }
@@ -190,6 +198,7 @@ class EmailReadingDeliveryLifecycle
                 EmailReadingDelivery::STATUS_PENDING,
                 EmailReadingDelivery::STATUS_GENERATED,
                 EmailReadingDelivery::STATUS_FAILED,
+                EmailReadingDelivery::STATUS_COMPLIANCE_HOLD,
             ])
             ->update(['status' => EmailReadingDelivery::STATUS_CANCELLED]);
 
@@ -211,6 +220,7 @@ class EmailReadingDeliveryLifecycle
             ->whereIn('status', [
                 EmailReadingDelivery::STATUS_PENDING,
                 EmailReadingDelivery::STATUS_GENERATED,
+                EmailReadingDelivery::STATUS_COMPLIANCE_HOLD,
             ]);
 
         if ($lineItemIds !== null) {
@@ -267,6 +277,41 @@ class EmailReadingDeliveryLifecycle
     }
 
     /**
+     * Admin sign-off on a compliance hold: stamps the review so the gate does
+     * not re-hold the delivery, returns it to `pending` and re-queues
+     * generation. The flagged reason is kept for the audit trail.
+     *
+     * @return bool false when the delivery is not on compliance hold
+     *
+     * @throws RuntimeException when the delivery is being sent right now
+     */
+    public function approveComplianceHold(EmailReadingDelivery $delivery): bool
+    {
+        $this->assertNotSending($delivery);
+
+        $updated = EmailReadingDelivery::query()
+            ->whereKey($delivery->id)
+            ->where('status', EmailReadingDelivery::STATUS_COMPLIANCE_HOLD)
+            ->update([
+                'status' => EmailReadingDelivery::STATUS_PENDING,
+                'compliance_reviewed_at' => Carbon::now(),
+                'error_message' => null,
+            ]);
+
+        if ($updated !== 1) {
+            return false;
+        }
+
+        ProcessEmailReadingOrderJob::dispatch($delivery->id)
+            ->onConnection(config('email_reading.queue.connection'))
+            ->onQueue(config('email_reading.queue.process'));
+
+        $delivery->refresh();
+
+        return true;
+    }
+
+    /**
      * Change when a delivery is due. Allowed only before it is claimed; once
      * `sending`/`sent` the time can no longer influence anything.
      *
@@ -304,6 +349,7 @@ class EmailReadingDeliveryLifecycle
             ->whereIn('status', [
                 EmailReadingDelivery::STATUS_PENDING,
                 EmailReadingDelivery::STATUS_GENERATED,
+                EmailReadingDelivery::STATUS_COMPLIANCE_HOLD,
             ])
             ->whereNull('expedited_at')
             ->update([
@@ -329,6 +375,7 @@ class EmailReadingDeliveryLifecycle
                 EmailReadingDelivery::STATUS_PENDING,
                 EmailReadingDelivery::STATUS_GENERATED,
                 EmailReadingDelivery::STATUS_FAILED,
+                EmailReadingDelivery::STATUS_COMPLIANCE_HOLD,
             ])
             ->update([
                 'status' => EmailReadingDelivery::STATUS_SENT,
@@ -342,7 +389,7 @@ class EmailReadingDeliveryLifecycle
         $delivery->refresh();
 
         if ($updated !== 1) {
-            throw new RuntimeException('Only pending, generated or failed readings can be marked as sent manually. Reactivate a cancelled reading first.');
+            throw new RuntimeException('Only pending, generated, failed or compliance-hold readings can be marked as sent manually. Reactivate a cancelled reading first.');
         }
 
         if ($fulfil) {

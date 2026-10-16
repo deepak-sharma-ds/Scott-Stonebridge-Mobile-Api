@@ -24,16 +24,18 @@ return [
     |--------------------------------------------------------------------------
     | Shared formatting contract
     |--------------------------------------------------------------------------
-    | The formatting contract instructs the model to structure campaign
-    | emails using markdown (headings, key messages, closing section, no
-    | greeting/sign-off). A product row in campaign_products may override
+    | The formatting contract instructs the model to write campaign emails as
+    | a warm personal letter in flowing paragraphs, with soft ### subheadings
+    | and a closing section. Blockquotes, tables, bullet lists and horizontal
+    | rules are forbidden. A product row in campaign_products may override
     | `formatting_contract`.
     */
     'formatting_contract' => env(
         'CAMPAIGN_EMAIL_FORMATTING_CONTRACT',
-        "Structure your response using Markdown:\n"
-        ."- Use markdown headings (## or ###) for each product highlight or main section.\n"
-        ."- Include short, one-line key message lines or takeaways (e.g. bold or blockquote).\n"
+        "Write the email as a warm, personal letter in Markdown:\n"
+        ."- Write in natural flowing paragraphs, as if typing a heartfelt email to one person.\n"
+        ."- Use soft ### subheadings only to introduce each product highlight or main section. Keep them short and gentle.\n"
+        ."- Do NOT use blockquotes (lines starting with '>'), tables, bullet points, numbered lists, horizontal dividers ('---'), or decorative symbols. Weave every point into the paragraphs instead.\n"
         ."- End with a dedicated closing section headed '### From My Heart to Yours' with warm, encouraging parting words.\n"
         ."- Do NOT include a greeting or salutation (e.g. 'Dear ...') — the email template already supplies it.\n"
         ."- Do NOT include a sign-off or closing signature (e.g. 'Warm blessings, Scott') — the email template already supplies it.\n"
