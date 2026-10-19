@@ -37,7 +37,7 @@
                 <div class="card-body">
                     <div class="mb-3">
                         <label class="form-label" for="title">Bundle title <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" id="title" name="title" value="{{ old('title', $bundle->title) }}" required maxlength="255" placeholder="e.g. Zymox Ear Care Kit">
+                        <input type="text" class="form-control" id="title" name="title" value="{{ old('title', $bundle->title) }}" required maxlength="255" placeholder="e.g. Scott Reading Card Kit">
                         <div class="form-text">Shown to customers as the product name.</div>
                     </div>
                     <div class="mb-0">

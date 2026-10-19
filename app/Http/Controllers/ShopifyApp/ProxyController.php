@@ -8,7 +8,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Storefront → app proxy (/apps/zymox-bundles/*). Signature checked by VerifyAppProxySignature.
+ * Storefront → app proxy (/apps/Scott-bundles/*). Signature checked by VerifyAppProxySignature.
  */
 class ProxyController extends Controller
 {

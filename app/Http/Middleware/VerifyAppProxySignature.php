@@ -8,7 +8,7 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Verifies requests forwarded by the Shopify app proxy (/apps/zymox-bundles/* on the storefront).
+ * Verifies requests forwarded by the Shopify app proxy (/apps/Scott-bundles/* on the storefront).
  * https://shopify.dev/docs/apps/build/online-store/display-dynamic-data#calculate-a-digital-signature
  */
 class VerifyAppProxySignature

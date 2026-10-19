@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Cache;
  * Maintains the storefront "bundle offer" mapping.
  *
  * Every product that should promote bundles (component products + admin-chosen extras) gets a
- * product metafield zymox_bundle.offers (list.product_reference) pointing to the active bundle
+ * product metafield scott_bundle.offers (list.product_reference) pointing to the active bundle
  * products. The theme blocks read live price/stock from those referenced bundle products.
  */
 class BundleOfferService
@@ -121,7 +121,7 @@ class BundleOfferService
             'name'        => 'Bundle offers',
             'namespace'   => config('bundles.metafield_namespace'),
             'key'         => self::KEY,
-            'description' => 'Managed by the Zymox Bundles app. Bundles promoted on this product.',
+            'description' => 'Managed by the Scott Bundles app. Bundles promoted on this product.',
             'type'        => 'list.product_reference',
             'ownerType'   => 'PRODUCT',
         ]]);

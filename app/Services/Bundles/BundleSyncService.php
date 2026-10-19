@@ -13,7 +13,7 @@ use Throwable;
 /**
  * Pushes predefined bundles to Shopify as native fixed bundles:
  *
- *   parent product (tag: zymox-bundle, no SKU)
+ *   parent product (tag: scott-bundle, no SKU)
  *     └─ default variant ── productVariantComponents ──► component variants × qty
  *
  * Shopify expands the parent into its component variants at checkout, so the

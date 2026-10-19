@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Zymox Bundles</title>
+    <title>Scott Bundles</title>
     <meta name="shopify-api-key" content="{{ $apiKey }}">
     {{-- App Bridge must be the first script and must not be async/deferred --}}
     <script src="https://cdn.shopify.com/shopifycloud/app-bridge.js"></script>
@@ -23,7 +23,7 @@
         <script type="module" src="{{ $assets }}/{{ $entry['file'] }}"></script>
     @else
         <div style="font-family: system-ui, sans-serif; padding: 2rem; max-width: 640px">
-            <h2>Zymox Bundles app is not built yet</h2>
+            <h2>Scott Bundles app is not built yet</h2>
             <p>Run the following, then reload:</p>
             <pre style="background:#f4f4f4;padding:1rem;border-radius:6px">cd shopify-bundle-app/web
 npm install

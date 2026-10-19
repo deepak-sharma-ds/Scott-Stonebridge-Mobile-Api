@@ -72,7 +72,7 @@ class AppApiController extends Controller
 
         try {
             $nodes = $client->query('{ shopifyFunctions(first: 50) { nodes { title apiType } } }')['shopifyFunctions']['nodes'] ?? [];
-            $status['function_deployed'] = collect($nodes)->contains(fn ($f) => ($f['title'] ?? '') === 'Zymox bundle discount');
+            $status['function_deployed'] = collect($nodes)->contains(fn ($f) => ($f['title'] ?? '') === 'Scott bundle discount');
         } catch (Throwable) {
             // Unknown: shown as "couldn't check"
         }

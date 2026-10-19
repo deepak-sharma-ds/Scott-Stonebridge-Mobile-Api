@@ -78,7 +78,7 @@ Route::get('/api/bundle-app/samples/map-prices.csv', [MapPriceApiController::cla
     ->middleware('throttle:60,1')
     ->name('shopify-app.samples.map-prices');
 
-// Storefront events through the Shopify app proxy: /apps/zymox-bundles/events -> here
+// Storefront events through the Shopify app proxy: /apps/scott-bundles/events -> here
 Route::middleware(['api', VerifyAppProxySignature::class, 'throttle:600,1'])
     ->prefix('api/bundle-app/proxy')
     ->name('shopify-app.proxy.')

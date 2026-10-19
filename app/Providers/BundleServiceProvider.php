@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
 /**
- * Predefined Product Bundles module (Zymox Bundle App).
+ * Predefined Product Bundles module (Scott Bundle App).
  * Self-contained: registers its own routes so existing route files stay untouched.
  */
 class BundleServiceProvider extends ServiceProvider

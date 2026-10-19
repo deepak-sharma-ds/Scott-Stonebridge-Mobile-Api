@@ -160,7 +160,7 @@ class FunnelSyncService
         }
 
         $input = [
-            'title'           => mb_substr('Zymox bundle: ' . $funnel->name, 0, 255),
+            'title'           => mb_substr('Scott bundle: ' . $funnel->name, 0, 255),
             'functionHandle'  => config('bundles.discount_function_handle', 'bundle-discount'),
             'discountClasses' => ['PRODUCT'],
             'startsAt'        => $settings['starts_at'] ?: now()->toIso8601String(),

@@ -11,7 +11,7 @@
     </a>
     <ul class="menu-sub">
         <li class="menu-item">
-            <a href="https://admin.shopify.com/store/{{ str_replace('.myshopify.com', '', config('bundles.shop_domain')) }}/apps/zymox-bundles" target="_blank" rel="noopener" class="menu-link">
+            <a href="https://admin.shopify.com/store/{{ str_replace('.myshopify.com', '', config('bundles.shop_domain')) }}/apps/scott-bundles" target="_blank" rel="noopener" class="menu-link">
                 <div class="text-truncate">Bundle funnels <i class="bx bx-link-external small"></i></div>
             </a>
         </li>

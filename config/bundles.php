@@ -2,10 +2,10 @@
 
 /*
 |--------------------------------------------------------------------------
-| Predefined Product Bundles (Zymox Bundle App)
+| Predefined Product Bundles (Scott Bundle App)
 |--------------------------------------------------------------------------
 |
-| Credentials for the "Zymox Bundles" Shopify app (Dev Dashboard app).
+| Credentials for the "Scott Bundles" Shopify app (Dev Dashboard app).
 | Token resolution order (see ShopifyBundleCredentials):
 |   1. BUNDLE_STORE_ID          -> use a record from the `stores` table
 |   2. BUNDLE_ADMIN_ACCESS_TOKEN -> static Admin API token
@@ -29,11 +29,11 @@ return [
     'api_version' => env('BUNDLE_SHOPIFY_API_VERSION', '2026-07'),
 
     // Tag + product type applied to every bundle parent product created by the app.
-    'product_tag' => 'zymox-bundle',
+    'product_tag' => 'scott-bundle',
     'product_type' => 'Bundle',
 
     // Product metafield read by the theme app extension block.
-    'metafield_namespace' => 'zymox_bundle',
+    'metafield_namespace' => 'scott_bundle',
     'metafield_key' => 'config',
 
     // Online Store publication. Leave empty to auto-detect by name.
