@@ -1,0 +1,2 @@
+# The embedded Shopify app is served directly from this directory by Laravel.
+# Keep the generated Vite manifest and assets deployable with the backend.
