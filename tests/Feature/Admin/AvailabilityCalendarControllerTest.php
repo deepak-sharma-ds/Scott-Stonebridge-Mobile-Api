@@ -76,4 +76,35 @@ class AvailabilityCalendarControllerTest extends TestCase
 
         $response->assertNotFound();
     }
+
+    public function test_calendar_view_renders_successfully(): void
+    {
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($user)
+            ->get(route('admin.availability.calendar'));
+
+        $response->assertOk();
+    }
+
+    public function test_events_returns_formatted_slots_with_exact_date(): void
+    {
+        $user = User::factory()->create();
+        $date = AvailabilityDate::create(['user_id' => $user->id, 'date' => '2026-10-27']);
+        TimeSlot::create(['availability_date_id' => $date->id, 'start_time' => '09:00', 'end_time' => '10:00']);
+
+        $response = $this->actingAs($user)
+            ->getJson(route('admin.availability.calendar.events'));
+
+        $response->assertOk()
+            ->assertJsonFragment([
+                'title' => '1 slot',
+                'start' => '2026-10-27',
+                'allDay' => true,
+                'extendedProps' => [
+                    'date' => '2026-10-27',
+                    'slots_count' => 1,
+                ],
+            ]);
+    }
 }
