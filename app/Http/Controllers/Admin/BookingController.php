@@ -155,8 +155,8 @@ class BookingController extends Controller
             $timeSlot = TimeSlot::findOrFail($data['time_slot_id']);
             $date = Carbon::parse($availability->date)->format('Y-m-d');
 
-            $startDateTime = Carbon::createFromFormat('Y-m-d H:i:s', "$date {$timeSlot->start_time}");
-            $endDateTime = Carbon::createFromFormat('Y-m-d H:i:s', "$date {$timeSlot->end_time}");
+            $startDateTime = Carbon::parse("{$date} {$timeSlot->start_time}", config('app.timezone', 'Europe/London'));
+            $endDateTime = Carbon::parse("{$date} {$timeSlot->end_time}", config('app.timezone', 'Europe/London'));
 
             if ($booking->status === 'needs_reschedule') {
                 // Cancel old event
@@ -212,11 +212,11 @@ class BookingController extends Controller
 
                     // Update existing event
                     $event->setStart(new Google_Service_Calendar_EventDateTime([
-                        'dateTime' => $startDateTime->toRfc3339String(),
+                        'dateTime' => $startDateTime->setTimezone(config('app.timezone', 'Europe/London'))->toRfc3339String(),
                         'timeZone' => config('app.timezone', 'Europe/London'),
                     ]));
                     $event->setEnd(new Google_Service_Calendar_EventDateTime([
-                        'dateTime' => $endDateTime->toRfc3339String(),
+                        'dateTime' => $endDateTime->setTimezone(config('app.timezone', 'Europe/London'))->toRfc3339String(),
                         'timeZone' => config('app.timezone', 'Europe/London'),
                     ]));
 
@@ -368,8 +368,8 @@ class BookingController extends Controller
         return new Google_Service_Calendar_Event([
             'summary' => 'Meeting with '.$booking->name,
             'description' => "Booking rescheduled.\nPhone: ".$booking->phone,
-            'start' => ['dateTime' => $start->toRfc3339String(), 'timeZone' => config('app.timezone', 'Europe/London')],
-            'end' => ['dateTime' => $end->toRfc3339String(), 'timeZone' => config('app.timezone', 'Europe/London')],
+            'start' => ['dateTime' => $start->setTimezone(config('app.timezone', 'Europe/London'))->toRfc3339String(), 'timeZone' => config('app.timezone', 'Europe/London')],
+            'end' => ['dateTime' => $end->setTimezone(config('app.timezone', 'Europe/London'))->toRfc3339String(), 'timeZone' => config('app.timezone', 'Europe/London')],
             'attendees' => [['email' => $booking->email]],
             'conferenceData' => [
                 'createRequest' => ['conferenceSolutionKey' => ['type' => 'hangoutsMeet'], 'requestId' => uniqid()],

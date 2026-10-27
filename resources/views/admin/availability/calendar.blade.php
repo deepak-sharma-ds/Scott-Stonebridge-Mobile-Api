@@ -9,6 +9,11 @@
 .fc {
     font-family: 'Inter', system-ui, sans-serif;
     font-size: 0.875rem;
+    width: 100% !important;
+    max-width: 100% !important;
+}
+.fc-toolbar {
+    margin-bottom: 1.25rem !important;
 }
 .fc-toolbar-title {
     font-size: 1.125rem !important;
@@ -30,11 +35,44 @@
 .fc-button:focus  { box-shadow: var(--shadow-glow) !important; }
 .fc-button-active { opacity: 0.75 !important; }
 
+/* Grid frame & cell sizing */
+.fc-theme-standard .fc-scrollgrid {
+    border: 1px solid var(--card-border, #e2e8f0) !important;
+    border-radius: 8px;
+    overflow: hidden;
+    width: 100% !important;
+}
+.fc-theme-standard td,
+.fc-theme-standard th {
+    border-color: var(--card-border, #e2e8f0) !important;
+}
+.fc-col-header-cell {
+    background: #f8fafc;
+    padding: 0.5rem 0;
+}
 .fc-daygrid-day {
     transition: background 0.15s ease;
     cursor: pointer;
 }
 .fc-daygrid-day:hover { background: rgba(99,102,241,0.04) !important; }
+
+/* Generous, uniform cell height matching original design */
+.fc .fc-daygrid-day-frame {
+    min-height: 105px;
+    padding: 0.375rem 0.5rem;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+.fc .fc-daygrid-day-top {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+    margin-bottom: 0.25rem;
+}
+.fc .fc-daygrid-day-events {
+    margin-top: 0.125rem;
+}
 
 .fc-event {
     background: var(--gradient-primary) !important;
@@ -45,10 +83,14 @@
     border-radius: 6px !important;
     box-shadow: 0 2px 6px rgba(99,102,241,0.25) !important;
     cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
     transition: transform 0.15s ease, box-shadow 0.15s ease !important;
 }
 .fc-event:hover {
-    transform: scale(1.03) !important;
+    transform: scale(1.02) !important;
     box-shadow: 0 4px 10px rgba(99,102,241,0.35) !important;
 }
 .fc-col-header-cell-cushion,
@@ -58,6 +100,98 @@
     text-decoration: none !important;
 }
 .fc-day-today { background: rgba(99,102,241,0.04) !important; }
+
+/* Seamless out-of-month styling - pure white matching card background without grey shading */
+.fc-theme-standard .fc-day-disabled,
+.fc-daygrid-day.fc-day-disabled,
+.fc-daygrid-day.fc-day-other,
+.fc .fc-day-disabled {
+    background: #fff !important;
+    cursor: default !important;
+    pointer-events: none;
+}
+.fc-theme-standard .fc-day-disabled:hover,
+.fc-daygrid-day.fc-day-disabled:hover,
+.fc-daygrid-day.fc-day-other:hover,
+.fc .fc-day-disabled:hover {
+    background: #fff !important;
+}
+
+/* ── Mobile & Tablet Responsiveness ── */
+@media (max-width: 768px) {
+    .fc .fc-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem !important;
+    }
+    .fc .fc-toolbar-chunk:nth-child(2) {
+        order: -1;
+        width: 100%;
+        text-align: center;
+        margin-bottom: 0.25rem;
+    }
+    .fc .fc-toolbar-title {
+        font-size: 1.05rem !important;
+    }
+    .fc .fc-toolbar-chunk:nth-child(1),
+    .fc .fc-toolbar-chunk:nth-child(3) {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+    .fc .fc-button {
+        padding: 0.3rem 0.55rem !important;
+        font-size: 0.75rem !important;
+    }
+    .fc .fc-daygrid-day-frame {
+        min-height: 70px;
+        padding: 0.25rem 0.25rem;
+    }
+    .fc .fc-event {
+        padding: 2px 4px !important;
+        font-size: 0.7rem !important;
+        border-radius: 4px !important;
+    }
+    .fc .fc-col-header-cell-cushion {
+        font-size: 0.75rem !important;
+        padding: 0.25rem 0.125rem !important;
+    }
+    .fc .fc-daygrid-day-number {
+        font-size: 0.75rem !important;
+        padding: 0.125rem 0.25rem !important;
+    }
+}
+
+@media (max-width: 520px) {
+    .fc .fc-daygrid-day-frame {
+        min-height: 55px;
+        padding: 2px 1px;
+    }
+    .fc .fc-daygrid-day-top {
+        margin-bottom: 1px;
+    }
+    .fc .fc-daygrid-day-number {
+        font-size: 0.6875rem !important;
+        padding: 0 2px !important;
+    }
+    .fc .fc-col-header-cell-cushion {
+        font-size: 0.6875rem !important;
+        padding: 4px 1px !important;
+    }
+    .fc .fc-event {
+        font-size: 0.625rem !important;
+        padding: 1px 2px !important;
+        line-height: 1.15 !important;
+        border-radius: 3px !important;
+    }
+    .fc .fc-button {
+        padding: 0.25rem 0.45rem !important;
+        font-size: 0.6875rem !important;
+    }
+}
 
 /* ── Slot row inside panel ── */
 .slot-row {
@@ -164,8 +298,8 @@
     ])
 
     {{-- Calendar Card --}}
-    <div class="card p-4">
-        <div id="calendar"></div>
+    <div class="card p-2 p-sm-3 p-md-4">
+        <div id="calendar" style="width: 100%; max-width: 100%;"></div>
     </div>
 
     {{-- ── Right Slide Panel (replaces Bootstrap Offcanvas) ── --}}
@@ -332,8 +466,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /* ── FullCalendar init ── */
     var calendar = new FullCalendar.Calendar(calendarEl, {
-        initialView:    'dayGridMonth',
-        dayMaxEventRows: 3,
+        initialView:         'dayGridMonth',
+        dayMaxEventRows:     3,
+        showNonCurrentDates: false,
+        fixedWeekCount:      false,
+        height:              'auto',
         headerToolbar: {
             left:   'prev,next today',
             center: 'title',
@@ -345,6 +482,7 @@ document.addEventListener('DOMContentLoaded', function () {
         },
         dateClick: function (info) {
             if (info.jsEvent.target.closest('.fc-event')) return;
+            if (info.dayEl && info.dayEl.classList.contains('fc-day-other')) return;
             if (opening) return;
             selectedDate = info.dateStr;
             openPanelForDate(selectedDate);
@@ -382,7 +520,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (opening) return;
         opening = true;
 
-        var label = new Date(date + 'T00:00:00').toDateString();
+        var parts = date.split('-');
+        var d     = new Date(parts[0], parts[1] - 1, parts[2]);
+        var label = d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
         document.getElementById('existingSlots').innerHTML =
             '<div style="color:var(--text-muted);font-size:0.875rem;">Loading…</div>';
         document.getElementById('new_slot_start').value = '';
