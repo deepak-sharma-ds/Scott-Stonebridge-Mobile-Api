@@ -5,6 +5,7 @@
 - [Email Reading Automation](docs/domain/email-reading-automation/CONTEXT.md) — existing production flow; personalized psychic-reading emails generated live, per customer, per order
 - [Campaign Email Automation](docs/domain/campaign-email-automation/CONTEXT.md) — new Klaviyo-campaign-driven flow; pre-generated, non-personalized emails attributed back to a marketing campaign
 - [AI Chatbot](docs/domain/ai-chatbot/CONTEXT.md) — storefront chat widget with MCP tool-calling and a retrieval-augmented store-knowledge base
+- [Appointment Booking & Calendar Synchronization](docs/domain/appointment-booking/CONTEXT.md) — Shopify customer slot booking and bi-directional 2-way Google Calendar synchronization
 
 ## Relationships
 

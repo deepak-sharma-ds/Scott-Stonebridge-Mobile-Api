@@ -3,19 +3,77 @@
 namespace App\Services;
 
 use App\Models\AvailabilityDate;
+use App\Models\Configuration;
 use App\Models\GoogleToken;
 use App\Models\ScheduledMeeting;
 use App\Models\TimeSlot;
 use Carbon\Carbon;
 use Google_Client;
 use Google_Service_Calendar;
+use Google_Service_Calendar_Calendar;
 use Google_Service_Calendar_Event;
+use Google_Service_Calendar_EventDateTime;
+use Google_Service_Calendar_EventExtendedProperties;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 class BookingService
 {
+    protected ?Google_Client $googleClient = null;
+
+    protected ?Google_Service_Calendar $calendarService = null;
+
+    public function setGoogleClient(?Google_Client $client): self
+    {
+        $this->googleClient = $client;
+
+        return $this;
+    }
+
+    public function setCalendarService(?Google_Service_Calendar $service): self
+    {
+        $this->calendarService = $service;
+
+        return $this;
+    }
+
+    public function getGoogleCalendarService(): ?Google_Service_Calendar
+    {
+        if ($this->calendarService !== null) {
+            return $this->calendarService;
+        }
+
+        $client = $this->getGoogleClient();
+        if (! $client) {
+            return null;
+        }
+
+        $this->calendarService = new Google_Service_Calendar($client);
+
+        return $this->calendarService;
+    }
+
+    public function getSlotsCalendarId(): ?string
+    {
+        $val = Configuration::where('name', 'GoogleCalendar.slots_calendar_id')->value('value');
+
+        return ! empty($val) ? (string) $val : null;
+    }
+
+    public function setSlotsCalendarId(string $calendarId): void
+    {
+        Configuration::updateOrCreate(
+            ['name' => 'GoogleCalendar.slots_calendar_id'],
+            [
+                'value' => $calendarId,
+                'title' => 'Google Calendar Available Slots Secondary Calendar ID',
+                'description' => 'Secondary Google Calendar ID holding green available slot placeholders',
+                'editable' => 1,
+            ]
+        );
+    }
+
     public function bookMeeting(array $data)
     {
         $log = Log::channel('appointment_slots');
@@ -218,6 +276,10 @@ class BookingService
      */
     public function getGoogleClient(): ?Google_Client
     {
+        if ($this->googleClient !== null) {
+            return $this->googleClient;
+        }
+
         $log = Log::channel('appointment_slots');
         $googleToken = GoogleToken::first();
         if (! $googleToken) {
@@ -303,11 +365,11 @@ class BookingService
             $startDateTime = Carbon::parse("{$date} {$startTime}", config('app.timezone', 'Europe/London'));
             $endDateTime = Carbon::parse("{$date} {$endTime}", config('app.timezone', 'Europe/London'));
 
-            $event->setStart(new \Google_Service_Calendar_EventDateTime([
+            $event->setStart(new Google_Service_Calendar_EventDateTime([
                 'dateTime' => $startDateTime->setTimezone(config('app.timezone', 'Europe/London'))->toRfc3339String(),
                 'timeZone' => config('app.timezone', 'Europe/London'),
             ]));
-            $event->setEnd(new \Google_Service_Calendar_EventDateTime([
+            $event->setEnd(new Google_Service_Calendar_EventDateTime([
                 'dateTime' => $endDateTime->setTimezone(config('app.timezone', 'Europe/London'))->toRfc3339String(),
                 'timeZone' => config('app.timezone', 'Europe/London'),
             ]));
@@ -326,7 +388,83 @@ class BookingService
         }
     }
 
-    protected static function notifyAdminForReschedule($meeting)
+    /**
+     * Create or sync a confirmed meeting event directly to Scott's Primary Google Calendar.
+     */
+    public function syncConfirmedMeetingToGoogle(ScheduledMeeting $meeting, Carbon $start, Carbon $end): ?array
+    {
+        $calendarService = $this->getGoogleCalendarService();
+        if (! $calendarService) {
+            return null;
+        }
+
+        try {
+            $event = new Google_Service_Calendar_Event([
+                'summary' => 'Meeting with '.$meeting->name,
+                'description' => "Booking confirmed.\nPhone: ".$meeting->phone,
+                'start' => [
+                    'dateTime' => $start->setTimezone(config('app.timezone', 'Europe/London'))->toRfc3339String(),
+                    'timeZone' => config('app.timezone', 'Europe/London'),
+                ],
+                'end' => [
+                    'dateTime' => $end->setTimezone(config('app.timezone', 'Europe/London'))->toRfc3339String(),
+                    'timeZone' => config('app.timezone', 'Europe/London'),
+                ],
+                'attendees' => [
+                    ['email' => $meeting->email],
+                ],
+                'conferenceData' => [
+                    'createRequest' => [
+                        'conferenceSolutionKey' => ['type' => 'hangoutsMeet'],
+                        'requestId' => uniqid(),
+                    ],
+                ],
+                'extendedProperties' => [
+                    'private' => [
+                        'slot_id' => (string) $meeting->time_slot_id,
+                        'date_id' => (string) $meeting->availability_date_id,
+                        'order_id' => (string) $meeting->order_id,
+                        'customer_name' => (string) $meeting->name,
+                        'managed_by' => 'laravel_booking_system',
+                    ],
+                ],
+            ]);
+
+            $created = $calendarService->events->insert('primary', $event, ['conferenceDataVersion' => 1]);
+
+            return [
+                'event_id' => $created->getId(),
+                'meeting_link' => $created->getHangoutLink(),
+            ];
+        } catch (\Throwable $e) {
+            Log::channel('appointment_slots')->error('Google Calendar insert failed: '.$e->getMessage());
+
+            return null;
+        }
+    }
+
+    /**
+     * Delete an event from Google Calendar and notify attendees.
+     */
+    public function deleteGoogleCalendarEvent(string $eventId, string $calendarId = 'primary'): bool
+    {
+        $calendarService = $this->getGoogleCalendarService();
+        if (! $calendarService) {
+            return false;
+        }
+
+        try {
+            $calendarService->events->delete($calendarId, $eventId, ['sendUpdates' => 'all']);
+
+            return true;
+        } catch (\Throwable $e) {
+            Log::channel('appointment_slots')->warning("Failed to delete Google event {$eventId}: ".$e->getMessage());
+
+            return false;
+        }
+    }
+
+    public static function notifyAdminForReschedule(ScheduledMeeting $meeting): void
     {
         $log = Log::channel('appointment_slots');
         try {
@@ -345,6 +483,210 @@ class BookingService
             $log->error('Failed to send reschedule reminder', [
                 'error' => $e->getMessage(),
             ]);
+        }
+    }
+
+    /**
+     * Discover existing sub-calendar by name or provision a new one.
+     */
+    public function getOrCreateSubCalendar(string $calendarName = 'Stonebridge - Available Slots', string $timezone = 'Europe/London'): ?string
+    {
+        $calendarService = $this->getGoogleCalendarService();
+        if (! $calendarService) {
+            return null;
+        }
+
+        // 1. Check if configured sub-calendar ID is already valid
+        $existingId = $this->getSlotsCalendarId();
+        if ($existingId) {
+            try {
+                $cal = $calendarService->calendars->get($existingId);
+                if ($cal && $cal->getSummary() === $calendarName) {
+                    return $existingId;
+                }
+            } catch (\Throwable $e) {
+                Log::channel('appointment_slots')->warning("Configured sub-calendar {$existingId} not accessible, rediscovering...");
+            }
+        }
+
+        // 2. Discover existing secondary calendar by summary
+        try {
+            $calendarList = $calendarService->calendarList->listCalendarList();
+            foreach ($calendarList->getItems() as $item) {
+                if ($item->getSummary() === $calendarName && ! $item->getDeleted()) {
+                    $calendarId = $item->getId();
+                    $this->setSlotsCalendarId($calendarId);
+
+                    return $calendarId;
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::channel('appointment_slots')->warning('Failed listing calendars: '.$e->getMessage());
+        }
+
+        // 3. Create secondary calendar if not found
+        try {
+            $newCal = new Google_Service_Calendar_Calendar;
+            $newCal->setSummary($calendarName);
+            $newCal->setTimeZone($timezone);
+            $newCal->setDescription('Secondary calendar for Stonebridge appointment booking open slots');
+
+            $created = $calendarService->calendars->insert($newCal);
+            $calendarId = $created->getId();
+            $this->setSlotsCalendarId($calendarId);
+
+            return $calendarId;
+        } catch (\Throwable $e) {
+            Log::channel('appointment_slots')->error('Failed creating sub-calendar: '.$e->getMessage());
+
+            return null;
+        }
+    }
+
+    /**
+     * Project an open TimeSlot as a visual 🟢 Available placeholder on the sub-calendar.
+     */
+    public function projectSlotPlaceholder(TimeSlot $slot, AvailabilityDate $date, ?string $calendarId = null): ?string
+    {
+        $calendarId = $calendarId ?: ($this->getSlotsCalendarId() ?? $this->getOrCreateSubCalendar());
+        if (! $calendarId) {
+            return null;
+        }
+
+        $calendarService = $this->getGoogleCalendarService();
+        if (! $calendarService) {
+            return null;
+        }
+
+        $tz = config('app.timezone', 'Europe/London');
+        $dateStr = Carbon::parse($date->date)->format('Y-m-d');
+        $startDateTime = Carbon::parse("{$dateStr} {$slot->start_time}", $tz);
+        $endDateTime = Carbon::parse("{$dateStr} {$slot->end_time}", $tz);
+
+        $summary = '🟢 Available ('.$startDateTime->format('H:i').' - '.$endDateTime->format('H:i').')';
+        $description = "Open booking slot\nSlot ID: {$slot->id}\nDate ID: {$date->id}";
+
+        $extendedProperties = [
+            'private' => [
+                'slot_id' => (string) $slot->id,
+                'date_id' => (string) $date->id,
+                'managed_by' => 'laravel_booking_system',
+                'is_placeholder' => 'true',
+            ],
+        ];
+
+        try {
+            // Check for existing placeholder for idempotency
+            $existing = $this->findPlaceholderBySlotId($slot->id, $calendarId);
+
+            if ($existing) {
+                $existing->setSummary($summary);
+                $existing->setDescription($description);
+                $existing->setStart(new Google_Service_Calendar_EventDateTime([
+                    'dateTime' => $startDateTime->toRfc3339String(),
+                    'timeZone' => $tz,
+                ]));
+                $existing->setEnd(new Google_Service_Calendar_EventDateTime([
+                    'dateTime' => $endDateTime->toRfc3339String(),
+                    'timeZone' => $tz,
+                ]));
+                $existing->setExtendedProperties(new Google_Service_Calendar_EventExtendedProperties($extendedProperties));
+
+                $updated = $calendarService->events->update($calendarId, $existing->getId(), $existing);
+
+                return $updated->getId();
+            }
+
+            $event = new Google_Service_Calendar_Event([
+                'summary' => $summary,
+                'description' => $description,
+                'start' => [
+                    'dateTime' => $startDateTime->toRfc3339String(),
+                    'timeZone' => $tz,
+                ],
+                'end' => [
+                    'dateTime' => $endDateTime->toRfc3339String(),
+                    'timeZone' => $tz,
+                ],
+                'extendedProperties' => $extendedProperties,
+                'transparency' => 'transparent',
+            ]);
+
+            $created = $calendarService->events->insert($calendarId, $event);
+
+            return $created->getId();
+        } catch (\Throwable $e) {
+            Log::channel('appointment_slots')->error("Failed projecting placeholder for slot {$slot->id}: ".$e->getMessage());
+
+            return null;
+        }
+    }
+
+    /**
+     * Find a placeholder event on the sub-calendar by TimeSlot ID.
+     */
+    public function findPlaceholderBySlotId(int $slotId, ?string $calendarId = null): ?Google_Service_Calendar_Event
+    {
+        $calendarId = $calendarId ?: $this->getSlotsCalendarId();
+        if (! $calendarId) {
+            return null;
+        }
+
+        $calendarService = $this->getGoogleCalendarService();
+        if (! $calendarService) {
+            return null;
+        }
+
+        try {
+            $events = $calendarService->events->listEvents($calendarId, [
+                'privateExtendedProperty' => 'slot_id='.$slotId,
+            ]);
+
+            foreach ($events->getItems() as $item) {
+                if ($item->getStatus() !== 'cancelled') {
+                    return $item;
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::channel('appointment_slots')->warning("Error searching placeholder for slot {$slotId}: ".$e->getMessage());
+        }
+
+        return null;
+    }
+
+    /**
+     * Remove placeholder event from the sub-calendar when booked or deleted.
+     */
+    public function removeSlotPlaceholder(int $slotId, ?string $calendarId = null): bool
+    {
+        $calendarId = $calendarId ?: $this->getSlotsCalendarId();
+        if (! $calendarId) {
+            return false;
+        }
+
+        $calendarService = $this->getGoogleCalendarService();
+        if (! $calendarService) {
+            return false;
+        }
+
+        try {
+            $events = $calendarService->events->listEvents($calendarId, [
+                'privateExtendedProperty' => 'slot_id='.$slotId,
+            ]);
+
+            $deletedAny = false;
+            foreach ($events->getItems() as $item) {
+                if ($item->getStatus() !== 'cancelled') {
+                    $calendarService->events->delete($calendarId, $item->getId(), ['sendUpdates' => 'none']);
+                    $deletedAny = true;
+                }
+            }
+
+            return $deletedAny;
+        } catch (\Throwable $e) {
+            Log::channel('appointment_slots')->warning("Error deleting placeholder for slot {$slotId}: ".$e->getMessage());
+
+            return false;
         }
     }
 }

@@ -1,5 +1,7 @@
 <?php
 
+use App\Services\Booking\Webhooks\BookingOrderCancelledHandler;
+use App\Services\Booking\Webhooks\BookingOrderPaidHandler;
 use App\Services\CampaignEmail\Webhooks\CampaignOrderCancelledHandler;
 use App\Services\CampaignEmail\Webhooks\CampaignOrderPaidHandler;
 use App\Services\CampaignEmail\Webhooks\CampaignOrderUpdatedHandler;
@@ -41,6 +43,8 @@ return [
             'campaign.paid' => CampaignOrderPaidHandler::class,
             'campaign.updated' => CampaignOrderUpdatedHandler::class,
             'campaign.cancelled' => CampaignOrderCancelledHandler::class,
+            'booking.paid' => BookingOrderPaidHandler::class,
+            'booking.cancelled' => BookingOrderCancelledHandler::class,
         ],
         // Events stuck in received/processing longer than this are re-queued.
         'stale_after_minutes' => (int) env('SHOPIFY_WEBHOOK_STALE_MINUTES', 10),

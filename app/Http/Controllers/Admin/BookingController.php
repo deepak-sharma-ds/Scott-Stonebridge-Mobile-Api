@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\Booking\SyncSlotsToGoogleSubCalendarJob;
 use App\Models\AvailabilityDate;
 use App\Models\GoogleToken;
 use App\Models\ScheduledMeeting;
@@ -16,6 +17,8 @@ use Google_Client;
 use Google_Service_Calendar;
 use Google_Service_Calendar_Event;
 use Google_Service_Calendar_EventDateTime;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
@@ -377,13 +380,25 @@ class BookingController extends Controller
         ]);
     }
 
-    public function cancel(Request $request)
+    public function cancel(Request $request, BookingService $bookingService): RedirectResponse
     {
         try {
             $data = $request->validate([
                 'booking_id' => 'required|exists:scheduled_meetings,id',
             ]);
-            $booking = ScheduledMeeting::where('id', $data['booking_id'])->delete();
+
+            $meeting = ScheduledMeeting::findOrFail($data['booking_id']);
+            $meeting->update(['status' => 'cancelled']);
+
+            if (! empty($meeting->event_id)) {
+                $bookingService->deleteGoogleCalendarEvent($meeting->event_id, 'primary');
+            }
+
+            if ($meeting->time_slot_id) {
+                SyncSlotsToGoogleSubCalendarJob::dispatch(
+                    slotIdsToProject: [$meeting->time_slot_id]
+                );
+            }
 
             return redirect()->route('admin.scheduled-meetings')->with('success', 'Meeting closed successfully!');
         } catch (\Exception $e) {
@@ -484,6 +499,73 @@ class BookingController extends Controller
         } catch (\Throwable $th) {
             // throw $th;
             dd($th);
+        }
+    }
+
+    public function googleCalendarStatus(BookingService $bookingService): JsonResponse
+    {
+        $slotsCalendarId = $bookingService->getSlotsCalendarId();
+        $token = GoogleToken::first();
+        $hasToken = $token && ! empty($token->access_token);
+
+        return response()->json([
+            'is_configured' => $hasToken && ! empty($slotsCalendarId),
+            'has_token' => $hasToken,
+            'slots_calendar_id' => $slotsCalendarId,
+        ]);
+    }
+
+    public function setupSubCalendar(BookingService $bookingService): JsonResponse
+    {
+        try {
+            $client = $bookingService->getGoogleClient();
+            if (! $client) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Google Calendar credentials missing or expired. Please authenticate admin account.',
+                ], 422);
+            }
+
+            $calendarId = $bookingService->getOrCreateSubCalendar('Stonebridge - Available Slots');
+            if (! $calendarId) {
+                return response()->json([
+                    'success' => false,
+                    'error' => 'Failed to locate or provision Google Sub-Calendar.',
+                ], 500);
+            }
+
+            // Backfill future open slots
+            $today = Carbon::today(config('app.timezone', 'Europe/London'))->format('Y-m-d');
+            $dates = AvailabilityDate::where('date', '>=', $today)
+                ->with(['timeSlots' => function ($query) {
+                    $query->whereDoesntHave('scheduledMeetings', function ($q) {
+                        $q->whereIn('status', ['confirmed', 'blocked_by_calendar']);
+                    });
+                }])
+                ->get();
+
+            $count = 0;
+            foreach ($dates as $date) {
+                foreach ($date->timeSlots as $slot) {
+                    if ($bookingService->projectSlotPlaceholder($slot, $date, $calendarId)) {
+                        $count++;
+                    }
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'calendar_id' => $calendarId,
+                'slots_projected' => $count,
+                'message' => "Sub-calendar provisioned and {$count} slot(s) projected.",
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('Error setting up Google Sub-Calendar', ['exception' => $e->getMessage()]);
+
+            return response()->json([
+                'success' => false,
+                'error' => $e->getMessage(),
+            ], 500);
         }
     }
 }

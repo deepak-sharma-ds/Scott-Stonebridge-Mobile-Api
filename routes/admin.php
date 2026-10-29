@@ -191,6 +191,8 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
     Route::post('booking/store', [BookingController::class, 'store'])->name('admin.booking.store');
     Route::put('booking/reschedule', [BookingController::class, 'reschedule'])->name('admin.booking.reschedule');
     Route::get('google-calendar/auth', [BookingController::class, 'adminGoogleAuth'])->name('admin.google.auth');
+    Route::get('google-calendar/status', [BookingController::class, 'googleCalendarStatus'])->name('admin.google.status');
+    Route::post('google-calendar/setup', [BookingController::class, 'setupSubCalendar'])->name('admin.google.setup');
     Route::put('booking/cancel', [BookingController::class, 'cancel'])->name('admin.booking.cancel');
     Route::get('get-time-slots', [BookingController::class, 'getTimeSlots'])->name('admin.get.time-slots');
 

@@ -14,6 +14,7 @@ class ScheduledMeeting extends Model
 
     protected $fillable = [
         'user_id',
+        'order_id',
         'name',
         'email',
         'phone',
