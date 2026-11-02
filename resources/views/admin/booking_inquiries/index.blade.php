@@ -105,9 +105,7 @@
                                             {{ $inquiry->phone }}
                                         </div>
                                     @else
-                                        <div style="display: flex; align-items: center; gap: 0.5rem;">
-                                            -
-                                        </div>
+                                        -
                                     @endif
 
                                 </td>
