@@ -368,9 +368,13 @@ class BookingController extends Controller
     {
         Log::channel('appointment_slots')->info('Building calendar event for booking', ['booking_id' => $booking->id]);
 
+        $formattedSummary = $this->bookingService->formatBookedMeetingSummary($booking->name, null, $booking->timeSlot);
+        $phoneLine = ! empty($booking->phone) ? "\nPhone: {$booking->phone}" : '';
+
         return new Google_Service_Calendar_Event([
-            'summary' => 'Meeting with '.$booking->name,
-            'description' => "Booking rescheduled.\nName: {$booking->name}\nPhone: {$booking->phone}",
+            'summary' => $formattedSummary,
+            'description' => "Name: {$booking->name}{$phoneLine}",
+            'colorId' => (string) config('booking.colors.booked', '11'),
             'start' => ['dateTime' => $start->setTimezone(config('app.timezone', 'Europe/London'))->toRfc3339String(), 'timeZone' => config('app.timezone', 'Europe/London')],
             'end' => ['dateTime' => $end->setTimezone(config('app.timezone', 'Europe/London'))->toRfc3339String(), 'timeZone' => config('app.timezone', 'Europe/London')],
             'attendees' => [['email' => $booking->email]],

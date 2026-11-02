@@ -806,4 +806,217 @@ class GoogleCalendarSyncFeatureTest extends TestCase
         $result = $bookingService->projectSlotPlaceholder($this->slot1, $this->date, 'sub_calendar_123');
         $this->assertEquals('new_slot_placeholder', $result);
     }
+
+    public function test_conversion_automatically_removes_green_dot_and_adds_red_dot_with_red_color(): void
+    {
+        $mockClient = Mockery::mock(Google_Client::class);
+        $mockCalendarService = Mockery::mock(Google_Service_Calendar::class);
+        $mockEvents = Mockery::mock(Google_Service_Calendar_Resource_Events::class);
+        $mockCalendarService->events = $mockEvents;
+
+        $bookingService = app(BookingService::class);
+        $bookingService->setGoogleClient($mockClient);
+        $bookingService->setCalendarService($mockCalendarService);
+        $this->app->instance(BookingService::class, $bookingService);
+
+        // Scott leaves green dot and doesn't put name in title (only in description)
+        $convertedEvent = new Google_Service_Calendar_Event;
+        $convertedEvent->setId('green_dot_evt_001');
+        $convertedEvent->setStatus('confirmed');
+        $convertedEvent->setSummary('🟢 Available (10:00 - 10:30)');
+        $convertedEvent->setDescription("Open booking slot\nSlot ID: {$this->slot1->id}\nDate ID: {$this->date->id}\n\nName: Michael Scott\nPhone: 07890123456");
+
+        $start = Carbon::parse("{$this->tomorrowStr} 10:00:00", 'Europe/London');
+        $end = Carbon::parse("{$this->tomorrowStr} 10:30:00", 'Europe/London');
+        $convertedEvent->setStart(new Google_Service_Calendar_EventDateTime([
+            'dateTime' => $start->toRfc3339String(),
+            'timeZone' => 'Europe/London',
+        ]));
+        $convertedEvent->setEnd(new Google_Service_Calendar_EventDateTime([
+            'dateTime' => $end->toRfc3339String(),
+            'timeZone' => 'Europe/London',
+        ]));
+
+        $ext = new Google_Service_Calendar_EventExtendedProperties;
+        $ext->setPrivate([
+            'slot_id' => (string) $this->slot1->id,
+            'date_id' => (string) $this->date->id,
+            'is_placeholder' => 'true',
+            'managed_by' => 'laravel_booking_system',
+        ]);
+        $convertedEvent->setExtendedProperties($ext);
+
+        $attendee = new \Google_Service_Calendar_EventAttendee;
+        $attendee->setEmail('michael@example.com');
+        $convertedEvent->setAttendees([$attendee]);
+
+        $eventsListSub = new Google_Service_Calendar_Events;
+        $eventsListSub->setItems([$convertedEvent]);
+        $eventsListSub->setNextSyncToken('sub_token_dots');
+
+        $mockEvents->shouldReceive('listEvents')
+            ->with('sub_calendar_123', Mockery::any())
+            ->andReturn($eventsListSub);
+
+        $mockEvents->shouldReceive('listEvents')
+            ->with('primary', Mockery::any())
+            ->andReturn(new Google_Service_Calendar_Events);
+
+        // Assert that the promoted event has 🟢 removed, 🔴 added, and colorId = 11 (Tomato Red)
+        $mockEvents->shouldReceive('insert')
+            ->once()
+            ->with('primary', Mockery::on(function ($evt) {
+                return $evt instanceof Google_Service_Calendar_Event
+                    && ! str_contains($evt->getSummary(), '🟢')
+                    && str_starts_with($evt->getSummary(), '🔴')
+                    && str_contains($evt->getSummary(), 'Michael Scott')
+                    && $evt->getColorId() === '11';
+            }), Mockery::any())
+            ->andReturnUsing(function ($cal, $evt) {
+                $evt->setId('promoted_pri_dots');
+                $evt->setHangoutLink('https://meet.google.com/meet-dots');
+
+                return $evt;
+            });
+
+        $mockEvents->shouldReceive('delete')
+            ->once()
+            ->with('sub_calendar_123', 'green_dot_evt_001', Mockery::any())
+            ->andReturn(null);
+
+        $job = new ProcessGoogleCalendarSyncJob;
+        $job->handle($bookingService);
+
+        $meeting = ScheduledMeeting::where('time_slot_id', $this->slot1->id)->first();
+        $this->assertNotNull($meeting);
+        $this->assertEquals('Michael Scott', $meeting->name);
+        $this->assertEquals('07890123456', $meeting->phone);
+    }
+
+    public function test_phone_is_optional_without_country_code_restriction(): void
+    {
+        $mockClient = Mockery::mock(Google_Client::class);
+        $mockCalendarService = Mockery::mock(Google_Service_Calendar::class);
+        $mockEvents = Mockery::mock(Google_Service_Calendar_Resource_Events::class);
+        $mockCalendarService->events = $mockEvents;
+
+        $bookingService = app(BookingService::class);
+        $bookingService->setGoogleClient($mockClient);
+        $bookingService->setCalendarService($mockCalendarService);
+        $this->app->instance(BookingService::class, $bookingService);
+
+        // Scott enters Name in description but NO phone
+        $convertedEvent = new Google_Service_Calendar_Event;
+        $convertedEvent->setId('no_phone_evt');
+        $convertedEvent->setStatus('confirmed');
+        $convertedEvent->setSummary('Consultation');
+        $convertedEvent->setDescription("Open booking slot\nSlot ID: {$this->slot2->id}\nDate ID: {$this->date->id}\n\nName: Pam Beesly\nPhone: ");
+
+        $start = Carbon::parse("{$this->tomorrowStr} 10:30:00", 'Europe/London');
+        $end = Carbon::parse("{$this->tomorrowStr} 11:00:00", 'Europe/London');
+        $convertedEvent->setStart(new Google_Service_Calendar_EventDateTime([
+            'dateTime' => $start->toRfc3339String(),
+            'timeZone' => 'Europe/London',
+        ]));
+        $convertedEvent->setEnd(new Google_Service_Calendar_EventDateTime([
+            'dateTime' => $end->toRfc3339String(),
+            'timeZone' => 'Europe/London',
+        ]));
+
+        $ext = new Google_Service_Calendar_EventExtendedProperties;
+        $ext->setPrivate([
+            'slot_id' => (string) $this->slot2->id,
+            'date_id' => (string) $this->date->id,
+            'is_placeholder' => 'true',
+            'managed_by' => 'laravel_booking_system',
+        ]);
+        $convertedEvent->setExtendedProperties($ext);
+
+        $attendee = new \Google_Service_Calendar_EventAttendee;
+        $attendee->setEmail('pam@example.com');
+        $convertedEvent->setAttendees([$attendee]);
+
+        $eventsListSub = new Google_Service_Calendar_Events;
+        $eventsListSub->setItems([$convertedEvent]);
+        $eventsListSub->setNextSyncToken('sub_token_no_phone');
+
+        $mockEvents->shouldReceive('listEvents')
+            ->with('sub_calendar_123', Mockery::any())
+            ->andReturn($eventsListSub);
+
+        $mockEvents->shouldReceive('listEvents')
+            ->with('primary', Mockery::any())
+            ->andReturn(new Google_Service_Calendar_Events);
+
+        $mockEvents->shouldReceive('insert')
+            ->once()
+            ->with('primary', Mockery::on(function ($evt) {
+                return $evt instanceof Google_Service_Calendar_Event
+                    && str_contains($evt->getSummary(), 'Pam Beesly')
+                    && ! str_contains($evt->getDescription(), 'Phone: +447000000000');
+            }), Mockery::any())
+            ->andReturnUsing(function ($cal, $evt) {
+                $evt->setId('promoted_no_phone');
+                $evt->setHangoutLink('https://meet.google.com/meet-pam');
+
+                return $evt;
+            });
+
+        $mockEvents->shouldReceive('delete')
+            ->once()
+            ->with('sub_calendar_123', 'no_phone_evt', Mockery::any())
+            ->andReturn(null);
+
+        $job = new ProcessGoogleCalendarSyncJob;
+        $job->handle($bookingService);
+
+        $meeting = ScheduledMeeting::where('time_slot_id', $this->slot2->id)->first();
+        $this->assertNotNull($meeting);
+        $this->assertEquals('Pam Beesly', $meeting->name);
+        $this->assertNull($meeting->phone); // Empty phone stored as null via accessor
+    }
+
+    public function test_delete_google_calendar_event_replaces_booking_confirmed_with_cancelled_before_deleting(): void
+    {
+        $mockClient = Mockery::mock(Google_Client::class);
+        $mockCalendar = Mockery::mock(Google_Service_Calendar::class);
+        $mockEvents = Mockery::mock(Google_Service_Calendar_Resource_Events::class);
+        $mockCalendar->events = $mockEvents;
+
+        $bookingService = new BookingService;
+        $bookingService->setGoogleClient($mockClient);
+        $bookingService->setCalendarService($mockCalendar);
+
+        $existingEvent = new Google_Service_Calendar_Event;
+        $existingEvent->setId('evt_cancel_999');
+        $existingEvent->setDescription("Booking confirmed.\nName: Ajay Yadav\nPhone: +919265840386");
+
+        $mockEvents->shouldReceive('get')
+            ->once()
+            ->with('primary', 'evt_cancel_999')
+            ->andReturn($existingEvent);
+
+        $patchedDescription = null;
+        $mockEvents->shouldReceive('patch')
+            ->once()
+            ->with('primary', 'evt_cancel_999', Mockery::on(function ($evt) use (&$patchedDescription) {
+                $patchedDescription = $evt->getDescription();
+
+                return $evt instanceof Google_Service_Calendar_Event
+                    && str_contains($evt->getDescription(), 'Booking cancelled.')
+                    && ! str_contains($evt->getDescription(), 'Booking confirmed.');
+            }), ['sendUpdates' => 'none'])
+            ->andReturn($existingEvent);
+
+        $mockEvents->shouldReceive('delete')
+            ->once()
+            ->with('primary', 'evt_cancel_999', ['sendUpdates' => 'all'])
+            ->andReturn(null);
+
+        $result = $bookingService->deleteGoogleCalendarEvent('evt_cancel_999', 'primary');
+
+        $this->assertTrue($result);
+        $this->assertStringContainsString('Booking cancelled.', $patchedDescription);
+        $this->assertStringNotContainsString('Booking confirmed.', $patchedDescription);
+    }
 }

@@ -120,10 +120,14 @@ class BookingService
             $startDateTime = Carbon::parse("{$date} {$timeSlot->start_time}", config('app.timezone', 'Europe/London'));
             $endDateTime = Carbon::parse("{$date} {$timeSlot->end_time}", config('app.timezone', 'Europe/London'));
 
+            $summary = $this->formatBookedMeetingSummary($data['name'], null, $timeSlot);
+            $phoneLine = ! empty($data['phone']) ? "\nPhone: ".$data['phone'] : '';
+
             // Build event
             $event = new Google_Service_Calendar_Event([
-                'summary' => 'Meeting with '.$data['name'],
-                'description' => "Booking confirmed.\nName: {$data['name']}\nPhone: {$data['phone']}",
+                'summary' => $summary,
+                'description' => "Name: {$data['name']}{$phoneLine}",
+                'colorId' => (string) config('booking.colors.booked', '11'),
                 'start' => [
                     'dateTime' => $startDateTime->setTimezone(config('app.timezone', 'Europe/London'))->toRfc3339String(),
                     'timeZone' => config('app.timezone', 'Europe/London'),
@@ -405,17 +409,27 @@ class BookingService
      *
      * @param  array<string, mixed>  $optParams
      */
-    public function syncConfirmedMeetingToGoogle(ScheduledMeeting $meeting, Carbon $start, Carbon $end, array $optParams = []): ?array
-    {
+    public function syncConfirmedMeetingToGoogle(
+        ScheduledMeeting $meeting,
+        Carbon $start,
+        Carbon $end,
+        array $optParams = [],
+        ?string $sourceSummary = null
+    ): ?array {
         $calendarService = $this->getGoogleCalendarService();
         if (! $calendarService) {
             return null;
         }
 
         try {
+            $summary = $this->formatBookedMeetingSummary($meeting->name, $sourceSummary, $meeting->timeSlot);
+            $phoneLine = ! empty($meeting->phone) ? "\nPhone: {$meeting->phone}" : '';
+            $description = "Name: {$meeting->name}{$phoneLine}";
+
             $event = new Google_Service_Calendar_Event([
-                'summary' => 'Meeting with '.$meeting->name,
-                'description' => "Booking confirmed.\nName: {$meeting->name}\nPhone: {$meeting->phone}",
+                'summary' => $summary,
+                'description' => $description,
+                'colorId' => (string) config('booking.colors.booked', '11'),
                 'start' => [
                     'dateTime' => $start->setTimezone(config('app.timezone', 'Europe/London'))->toRfc3339String(),
                     'timeZone' => config('app.timezone', 'Europe/London'),
@@ -459,16 +473,66 @@ class BookingService
     }
 
     /**
-     * Delete an event from Google Calendar and notify attendees.
+     * Format summary for a booked meeting:
+     * - Removes green dot 🟢 if present.
+     * - Ensures title starts with red dot 🔴.
+     * - If original summary was generic/available or missing customer name, formats as "🔴 Meeting with {CustomerName}".
      */
-    public function deleteGoogleCalendarEvent(string $eventId, string $calendarId = 'primary'): bool
+    public function formatBookedMeetingSummary(string $customerName, ?string $rawSummary = null, ?TimeSlot $slot = null): string
     {
+        $summary = $rawSummary !== null ? trim($rawSummary) : '';
+        // Strip any leading green dot, red dot, or stray markers
+        $clean = trim(preg_replace('/^[🟢🔴]\s*/u', '', $summary));
+
+        // If title is empty, starts with "available" (case-insensitive), or doesn't mention the customer, standardize it
+        if ($clean === '' || str_starts_with(strtolower($clean), 'available') || ! str_contains(strtolower($clean), strtolower($customerName))) {
+            $slotSuffix = '';
+            if ($slot) {
+                $slotSuffix = ' ('.substr($slot->start_time, 0, 5).' - '.substr($slot->end_time, 0, 5).')';
+            }
+
+            return "🔴 Meeting with {$customerName}{$slotSuffix}";
+        }
+
+        return "🔴 {$clean}";
+    }
+
+    /**
+     * Delete an event from Google Calendar and notify attendees.
+     * Updates description beforehand so Google's cancellation email does not state "Booking confirmed."
+     */
+    public function deleteGoogleCalendarEvent(
+        string $eventId,
+        string $calendarId = 'primary',
+        ?string $cancellationMessage = null
+    ): bool {
         $calendarService = $this->getGoogleCalendarService();
         if (! $calendarService) {
             return false;
         }
 
         try {
+            // Update description before deleting so cancellation email says "Booking cancelled." rather than "Booking confirmed."
+            try {
+                $existing = $calendarService->events->get($calendarId, $eventId);
+                if ($existing) {
+                    $oldDesc = (string) $existing->getDescription();
+                    if (str_contains($oldDesc, 'Booking confirmed.')) {
+                        $newDesc = str_replace('Booking confirmed.', 'Booking cancelled.', $oldDesc);
+                    } elseif ($cancellationMessage !== null) {
+                        $newDesc = $cancellationMessage;
+                    } elseif (! str_contains($oldDesc, 'Booking cancelled.')) {
+                        $newDesc = trim("Booking cancelled.\n".ltrim($oldDesc));
+                    } else {
+                        $newDesc = $oldDesc;
+                    }
+                    $existing->setDescription($newDesc);
+                    $calendarService->events->patch($calendarId, $eventId, $existing, ['sendUpdates' => 'none']);
+                }
+            } catch (\Throwable $patchError) {
+                Log::channel('appointment_slots')->info("Could not update description before deleting event {$eventId}: {$patchError->getMessage()}");
+            }
+
             $calendarService->events->delete($calendarId, $eventId, ['sendUpdates' => 'all']);
 
             return true;
@@ -597,6 +661,7 @@ class BookingService
             if ($existing) {
                 $existing->setSummary($summary);
                 $existing->setDescription($description);
+                $existing->setColorId((string) config('booking.colors.available', '10'));
                 $existing->setStart(new Google_Service_Calendar_EventDateTime([
                     'dateTime' => $startDateTime->toRfc3339String(),
                     'timeZone' => $tz,
@@ -615,6 +680,7 @@ class BookingService
             $event = new Google_Service_Calendar_Event([
                 'summary' => $summary,
                 'description' => $description,
+                'colorId' => (string) config('booking.colors.available', '10'),
                 'start' => [
                     'dateTime' => $startDateTime->toRfc3339String(),
                     'timeZone' => $tz,

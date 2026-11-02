@@ -351,8 +351,12 @@ class ProcessGoogleCalendarSyncJob implements ShouldQueue
 
         $log->info("Recorded direct primary booking meeting #{$createdMeeting->id} for slot {$targetSlot->id}");
 
-        // Stamp managed_by extendedProperties on Google event
+        // Stamp managed_by extendedProperties, format red dot title, and set color on Google event
         try {
+            $formattedSummary = $bookingService->formatBookedMeetingSummary($customerName, $event->getSummary(), $targetSlot);
+            $event->setSummary($formattedSummary);
+            $event->setColorId((string) config('booking.colors.booked', '11'));
+
             $ext = $event->getExtendedProperties() ?: new Google_Service_Calendar_EventExtendedProperties;
             $private = $ext->getPrivate() ?: [];
             $private['managed_by'] = 'laravel_booking_system';
@@ -388,7 +392,7 @@ class ProcessGoogleCalendarSyncJob implements ShouldQueue
                     'time_slot_id' => $nextSlot->id,
                     'name' => $customerName.' (Extended Block)',
                     'email' => $customerEmail,
-                    'phone' => '+447000000000',
+                    'phone' => $customerPhone ?: '',
                     'meeting_link' => 'pending',
                     'event_id' => $eventId.'_block_'.$nextSlot->id,
                     'datetime' => Carbon::parse("{$targetDateStr} {$nextSlot->start_time}", $tz),
@@ -499,9 +503,13 @@ class ProcessGoogleCalendarSyncJob implements ShouldQueue
         $log->info("Created ScheduledMeeting #{$meeting->id} from sub-calendar conversion");
 
         // Promote meeting to Primary Calendar with Google Meet link (suppress duplicate email update)
-        $synced = $bookingService->syncConfirmedMeetingToGoogle($meeting, $eventStart, $eventEnd, [
-            'sendUpdates' => 'none',
-        ]);
+        $synced = $bookingService->syncConfirmedMeetingToGoogle(
+            $meeting,
+            $eventStart,
+            $eventEnd,
+            ['sendUpdates' => 'none'],
+            $event->getSummary()
+        );
         if ($synced) {
             $meeting->update([
                 'event_id' => $synced['event_id'],
@@ -523,6 +531,7 @@ class ProcessGoogleCalendarSyncJob implements ShouldQueue
     /**
      * Extract customer name and phone from description (Name: ... / Phone: ...),
      * Google guest displayName, or clean event title.
+     * Name is compulsory; Phone is optional with no country code restriction.
      *
      * @return array{name: string, phone: string}
      */
@@ -543,7 +552,7 @@ class ProcessGoogleCalendarSyncJob implements ShouldQueue
         $name = null;
         $phone = null;
 
-        // 1. Check description for Name: or Customer: (stopping before any subsequent Phone: if on same line)
+        // 1. Check description ("extra params") for Name: or Customer: (takes highest priority!)
         if (preg_match('/(?:Name|Customer):\s*(.+?)(?=\s*(?:Phone|Tel|Mobile):|$)/im', $cleanDescription, $matches)) {
             $parsedName = trim(strip_tags($matches[1]));
             if ($parsedName !== '') {
@@ -551,7 +560,7 @@ class ProcessGoogleCalendarSyncJob implements ShouldQueue
             }
         }
 
-        // 2. Check description for Phone: or Tel:
+        // 2. Check description for Phone: or Tel: (Optional - no country code enforced)
         if (preg_match('/(?:Phone|Tel|Mobile):\s*([^\r\n]+)/im', $cleanDescription, $matches)) {
             $parsedPhone = trim(strip_tags($matches[1]));
             if ($parsedPhone !== '') {
@@ -564,7 +573,7 @@ class ProcessGoogleCalendarSyncJob implements ShouldQueue
             $name = trim(strip_tags($guestDisplayName));
         }
 
-        // 4. Fall back to parsing the Event Title (Summary)
+        // 4. Fall back to parsing the Event Title (Summary) if not generic "Available"
         if (empty($name) && ! empty($summary)) {
             $clean = preg_replace('/^[🟢🔴]\s*/u', '', $summary);
             $clean = preg_replace('/^Meeting with\s*/i', '', (string) $clean);
@@ -583,7 +592,7 @@ class ProcessGoogleCalendarSyncJob implements ShouldQueue
 
         return [
             'name' => $name ?: $defaultName,
-            'phone' => $phone ?: '+447000000000',
+            'phone' => $phone ?: '',
         ];
     }
 }

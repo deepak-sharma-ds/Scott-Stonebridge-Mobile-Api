@@ -49,6 +49,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Google Calendar Event Colors
+    |--------------------------------------------------------------------------
+    | Google Calendar color IDs (1-11):
+    | 1: Lavender, 2: Sage, 3: Grape, 4: Flamingo, 5: Banana, 6: Tangerine,
+    | 7: Peacock, 8: Graphite, 9: Blueberry, 10: Basil (Green), 11: Tomato (Red)
+    */
+    'colors' => [
+        'booked' => env('GOOGLE_CALENDAR_BOOKED_COLOR_ID', '11'), // Tomato (Red)
+        'available' => env('GOOGLE_CALENDAR_AVAILABLE_COLOR_ID', '10'), // Basil (Green)
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Shopify Webhook HMAC Verification
     |--------------------------------------------------------------------------
     | Validates X-Shopify-Hmac-Sha256 header against the configured webhook secret.

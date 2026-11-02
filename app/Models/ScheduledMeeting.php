@@ -68,7 +68,7 @@ class ScheduledMeeting extends Model
 
     public function getPhoneAttribute(?string $value): ?string
     {
-        if ($value === null) {
+        if ($value === null || trim($value) === '') {
             return null;
         }
 
