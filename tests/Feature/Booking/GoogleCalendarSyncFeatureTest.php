@@ -320,7 +320,7 @@ class GoogleCalendarSyncFeatureTest extends TestCase
         // Expect patch on primary event to stamp managed_by
         $mockEvents->shouldReceive('patch')
             ->once()
-            ->with('primary', 'scott_direct_evt_555', Mockery::any())
+            ->with('primary', 'scott_direct_evt_555', Mockery::any(), Mockery::any())
             ->andReturn($directEvent);
 
         $mockEvents->shouldReceive('delete')
@@ -666,5 +666,144 @@ class GoogleCalendarSyncFeatureTest extends TestCase
 
         $meeting->refresh();
         $this->assertEquals('confirmed', $meeting->status);
+    }
+
+    public function test_sub_calendar_conversion_with_html_description_extracts_clean_name_and_phone(): void
+    {
+        $mockClient = Mockery::mock(Google_Client::class);
+        $mockCalendarService = Mockery::mock(Google_Service_Calendar::class);
+        $mockEvents = Mockery::mock(Google_Service_Calendar_Resource_Events::class);
+        $mockCalendarService->events = $mockEvents;
+
+        $bookingService = app(BookingService::class);
+        $bookingService->setGoogleClient($mockClient);
+        $bookingService->setCalendarService($mockCalendarService);
+        $this->app->instance(BookingService::class, $bookingService);
+
+        $convertedEvent = new Google_Service_Calendar_Event;
+        $convertedEvent->setId('html_placeholder_001');
+        $convertedEvent->setStatus('confirmed');
+        $convertedEvent->setSummary('Meeting with Ajay Yadav');
+        // Simulated Google Calendar rich-text HTML description
+        $convertedEvent->setDescription("<pre><code>Open booking slot<br>Slot ID: {$this->slot1->id}<br>Date ID: {$this->date->id}<br>Name: Ajay Yadav<br>Phone: +919265840386</code></pre>");
+
+        $start = Carbon::parse("{$this->tomorrowStr} 10:00:00", 'Europe/London');
+        $end = Carbon::parse("{$this->tomorrowStr} 10:30:00", 'Europe/London');
+        $convertedEvent->setStart(new Google_Service_Calendar_EventDateTime([
+            'dateTime' => $start->toRfc3339String(),
+            'timeZone' => 'Europe/London',
+        ]));
+        $convertedEvent->setEnd(new Google_Service_Calendar_EventDateTime([
+            'dateTime' => $end->toRfc3339String(),
+            'timeZone' => 'Europe/London',
+        ]));
+
+        $ext = new Google_Service_Calendar_EventExtendedProperties;
+        $ext->setPrivate([
+            'slot_id' => (string) $this->slot1->id,
+            'date_id' => (string) $this->date->id,
+            'is_placeholder' => 'true',
+            'managed_by' => 'laravel_booking_system',
+        ]);
+        $convertedEvent->setExtendedProperties($ext);
+
+        $attendee = new \Google_Service_Calendar_EventAttendee;
+        $attendee->setEmail('ajay.yadav@dotsquares.com');
+        $convertedEvent->setAttendees([$attendee]);
+
+        $eventsListSub = new Google_Service_Calendar_Events;
+        $eventsListSub->setItems([$convertedEvent]);
+        $eventsListSub->setNextSyncToken('sub_token_html');
+
+        $mockEvents->shouldReceive('listEvents')
+            ->with('sub_calendar_123', Mockery::any())
+            ->andReturn($eventsListSub);
+
+        $mockEvents->shouldReceive('listEvents')
+            ->with('primary', Mockery::any())
+            ->andReturn(new Google_Service_Calendar_Events);
+
+        // Verify that insert into primary is called with ['sendUpdates' => 'none'] to avoid duplicate emails
+        $mockEvents->shouldReceive('insert')
+            ->once()
+            ->with('primary', Mockery::on(function ($evt) {
+                return $evt instanceof Google_Service_Calendar_Event
+                    && str_contains($evt->getSummary(), 'Ajay Yadav')
+                    && str_contains($evt->getDescription(), 'Name: Ajay Yadav')
+                    && str_contains($evt->getDescription(), 'Phone: +919265840386');
+            }), Mockery::on(function ($params) {
+                return isset($params['sendUpdates']) && $params['sendUpdates'] === 'none';
+            }))
+            ->andReturnUsing(function ($cal, $evt) {
+                $evt->setId('promoted_pri_html_123');
+                $evt->setHangoutLink('https://meet.google.com/meet-html');
+
+                return $evt;
+            });
+
+        $mockEvents->shouldReceive('delete')
+            ->once()
+            ->with('sub_calendar_123', 'html_placeholder_001', Mockery::any())
+            ->andReturn(null);
+
+        $job = new ProcessGoogleCalendarSyncJob;
+        $job->handle($bookingService);
+
+        // Assert database record has clean name and phone without any HTML tags
+        $meeting = ScheduledMeeting::where('time_slot_id', $this->slot1->id)->first();
+        $this->assertNotNull($meeting);
+        $this->assertEquals('Ajay Yadav', $meeting->name);
+        $this->assertEquals('+919265840386', $meeting->phone);
+    }
+
+    public function test_scheduled_meeting_model_sanitizes_html_tags_and_cleans_legacy_data(): void
+    {
+        // 1. Mutator cleans input on save
+        $meeting = new ScheduledMeeting;
+        $meeting->name = 'Ajay YadavPhone: +919265840386</code></pre>';
+        $meeting->phone = '+919265840386</code></pre>';
+        $this->assertEquals('Ajay Yadav', $meeting->name);
+        $this->assertEquals('+919265840386', $meeting->phone);
+
+        // 2. Accessor cleans raw corrupted database value
+        $legacyMeeting = new ScheduledMeeting;
+        $legacyMeeting->setRawAttributes([
+            'name' => 'Ajay YadavPhone: +919265840386</code></pre>',
+            'phone' => '+919265840386</code></pre>',
+        ]);
+        $this->assertEquals('Ajay Yadav', $legacyMeeting->name);
+        $this->assertEquals('+919265840386', $legacyMeeting->phone);
+    }
+
+    public function test_placeholder_projection_includes_default_name_and_phone_fields(): void
+    {
+        $mockClient = Mockery::mock(Google_Client::class);
+        $mockCalendarService = Mockery::mock(Google_Service_Calendar::class);
+        $mockEvents = Mockery::mock(Google_Service_Calendar_Resource_Events::class);
+        $mockCalendarService->events = $mockEvents;
+
+        $bookingService = app(BookingService::class);
+        $bookingService->setGoogleClient($mockClient);
+        $bookingService->setCalendarService($mockCalendarService);
+
+        $mockEvents->shouldReceive('listEvents')
+            ->with('sub_calendar_123', Mockery::any())
+            ->andReturn(new Google_Service_Calendar_Events);
+
+        $mockEvents->shouldReceive('insert')
+            ->once()
+            ->with('sub_calendar_123', Mockery::on(function ($event) {
+                return $event instanceof Google_Service_Calendar_Event
+                    && str_contains($event->getDescription(), 'Name: ')
+                    && str_contains($event->getDescription(), 'Phone: ');
+            }))
+            ->andReturnUsing(function ($cal, $evt) {
+                $evt->setId('new_slot_placeholder');
+
+                return $evt;
+            });
+
+        $result = $bookingService->projectSlotPlaceholder($this->slot1, $this->date, 'sub_calendar_123');
+        $this->assertEquals('new_slot_placeholder', $result);
     }
 }

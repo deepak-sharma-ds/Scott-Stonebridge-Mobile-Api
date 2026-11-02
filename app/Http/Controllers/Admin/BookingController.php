@@ -370,7 +370,7 @@ class BookingController extends Controller
 
         return new Google_Service_Calendar_Event([
             'summary' => 'Meeting with '.$booking->name,
-            'description' => "Booking rescheduled.\nPhone: ".$booking->phone,
+            'description' => "Booking rescheduled.\nName: {$booking->name}\nPhone: {$booking->phone}",
             'start' => ['dateTime' => $start->setTimezone(config('app.timezone', 'Europe/London'))->toRfc3339String(), 'timeZone' => config('app.timezone', 'Europe/London')],
             'end' => ['dateTime' => $end->setTimezone(config('app.timezone', 'Europe/London'))->toRfc3339String(), 'timeZone' => config('app.timezone', 'Europe/London')],
             'attendees' => [['email' => $booking->email]],

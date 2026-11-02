@@ -127,6 +127,16 @@ class BookingOrderPaidHandler implements ShopifyWebhookHandlerInterface
                     'error' => $e->getMessage(),
                 ]);
             }
+
+            // Remove unbooked placeholder from secondary calendar
+            try {
+                $this->bookingService->removeSlotPlaceholder($slot->id);
+            } catch (\Throwable $e) {
+                Log::channel('shopify_webhooks')->warning('Failed removing slot placeholder after Shopify booking', [
+                    'slot_id' => $slot->id,
+                    'error' => $e->getMessage(),
+                ]);
+            }
         });
 
         return WebhookOutcome::processed();

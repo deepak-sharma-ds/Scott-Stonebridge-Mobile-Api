@@ -54,9 +54,23 @@ class ProcessGoogleCalendarSyncJob implements ShouldQueue
 
         $slotsCalendarId = $bookingService->getSlotsCalendarId();
 
-        $calendarsToSync = $this->targetCalendarId
-            ? [$this->targetCalendarId]
-            : array_values(array_filter(['primary', $slotsCalendarId]));
+        if ($this->targetCalendarId) {
+            $calendarsToSync = [$this->targetCalendarId];
+        } elseif (! empty($this->channelId)) {
+            // If webhook provided a channel ID, map directly to its specific calendar to prevent cross-calendar double syncing
+            $primaryChannelId = Configuration::where('name', 'GoogleCalendar.primary_channel_id')->value('value');
+            $slotsChannelId = Configuration::where('name', 'GoogleCalendar.slots_channel_id')->value('value');
+
+            if ($primaryChannelId && $this->channelId === $primaryChannelId) {
+                $calendarsToSync = ['primary'];
+            } elseif ($slotsChannelId && $this->channelId === $slotsChannelId) {
+                $calendarsToSync = array_values(array_filter([$slotsCalendarId]));
+            } else {
+                $calendarsToSync = array_values(array_filter(['primary', $slotsCalendarId]));
+            }
+        } else {
+            $calendarsToSync = array_values(array_filter(['primary', $slotsCalendarId]));
+        }
 
         foreach ($calendarsToSync as $calId) {
             $this->syncCalendarChanges($calId, $bookingService, $calendarService, $slotsCalendarId);
@@ -347,7 +361,7 @@ class ProcessGoogleCalendarSyncJob implements ShouldQueue
             $ext->setPrivate($private);
             $event->setExtendedProperties($ext);
 
-            $calendarService->events->patch('primary', $eventId, $event);
+            $calendarService->events->patch('primary', $eventId, $event, ['sendUpdates' => 'none']);
         } catch (\Throwable $e) {
             $log->warning("Could not patch managed_by on direct primary event {$eventId}: ".$e->getMessage());
         }
@@ -484,8 +498,10 @@ class ProcessGoogleCalendarSyncJob implements ShouldQueue
 
         $log->info("Created ScheduledMeeting #{$meeting->id} from sub-calendar conversion");
 
-        // Promote meeting to Primary Calendar with Google Meet link
-        $synced = $bookingService->syncConfirmedMeetingToGoogle($meeting, $eventStart, $eventEnd);
+        // Promote meeting to Primary Calendar with Google Meet link (suppress duplicate email update)
+        $synced = $bookingService->syncConfirmedMeetingToGoogle($meeting, $eventStart, $eventEnd, [
+            'sendUpdates' => 'none',
+        ]);
         if ($synced) {
             $meeting->update([
                 'event_id' => $synced['event_id'],
@@ -515,25 +531,37 @@ class ProcessGoogleCalendarSyncJob implements ShouldQueue
         ?string $guestDisplayName,
         string $defaultName
     ): array {
-        $description = (string) ($event->getDescription() ?? '');
+        $rawDescription = (string) ($event->getDescription() ?? '');
         $summary = (string) ($event->getSummary() ?? '');
+
+        // Convert HTML breaks and block tags to newlines before stripping tags
+        $cleanDescription = preg_replace('/<\s*(?:br|p|div|li|tr|\/p|\/div|\/li|\/tr)[^>]*>/i', "\n", $rawDescription);
+        $cleanDescription = html_entity_decode((string) $cleanDescription, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $cleanDescription = strip_tags($cleanDescription);
+        $cleanDescription = str_replace(["\xc2\xa0", '&nbsp;'], ' ', $cleanDescription);
 
         $name = null;
         $phone = null;
 
-        // 1. Check description for Name: or Customer:
-        if (preg_match('/(?:Name|Customer):\s*([^\r\n]+)/i', $description, $matches)) {
-            $name = trim($matches[1]);
+        // 1. Check description for Name: or Customer: (stopping before any subsequent Phone: if on same line)
+        if (preg_match('/(?:Name|Customer):\s*(.+?)(?=\s*(?:Phone|Tel|Mobile):|$)/im', $cleanDescription, $matches)) {
+            $parsedName = trim(strip_tags($matches[1]));
+            if ($parsedName !== '') {
+                $name = $parsedName;
+            }
         }
 
         // 2. Check description for Phone: or Tel:
-        if (preg_match('/(?:Phone|Tel|Mobile):\s*([^\r\n]+)/i', $description, $matches)) {
-            $phone = trim($matches[1]);
+        if (preg_match('/(?:Phone|Tel|Mobile):\s*([^\r\n]+)/im', $cleanDescription, $matches)) {
+            $parsedPhone = trim(strip_tags($matches[1]));
+            if ($parsedPhone !== '') {
+                $phone = $parsedPhone;
+            }
         }
 
         // 3. Fall back to Google Guest displayName
         if (empty($name) && ! empty($guestDisplayName)) {
-            $name = trim($guestDisplayName);
+            $name = trim(strip_tags($guestDisplayName));
         }
 
         // 4. Fall back to parsing the Event Title (Summary)
@@ -541,11 +569,16 @@ class ProcessGoogleCalendarSyncJob implements ShouldQueue
             $clean = preg_replace('/^[🟢🔴]\s*/u', '', $summary);
             $clean = preg_replace('/^Meeting with\s*/i', '', (string) $clean);
             $clean = preg_replace('/\s*\(\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}\)/', '', (string) $clean);
-            $clean = trim((string) $clean);
+            $clean = trim(strip_tags((string) $clean));
 
             if ($clean !== '' && ! str_starts_with(strtolower($clean), 'available')) {
                 $name = $clean;
             }
+        }
+
+        // Extra guard: clean any trailing Phone/Tel artifact from name if present
+        if (! empty($name)) {
+            $name = trim(preg_replace('/\s*(?:Phone|Tel|Mobile):.*$/i', '', $name));
         }
 
         return [

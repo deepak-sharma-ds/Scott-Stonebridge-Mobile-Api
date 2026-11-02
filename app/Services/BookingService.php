@@ -123,7 +123,7 @@ class BookingService
             // Build event
             $event = new Google_Service_Calendar_Event([
                 'summary' => 'Meeting with '.$data['name'],
-                'description' => "Booking confirmed.\nPhone: ".$data['phone'],
+                'description' => "Booking confirmed.\nName: {$data['name']}\nPhone: {$data['phone']}",
                 'start' => [
                     'dateTime' => $startDateTime->setTimezone(config('app.timezone', 'Europe/London'))->toRfc3339String(),
                     'timeZone' => config('app.timezone', 'Europe/London'),
@@ -167,6 +167,18 @@ class BookingService
                 'time_slot_id' => $data['time_slot_id'],
                 'order_id' => $data['order_id'] ?? null,
             ]);
+
+            // Remove unbooked placeholder from sub-calendar
+            if (! empty($data['time_slot_id'])) {
+                try {
+                    $this->removeSlotPlaceholder((int) $data['time_slot_id']);
+                } catch (\Throwable $th) {
+                    $log->warning('Failed removing slot placeholder after booking', [
+                        'slot_id' => $data['time_slot_id'],
+                        'error' => $th->getMessage(),
+                    ]);
+                }
+            }
 
             return [
                 'success' => true,
@@ -390,8 +402,10 @@ class BookingService
 
     /**
      * Create or sync a confirmed meeting event directly to Scott's Primary Google Calendar.
+     *
+     * @param  array<string, mixed>  $optParams
      */
-    public function syncConfirmedMeetingToGoogle(ScheduledMeeting $meeting, Carbon $start, Carbon $end): ?array
+    public function syncConfirmedMeetingToGoogle(ScheduledMeeting $meeting, Carbon $start, Carbon $end, array $optParams = []): ?array
     {
         $calendarService = $this->getGoogleCalendarService();
         if (! $calendarService) {
@@ -401,7 +415,7 @@ class BookingService
         try {
             $event = new Google_Service_Calendar_Event([
                 'summary' => 'Meeting with '.$meeting->name,
-                'description' => "Booking confirmed.\nPhone: ".$meeting->phone,
+                'description' => "Booking confirmed.\nName: {$meeting->name}\nPhone: {$meeting->phone}",
                 'start' => [
                     'dateTime' => $start->setTimezone(config('app.timezone', 'Europe/London'))->toRfc3339String(),
                     'timeZone' => config('app.timezone', 'Europe/London'),
@@ -430,7 +444,8 @@ class BookingService
                 ],
             ]);
 
-            $created = $calendarService->events->insert('primary', $event, ['conferenceDataVersion' => 1]);
+            $params = array_merge(['conferenceDataVersion' => 1], $optParams);
+            $created = $calendarService->events->insert('primary', $event, $params);
 
             return [
                 'event_id' => $created->getId(),
@@ -564,7 +579,7 @@ class BookingService
         $endDateTime = Carbon::parse("{$dateStr} {$slot->end_time}", $tz);
 
         $summary = '🟢 Available ('.$startDateTime->format('H:i').' - '.$endDateTime->format('H:i').')';
-        $description = "Open booking slot\nSlot ID: {$slot->id}\nDate ID: {$date->id}";
+        $description = "Open booking slot\nSlot ID: {$slot->id}\nDate ID: {$date->id}\n\nName: \nPhone: ";
 
         $extendedProperties = [
             'private' => [
