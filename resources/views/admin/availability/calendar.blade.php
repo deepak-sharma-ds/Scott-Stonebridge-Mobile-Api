@@ -292,9 +292,27 @@
      @keydown.escape.window="closePanel()">
 
     {{-- Page Header --}}
+    @php
+        $slotsCalId = \App\Models\Configuration::where('name', 'GoogleCalendar.slots_calendar_id')->value('value');
+        $hasGoogleToken = \App\Models\GoogleToken::query()->exists();
+    @endphp
     @include('admin.components.page-header', [
         'title'    => 'Availability Calendar',
         'subtitle' => 'Click any date to manage slots. Click an event to edit.',
+        'action'   => '
+            <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+                <span class="badge ' . ($hasGoogleToken && $slotsCalId ? 'badge-success' : 'badge-warning') . '" style="padding:0.45rem 0.75rem;font-size:0.8125rem;display:inline-flex;align-items:center;gap:0.35rem;border-radius:20px;">
+                    <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' . ($hasGoogleToken && $slotsCalId ? '#10b981' : '#f59e0b') . ';"></span>
+                    ' . ($hasGoogleToken && $slotsCalId ? 'Google Sub-Calendar: Connected' : 'Google Sub-Calendar: Not Setup') . '
+                </span>
+                <button type="button" id="btnSyncGoogleSubCal" class="btn btn-outline-primary" style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.8125rem;padding:0.45rem 0.85rem;" onclick="runGoogleSubCalendarSetup()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                    </svg>
+                    Sync / Setup Sub-Calendar
+                </button>
+            </div>
+        ',
     ])
 
     {{-- Calendar Card --}}
@@ -736,5 +754,38 @@ document.addEventListener('DOMContentLoaded', function () {
         calendar.refetchEvents();
     }
 });
+
+async function runGoogleSubCalendarSetup() {
+    var btn = document.getElementById('btnSyncGoogleSubCal');
+    var origText = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Provisioning...';
+    }
+    try {
+        var res = await fetch('{{ route('admin.google.setup') }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        });
+        var data = await res.json();
+        if (data.success) {
+            alert(data.message || 'Sub-calendar provisioned and slots backfilled successfully!');
+            window.location.reload();
+        } else {
+            alert('Setup failed: ' + (data.error || 'Unknown error'));
+        }
+    } catch (e) {
+        alert('Network error while provisioning sub-calendar.');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = origText;
+        }
+    }
+}
 </script>
 @endsection

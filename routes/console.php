@@ -108,3 +108,22 @@ Schedule::command('webhooks:retry')
     ->everyFiveMinutes()
     ->withoutOverlapping()
     ->name('webhooks-retry-stale');
+
+/*
+|--------------------------------------------------------------------------
+| Bi-Directional Google Calendar Sync & Watch Channel Maintenance
+|--------------------------------------------------------------------------
+|
+| calendar:renew-watch verifies and renews 7-day Google push webhook subscriptions daily.
+| calendar:sync-delta runs incremental delta sync every 30 minutes as a safety net.
+|
+*/
+Schedule::command('calendar:renew-watch')
+    ->daily()
+    ->withoutOverlapping()
+    ->name('calendar-renew-watch');
+
+Schedule::command('calendar:sync-delta')
+    ->everyThirtyMinutes()
+    ->withoutOverlapping()
+    ->name('calendar-sync-delta');

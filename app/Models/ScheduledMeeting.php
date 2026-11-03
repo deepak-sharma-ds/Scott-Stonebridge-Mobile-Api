@@ -14,6 +14,7 @@ class ScheduledMeeting extends Model
 
     protected $fillable = [
         'user_id',
+        'order_id',
         'name',
         'email',
         'phone',
@@ -28,6 +29,56 @@ class ScheduledMeeting extends Model
     protected $casts = [
         'datetime' => 'datetime',
     ];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Accessors & Mutators
+    |--------------------------------------------------------------------------
+    */
+
+    public function getNameAttribute(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $clean = strip_tags($value);
+        if (preg_match('/^(.+?)\s*(?:Phone|Tel|Mobile):/i', $clean, $matches)) {
+            $clean = $matches[1];
+        }
+
+        return trim($clean);
+    }
+
+    public function setNameAttribute(?string $value): void
+    {
+        if ($value === null) {
+            $this->attributes['name'] = null;
+
+            return;
+        }
+
+        $clean = strip_tags($value);
+        if (preg_match('/^(.+?)\s*(?:Phone|Tel|Mobile):/i', $clean, $matches)) {
+            $clean = $matches[1];
+        }
+
+        $this->attributes['name'] = trim($clean);
+    }
+
+    public function getPhoneAttribute(?string $value): ?string
+    {
+        if ($value === null || trim($value) === '') {
+            return null;
+        }
+
+        return trim(strip_tags($value));
+    }
+
+    public function setPhoneAttribute(?string $value): void
+    {
+        $this->attributes['phone'] = $value !== null ? trim(strip_tags($value)) : null;
+    }
 
     /*
     |--------------------------------------------------------------------------

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\Booking\SyncSlotsToGoogleSubCalendarJob;
 use App\Models\AvailabilityDate;
 use App\Models\ScheduledMeeting;
 use App\Models\TimeSlot;
@@ -170,9 +171,11 @@ class AvailabilityCalendarController extends Controller
         }
 
         // Now safe to delete removed slots
+        $deletedSlotIds = [];
         foreach ($toDelete as $es) {
             // call bookingService just in case (preserve existing logic)
             $this->bookingService->handleSlotBookingDeletion($es->id, $es->availability_date_id);
+            $deletedSlotIds[] = $es->id;
             $es->delete();
         }
 
@@ -193,6 +196,12 @@ class AvailabilityCalendarController extends Controller
             ]);
             $created++;
         }
+
+        SyncSlotsToGoogleSubCalendarJob::dispatch(
+            startDate: $date,
+            endDate: $date,
+            slotIdsToDelete: $deletedSlotIds,
+        );
 
         return response()->json([
             'success' => true,
@@ -225,9 +234,14 @@ class AvailabilityCalendarController extends Controller
             ], 409);
         }
 
+        $slotId = $timeSlot->id;
         $result = $this->bookingService->handleSlotBookingDeletion($timeSlot->id, $timeSlot->availability_date_id);
 
         $timeSlot->delete();
+
+        SyncSlotsToGoogleSubCalendarJob::dispatch(
+            slotIdsToDelete: [$slotId],
+        );
 
         return response()->json([
             'success' => true,
@@ -267,11 +281,22 @@ class AvailabilityCalendarController extends Controller
             ->filter()
             ->unique();
 
+        $unbookedSlotIds = $availability->timeSlots()
+            ->whereNotIn('id', $bookedTimeSlotIds)
+            ->pluck('id')
+            ->toArray();
+
         // delete all slots except booked ones
         $availability->timeSlots()->whereNotIn('id', $bookedTimeSlotIds)->delete();
 
         if ($availability->timeSlots()->doesntExist()) {
             $availability->delete();
+        }
+
+        if (! empty($unbookedSlotIds)) {
+            SyncSlotsToGoogleSubCalendarJob::dispatch(
+                slotIdsToDelete: $unbookedSlotIds,
+            );
         }
 
         return response()->json(['success' => true, 'message' => 'Date deleted']);
