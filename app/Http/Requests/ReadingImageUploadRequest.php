@@ -26,6 +26,7 @@ class ReadingImageUploadRequest extends FormRequest
                 'mimes:jpg,jpeg,png',
                 'max:'.(int) config('email_reading.image_upload.max_kb', 8192),
             ],
+            'product_id' => ['nullable', 'integer'],
         ];
     }
 

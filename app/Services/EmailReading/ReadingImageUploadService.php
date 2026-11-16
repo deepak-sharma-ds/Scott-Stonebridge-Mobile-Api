@@ -2,8 +2,8 @@
 
 namespace App\Services\EmailReading;
 
-use App\Jobs\EmailReading\CopyReadingImageToShopifyJob;
 use App\Models\EmailReadingDelivery;
+use App\Models\EmailReadingProduct;
 use App\Models\ReadingImageUpload;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
@@ -17,7 +17,7 @@ use Throwable;
  */
 class ReadingImageUploadService
 {
-    private const REFERENCE_PATH = '~/reading-uploads/([A-Za-z0-9]{40})(?:[/?#]|$)~';
+    private const REFERENCE_PATH = '~/reading-uploads/(?:\d{4}/\d{2}/)?([A-Za-z0-9]{40})(?:\.(?:jpg|png))?(?:[/?#]|$)~';
 
     /**
      * Validate, re-encode (drops EXIF/GPS) and store the image, then try to
@@ -26,13 +26,13 @@ class ReadingImageUploadService
      *
      * @throws InvalidArgumentException when the file is not a usable JPEG/PNG
      */
-    public function store(UploadedFile $file): ReadingImageUpload
+    public function store(UploadedFile $file, ?int $shopifyProductId = null): ReadingImageUpload
     {
         [$binary, $mime, $extension] = $this->reencode($file);
 
-        $disk = (string) config('email_reading.image_upload.disk', 'local');
+        $disk = (string) config('email_reading.image_upload.disk', 'private');
         $token = Str::random(40);
-        $path = 'reading-uploads/'.date('Y/m').'/'.$token.'.'.$extension;
+        $path = 'reading-uploads/'.$this->productFolder($shopifyProductId).'/'.date('Y/m').'/'.$token.'.'.$extension;
 
         Storage::disk($disk)->put($path, $binary);
 
@@ -44,45 +44,16 @@ class ReadingImageUploadService
             'size' => strlen($binary),
         ]);
 
-        return $this->copyToShopify($upload);
+        return $upload;
     }
 
-    /**
-     * Finish (or start) the Shopify Files copy. Never throws.
-     */
-    public function copyToShopify(ReadingImageUpload $upload, bool $queueOnFailure = true): ReadingImageUpload
+    /** Folder named after the product (from our own record, never client text); "general" when unknown. */
+    private function productFolder(?int $shopifyProductId): string
     {
-        if (! config('email_reading.image_upload.shopify_copy', true) || $upload->shopify_file_url) {
-            return $upload;
-        }
+        $product = $shopifyProductId ? EmailReadingProduct::where('shopify_product_id', $shopifyProductId)->first() : null;
+        $folder = Str::slug((string) ($product?->slug ?: $product?->name));
 
-        // Resolved lazily: building it reads the bundle store credentials.
-        $shopifyFiles = app(ReadingImageShopifyFiles::class);
-
-        if (! $shopifyFiles->isConfigured()) {
-            return $upload;
-        }
-
-        try {
-            $upload = $shopifyFiles->copy(
-                $upload,
-                (int) config('email_reading.image_upload.shopify_ready_wait_seconds', 6)
-            );
-        } catch (Throwable $e) {
-            Log::channel('shopify_webhooks')->warning('Reading image copy to Shopify Files failed', [
-                'upload_id' => $upload->id,
-                'error' => $e->getMessage(),
-            ]);
-        }
-
-        if ($queueOnFailure && ! $upload->shopify_file_url) {
-            CopyReadingImageToShopifyJob::dispatch($upload->id)
-                ->delay(now()->addMinute())
-                ->onConnection(config('email_reading.queue.connection'))
-                ->onQueue(config('email_reading.queue.process'));
-        }
-
-        return $upload->refresh();
+        return $folder !== '' ? $folder : 'general';
     }
 
     /**
@@ -106,6 +77,30 @@ class ReadingImageUploadService
         }
 
         return null;
+    }
+
+    /**
+     * Deletes the upload a reference points at (file, Shopify copy, record). Only unclaimed uploads
+     * are touched; claimed ones belong to an order. Never throws; returns whether it was deleted.
+     */
+    public function discard(?string $reference): bool
+    {
+        $upload = $this->resolve($reference);
+
+        if ($upload === null || $upload->claimed_at !== null) {
+            return false;
+        }
+
+        try {
+            Storage::disk($upload->disk)->delete($upload->path);
+            $upload->delete();
+
+            return true;
+        } catch (Throwable $e) {
+            Log::warning('Reading image discard failed', ['upload_id' => $upload->id, 'error' => $e->getMessage()]);
+
+            return false; // the scheduled purge removes it later
+        }
     }
 
     /** True for values that are image references (never worth moderating as text). */

@@ -209,6 +209,14 @@ Route::prefix('v1')->middleware([
         ->name('api.v1.reading-uploads.store');
 
     /**
+     * POST /api/v1/reading-uploads/discard - deletes an earlier, still unclaimed
+     * image after the customer replaced it (checkout extension).
+     */
+    Route::post('/reading-uploads/discard', [ReadingImageUploadController::class, 'discard'])
+        ->middleware('throttle:reading-image-upload')
+        ->name('api.v1.reading-uploads.discard');
+
+    /**
      * Shop & Currency Routes (Public - Guest Friendly)
      *
      * GET /api/v1/shop/currencies - Get supported currencies

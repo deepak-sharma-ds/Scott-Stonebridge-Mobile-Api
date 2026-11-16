@@ -31,9 +31,12 @@ class ReadingImageUpload extends Model
         ];
     }
 
-    /** The value saved as the answer: the Shopify CDN URL when ready, else the admin viewer URL. */
+    /**
+     * The value saved as the answer: the app's public link for the image (served from the private
+     * disk by token), which Shopify admin and the checkout can open.
+     */
     public function reference(): string
     {
-        return $this->shopify_file_url ?: route('admin.reading_uploads.show', ['token' => $this->token]);
+        return route('reading_uploads.public', ['token' => $this->token]);
     }
 }

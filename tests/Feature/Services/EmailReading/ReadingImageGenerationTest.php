@@ -28,7 +28,6 @@ class ReadingImageGenerationTest extends TestCase
         parent::setUp();
 
         Storage::fake('local');
-        config(['email_reading.image_upload.shopify_copy' => false]);
     }
 
     private function delivery(array $schema, ?string $answer, string $template = 'Selfie: {{ $q1 }}'): EmailReadingDelivery

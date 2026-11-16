@@ -34,3 +34,13 @@ Route::get('/track/email/{token}', [EmailTrackingController::class, 'track'])
     ->withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, ValidateCsrfToken::class, VerifyCsrfToken::class])
     ->middleware('throttle:60,1')
     ->name('email.track');
+
+/**
+ * Customer-uploaded reading image (public link by unguessable token). The file itself lives on the
+ * private disk; this is the URL saved as the answer so Shopify admin and the checkout can show it.
+ */
+Route::get('/reading-uploads/{token}', [\App\Http\Controllers\Admin\ReadingImageController::class, 'publicShow'])
+    ->where('token', '[A-Za-z0-9]{40}')
+    ->withoutMiddleware([StartSession::class, ShareErrorsFromSession::class, ValidateCsrfToken::class, VerifyCsrfToken::class])
+    ->middleware('throttle:120,1')
+    ->name('reading_uploads.public');

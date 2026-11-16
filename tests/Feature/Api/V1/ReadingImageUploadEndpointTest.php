@@ -19,8 +19,7 @@ class ReadingImageUploadEndpointTest extends TestCase
     {
         parent::setUp();
 
-        Storage::fake('local');
-        config(['email_reading.image_upload.shopify_copy' => false]);
+        Storage::fake('private');
     }
 
     public function test_it_stores_a_jpeg_and_returns_a_reference(): void
@@ -32,9 +31,47 @@ class ReadingImageUploadEndpointTest extends TestCase
         $response->assertCreated()->assertJsonPath('success', true);
 
         $upload = ReadingImageUpload::firstOrFail();
-        $this->assertStringContainsString('/reading-uploads/'.$upload->token, $response->json('reference'));
+        $this->assertStringContainsString('/reading-uploads/', $response->json('reference'));
+        $this->assertStringContainsString($upload->token, $response->json('reference'));
         $this->assertSame('image/jpeg', $upload->mime);
-        Storage::disk('local')->assertExists($upload->path);
+        $this->assertSame('private', $upload->disk);
+        Storage::disk('private')->assertExists($upload->path);
+    }
+
+    public function test_the_image_is_filed_under_the_product_folder(): void
+    {
+        EmailReadingProduct::create([
+            'shopify_product_id' => 777,
+            'name' => 'Selfie Reading',
+            'slug' => 'selfie-reading',
+            'questions_schema' => [['key' => 'Q1', 'label' => 'Your selfie', 'type' => 'image', 'required' => true]],
+            'prompt_template' => 'x',
+            'email_subject' => 's',
+            'is_active' => true,
+        ]);
+
+        $this->postJson('/api/v1/reading-uploads', [
+            'image' => UploadedFile::fake()->image('selfie.jpg', 600, 600),
+            'product_id' => 777,
+        ])->assertCreated();
+
+        $this->assertStringStartsWith('reading-uploads/selfie-reading/', ReadingImageUpload::firstOrFail()->path);
+    }
+
+    public function test_a_replaced_unclaimed_image_can_be_discarded_but_a_claimed_one_cannot(): void
+    {
+        $first = $this->postJson('/api/v1/reading-uploads', ['image' => UploadedFile::fake()->image('a.jpg', 600, 600)])->json('reference');
+        $second = $this->postJson('/api/v1/reading-uploads', ['image' => UploadedFile::fake()->image('b.jpg', 600, 600)])->json('reference');
+        $old = ReadingImageUpload::where('token', basename($first))->firstOrFail();
+        $claimed = ReadingImageUpload::where('token', basename($second))->firstOrFail();
+        $claimed->forceFill(['claimed_at' => now()])->save();
+
+        $this->postJson('/api/v1/reading-uploads/discard', ['reference' => $first])->assertOk();
+        $this->postJson('/api/v1/reading-uploads/discard', ['reference' => $second])->assertOk();
+
+        $this->assertNull(ReadingImageUpload::find($old->id));
+        Storage::disk('private')->assertMissing($old->path);
+        Storage::disk('private')->assertExists($claimed->path);
     }
 
     public function test_it_accepts_png(): void
