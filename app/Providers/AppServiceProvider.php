@@ -445,6 +445,13 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('reading-checkout-questions', fn (Request $request) => [
             Limit::perMinute(60)->by('reading-questions-ip:'.$request->ip()),
         ]);
+
+        // Checkout image upload: public by the same constraint as above, so it
+        // is throttled per IP; the file is re-validated and re-encoded server-side.
+        RateLimiter::for('reading-image-upload', fn (Request $request) => [
+            Limit::perMinute(10)->by('reading-upload-ip:'.$request->ip()),
+            Limit::perHour(60)->by('reading-upload-ip-hour:'.$request->ip()),
+        ]);
     }
 
     /*

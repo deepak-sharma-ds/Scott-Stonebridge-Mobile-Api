@@ -29,7 +29,8 @@ class EmailReadingGenerationService
 {
     public function __construct(
         private readonly ComplianceGateService $complianceGate,
-        private readonly ReadingFreshnessService $freshness
+        private readonly ReadingFreshnessService $freshness,
+        private readonly ReadingImageUploadService $images
     ) {}
 
     /**
@@ -62,9 +63,11 @@ class EmailReadingGenerationService
         $contract = $this->resolveFormattingContract($product);
         $expectedClosing = $this->resolveExpectedClosingSection($contract);
 
+        $images = $this->images->imagesForPrompt($delivery);
+
         $start = microtime(true);
 
-        $attempt = $this->generateAndValidate($delivery, $systemPrompt, $prompt, $model, $maxTokens, $expectedClosing);
+        $attempt = $this->generateAndValidate($delivery, $systemPrompt, $prompt, $model, $maxTokens, $expectedClosing, 0.0, $images);
 
         if ($attempt['validation']->isInvalid()) {
             Log::channel('shopify_webhooks')->warning('Email reading generation validation failed; retrying once', [
@@ -77,7 +80,7 @@ class EmailReadingGenerationService
                 ? min(8000, max($maxTokens + 500, (int) round($maxTokens * 1.5)))
                 : $maxTokens;
 
-            $attempt = $this->generateAndValidate($delivery, $systemPrompt, $prompt, $model, $retryMaxTokens, $expectedClosing);
+            $attempt = $this->generateAndValidate($delivery, $systemPrompt, $prompt, $model, $retryMaxTokens, $expectedClosing, 0.0, $images);
         }
 
         if ($attempt['validation']->isInvalid()) {
@@ -107,7 +110,7 @@ class EmailReadingGenerationService
 
         if ($this->freshnessEnabled()) {
             [$attempt, $embedding] = $this->enforceFreshness(
-                $delivery, $attempt, $systemPrompt, $prompt, $model, $maxTokens, $expectedClosing
+                $delivery, $attempt, $systemPrompt, $prompt, $model, $maxTokens, $expectedClosing, $images
             );
         }
 
@@ -188,7 +191,8 @@ class EmailReadingGenerationService
         string $prompt,
         string $model,
         int $maxTokens,
-        ?string $expectedClosing
+        ?string $expectedClosing,
+        array $images = []
     ): array {
         $embedding = $this->freshness->embed($attempt['html']);
         $previous = $this->freshness->previousReadings($delivery);
@@ -216,7 +220,8 @@ class EmailReadingGenerationService
             $model,
             $maxTokens,
             $expectedClosing,
-            (float) config('email_reading.freshness.retry_presence_penalty', 0.5)
+            (float) config('email_reading.freshness.retry_presence_penalty', 0.5),
+            $images
         );
 
         if ($retry['validation']->isInvalid()) {
@@ -290,10 +295,11 @@ class EmailReadingGenerationService
         string $model,
         int $maxTokens,
         ?string $expectedClosing,
-        float $presencePenalty = 0.0
+        float $presencePenalty = 0.0,
+        array $images = []
     ): array {
         try {
-            $result = $this->complete($systemPrompt, $prompt, $model, $maxTokens, null, $presencePenalty);
+            $result = $this->complete($systemPrompt, $prompt, $model, $maxTokens, null, $presencePenalty, $images);
         } catch (Throwable $e) {
             Log::channel('shopify_webhooks')->error('Email reading OpenAI call failed', [
                 'delivery_id' => $delivery->id,
@@ -336,7 +342,15 @@ class EmailReadingGenerationService
 
         $prompt = $this->buildUserPrompt($product->prompt_template, $delivery);
 
-        $result = $this->complete($this->buildSystemPrompt($product), $prompt, $model, $maxTokens, $adminInstruction);
+        $result = $this->complete(
+            $this->buildSystemPrompt($product),
+            $prompt,
+            $model,
+            $maxTokens,
+            $adminInstruction,
+            0.0,
+            $this->images->imagesForPrompt($delivery)
+        );
         $html = MarkdownMailBody::toHtml($result['content']);
         $contract = $this->resolveFormattingContract($product);
         $expectedClosing = $this->resolveExpectedClosingSection($contract);
@@ -382,13 +396,14 @@ class EmailReadingGenerationService
      * Single OpenAI call shared by generate/preview/test. Returns the trimmed
      * content + usage; never touches the database.
      *
+     * @param  list<string>  $images  data URLs sent with the user message (vision)
      * @return array{content:string,prompt_tokens:int,completion_tokens:int,model:string,finish_reason:string}
      */
-    private function complete(string $system, string $user, string $model, int $maxTokens, ?string $adminInstruction = null, float $presencePenalty = 0.0): array
+    private function complete(string $system, string $user, string $model, int $maxTokens, ?string $adminInstruction = null, float $presencePenalty = 0.0, array $images = []): array
     {
         $messages = [
             ['role' => 'system', 'content' => $system],
-            ['role' => 'user', 'content' => $user],
+            ['role' => 'user', 'content' => $images === [] ? $user : $this->userContentWithImages($user, $images)],
         ];
 
         if (! empty(trim((string) $adminInstruction))) {
@@ -461,7 +476,42 @@ class EmailReadingGenerationService
             (array) $delivery->questions
         );
 
+        // An image answer is a link, never prompt text: the template sees a
+        // short marker and the image itself travels as an attachment.
+        foreach ($this->images->imageSlots($delivery) as $slot) {
+            foreach ($slot['keys'] as $key) {
+                $data[$key] = $slot['upload'] ? '[the customer\'s image is attached]' : '';
+            }
+        }
+
         return $this->renderTemplate($template, $data);
+    }
+
+    /**
+     * The user message as content parts: the prompt text plus each image.
+     *
+     * @param  list<string>  $images
+     * @return list<array<string,mixed>>
+     */
+    private function userContentWithImages(string $prompt, array $images): array
+    {
+        $parts = [[
+            'type' => 'text',
+            'text' => $prompt."\n\nThe customer's image is attached. Use it only to inform the reading, "
+                .'and never identify the person or comment on their appearance beyond what the reading needs.',
+        ]];
+
+        foreach ($images as $dataUrl) {
+            $parts[] = [
+                'type' => 'image_url',
+                'image_url' => [
+                    'url' => $dataUrl,
+                    'detail' => (string) config('email_reading.image_upload.openai_detail', 'auto'),
+                ],
+            ];
+        }
+
+        return $parts;
     }
 
     /**

@@ -18,6 +18,7 @@ use App\Http\Controllers\Admin\EmailReadingController;
 use App\Http\Controllers\Admin\EmailReadingProductController;
 use App\Http\Controllers\Admin\MarketingCampaignController;
 use App\Http\Controllers\Admin\PackageController;
+use App\Http\Controllers\Admin\ReadingImageController;
 use App\Http\Controllers\Admin\ReportingController;
 use App\Http\Controllers\Admin\RichTextUploadController;
 use App\Http\Controllers\Admin\UnlistedProductController;
@@ -131,6 +132,11 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
             Route::post('/{delivery}/retry-fulfillment', [EmailReadingController::class, 'retryFulfillment'])->name('retry_fulfillment');
             Route::delete('/{delivery}', [EmailReadingController::class, 'destroy'])->name('destroy');
         });
+
+        // Customer-uploaded reading images (private, admin-only viewer)
+        Route::get('reading-uploads/{token}', [ReadingImageController::class, 'show'])
+            ->where('token', '[A-Za-z0-9]{40}')
+            ->name('reading_uploads.show');
 
         // Rich-text editor image uploads (shared by campaign + reading product email templates)
         Route::post('rich-text-uploads', [RichTextUploadController::class, 'store'])->name('rich-text-uploads.store');

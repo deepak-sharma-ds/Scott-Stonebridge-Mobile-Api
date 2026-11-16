@@ -16,6 +16,7 @@ use App\Http\Controllers\Api\V1\ProductController;
 use App\Http\Controllers\Api\V1\ProfileController;
 use App\Http\Controllers\Api\V1\Push\DeviceTokenController;
 use App\Http\Controllers\Api\V1\Push\NotificationController;
+use App\Http\Controllers\Api\V1\ReadingImageUploadController;
 use App\Http\Controllers\Api\V1\ReadingProductQuestionsController;
 use App\Http\Controllers\Api\V1\Sales\ConversionEventController as AIConversionEventController;
 use App\Http\Controllers\Api\V1\Sales\KnowledgeController as AIKnowledgeController;
@@ -197,6 +198,15 @@ Route::prefix('v1')->middleware([
         ->middleware('throttle:reading-checkout-questions')
         ->where('shopify_product_id', '[0-9]+')
         ->name('api.v1.reading-products.questions');
+
+    /**
+     * POST /api/v1/reading-uploads - the single image for an "image" question
+     * slot (checkout extension). Public and throttled; the file is validated
+     * and re-encoded server-side.
+     */
+    Route::post('/reading-uploads', [ReadingImageUploadController::class, 'store'])
+        ->middleware('throttle:reading-image-upload')
+        ->name('api.v1.reading-uploads.store');
 
     /**
      * Shop & Currency Routes (Public - Guest Friendly)

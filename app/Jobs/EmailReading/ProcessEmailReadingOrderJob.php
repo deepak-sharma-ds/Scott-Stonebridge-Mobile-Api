@@ -4,6 +4,7 @@ namespace App\Jobs\EmailReading;
 
 use App\Models\EmailReadingDelivery;
 use App\Services\EmailReading\EmailReadingGenerationService;
+use App\Services\EmailReading\ReadingImageUploadService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Illuminate\Support\Facades\Log;
@@ -127,7 +128,9 @@ class ProcessEmailReadingOrderJob implements ShouldQueue
                 }
                 $value = trim((string) ($questions[$candidate] ?? ''));
                 if ($value !== '') {
-                    $resolved = true;
+                    // An image answer only counts when its upload still exists.
+                    $resolved = ($slot['type'] ?? 'text') !== 'image'
+                        || app(ReadingImageUploadService::class)->resolve($value) !== null;
                     break;
                 }
             }

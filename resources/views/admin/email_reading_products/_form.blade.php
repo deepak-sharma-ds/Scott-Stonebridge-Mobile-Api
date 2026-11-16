@@ -118,6 +118,7 @@
                 <select class="form-control" :name="'questions_schema[' + i + '][type]'" x-model="slot.type">
                     <option value="text">Text</option>
                     <option value="textarea">Long Text</option>
+                    <option value="image">Image Upload</option>
                 </select>
                 <label style="display:flex;align-items:center;gap:0.375rem;font-size:0.8125rem;white-space:nowrap;">
                     <input type="checkbox" value="1" :name="'questions_schema[' + i + '][required]'"
@@ -209,7 +210,7 @@
                 initialSchema.map(s => ({
                     key: s.key || '',
                     label: s.label || '',
-                    type: (s.type === 'textarea') ? 'textarea' : 'text',
+                    type: ['textarea', 'image'].includes(s.type) ? s.type : 'text',
                     required: !!s.required
                 })) :
                 [{
