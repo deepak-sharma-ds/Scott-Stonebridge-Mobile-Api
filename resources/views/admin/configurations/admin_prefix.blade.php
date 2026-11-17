@@ -8,8 +8,22 @@
     <div class="row">
         <div class="col-xl-12">
             <div class="card">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
                     <h4 class="card-title">{{ Str::ucfirst($prefix) }} Configuration</h4>
+                    @if(strtolower((string) $prefix) === 'googlecalendar')
+                        @php
+                            $slotsCalId = \App\Models\Configuration::where('name', 'GoogleCalendar.slots_calendar_id')->value('value');
+                            $hasGoogleToken = \App\Models\GoogleToken::query()->exists();
+                        @endphp
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge {{ $hasGoogleToken && $slotsCalId ? 'badge-success' : 'badge-warning' }}" style="padding:0.4rem 0.75rem;border-radius:20px;">
+                                {{ $hasGoogleToken && $slotsCalId ? 'Sub-Calendar Connected' : 'Sub-Calendar Not Setup' }}
+                            </span>
+                            <button type="button" id="btnSyncGoogleSubCal" class="btn btn-sm btn-primary" onclick="runGoogleSubCalendarSetup()">
+                                Setup / Sync Sub-Calendar
+                            </button>
+                        </div>
+                    @endif
                 </div>
                 <div class="card-body">
                     <div class="basic-form">
@@ -220,5 +234,42 @@
     </div>
 
 </div>
+
+@if(strtolower((string) $prefix) === 'googlecalendar')
+<script>
+async function runGoogleSubCalendarSetup() {
+    var btn = document.getElementById('btnSyncGoogleSubCal');
+    var origText = btn ? btn.innerHTML : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = 'Provisioning...';
+    }
+    try {
+        var res = await fetch('{{ route('admin.google.setup') }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        });
+        var data = await res.json();
+        if (data.success) {
+            alert(data.message || 'Sub-calendar provisioned successfully!');
+            window.location.reload();
+        } else {
+            alert('Setup failed: ' + (data.error || 'Unknown error'));
+        }
+    } catch (e) {
+        alert('Network error while provisioning sub-calendar.');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = origText;
+        }
+    }
+}
+</script>
+@endif
 
 @endsection

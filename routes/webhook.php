@@ -4,7 +4,9 @@ use App\Http\Controllers\ShopifyController;
 use App\Http\Controllers\Webhook\Campaign\CampaignOrderCancelledWebhookController;
 use App\Http\Controllers\Webhook\Campaign\CampaignOrderUpdatedWebhookController;
 use App\Http\Controllers\Webhook\Campaign\CampaignPaidWebhookController;
+use App\Http\Controllers\Webhook\GoogleCalendarWebhookController;
 use App\Http\Controllers\Webhook\KlaviyoFlowWebhookController;
+use App\Http\Controllers\Webhook\ShopifyBookingWebhookController;
 use App\Http\Controllers\Webhook\ShopifyReadingOrderCancelledWebhookController;
 use App\Http\Controllers\Webhook\ShopifyReadingOrderUpdatedWebhookController;
 use App\Http\Controllers\Webhook\ShopifyReadingWebhookController;
@@ -15,7 +17,17 @@ use Illuminate\Support\Facades\Route;
  * SHOPIFY Webhooks
  */
 Route::prefix('webhook')->group(function () {
-    Route::post('/shopify', [ShopifyController::class, 'handleAppointmentBookingWebhook']);
+    Route::post('/shopify', [ShopifyBookingWebhookController::class, 'handlePaid'])
+        ->middleware('shopify.hmac:booking')
+        ->name('webhook.shopify.booking.legacy');
+
+    Route::post('/order-paid-booking', [ShopifyBookingWebhookController::class, 'handlePaid'])
+        ->middleware('shopify.hmac:booking')
+        ->name('webhook.shopify.booking.paid');
+
+    Route::post('/order-cancelled-booking', [ShopifyBookingWebhookController::class, 'handleCancelled'])
+        ->middleware('shopify.hmac:booking')
+        ->name('webhook.shopify.booking.cancelled');
 
     Route::post('/order-paid', [ShopifyController::class, 'orderPaid']);
 
@@ -51,4 +63,10 @@ Route::prefix('webhook')->group(function () {
         ->name('webhook.klaviyo.flow');
 
     Route::post('/shopify/consent-update', [ShopifyWebhookController::class, 'consentUpdate']);
+
+    /**
+     * GOOGLE CALENDAR Webhooks (events.watch push notifications)
+     */
+    Route::post('/google-calendar', [GoogleCalendarWebhookController::class, 'handle'])
+        ->name('webhook.google.calendar');
 });

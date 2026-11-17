@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\Booking\SyncSlotsToGoogleSubCalendarJob;
 use App\Services\AvailabilityGenerator;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -85,6 +86,11 @@ class AvailabilityGenerationController extends Controller
         }
 
         $stats = $this->generator->generateForRange($start, $end, $userId);
+
+        SyncSlotsToGoogleSubCalendarJob::dispatch(
+            startDate: $start->toDateString(),
+            endDate: $end->toDateString(),
+        );
 
         return redirect()->route('admin.availability_templates.index')
             ->with('success', "Slots generated for {$start->toDateString()} → {$end->toDateString()}. Created: {$stats['created']} | Skipped holidays: {$stats['skipped_holiday']} | Skipped booked: {$stats['skipped_booked']}");
