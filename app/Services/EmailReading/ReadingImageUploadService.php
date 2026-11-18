@@ -229,17 +229,48 @@ class ReadingImageUploadService
 
         $image = $this->downscale($image);
 
-        ob_start();
-        if ($isJpeg) {
-            imagejpeg($image, null, 88);
-        } else {
-            imagesavealpha($image, true);
-            imagepng($image);
-        }
-        $binary = (string) ob_get_clean();
+        $binary = $this->encodeToString($image, $isJpeg);
         imagedestroy($image);
 
+        if (! $this->isCompleteImage($binary, $isJpeg)) {
+            Log::error('Reading image re-encode produced an invalid file', ['size' => strlen($binary)]);
+
+            throw new InvalidArgumentException('The image could not be processed. Please try another image.');
+        }
+
         return $isJpeg ? [$binary, 'image/jpeg', 'jpg'] : [$binary, 'image/png', 'png'];
+    }
+
+    /**
+     * Encodes to a temp file instead of an output buffer, so stray output from
+     * anywhere else in the request can never end up inside the image bytes.
+     */
+    private function encodeToString(\GdImage $image, bool $isJpeg): string
+    {
+        $temp = tempnam(sys_get_temp_dir(), 'rimg');
+
+        try {
+            if ($isJpeg) {
+                imagejpeg($image, $temp, 88);
+            } else {
+                imagesavealpha($image, true);
+                imagepng($image, $temp);
+            }
+
+            return (string) file_get_contents($temp);
+        } finally {
+            @unlink($temp);
+        }
+    }
+
+    /** Checks the markers: JPEG FFD8...FFD9, PNG signature...IEND. */
+    private function isCompleteImage(string $binary, bool $isJpeg): bool
+    {
+        if ($isJpeg) {
+            return str_starts_with($binary, "\xFF\xD8") && str_ends_with($binary, "\xFF\xD9");
+        }
+
+        return str_starts_with($binary, "\x89PNG\r\n\x1a\n") && str_contains(substr($binary, -12), 'IEND');
     }
 
     private function applyOrientation(\GdImage $image, string $path): \GdImage
