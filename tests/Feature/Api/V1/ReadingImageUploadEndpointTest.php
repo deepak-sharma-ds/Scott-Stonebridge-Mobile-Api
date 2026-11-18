@@ -38,6 +38,20 @@ class ReadingImageUploadEndpointTest extends TestCase
         Storage::disk('private')->assertExists($upload->path);
     }
 
+    public function test_the_stored_file_is_a_complete_image_even_with_stray_output(): void
+    {
+        echo 'stray-output';
+
+        $this->postJson('/api/v1/reading-uploads', [
+            'image' => UploadedFile::fake()->image('selfie.jpg', 600, 600),
+        ])->assertCreated();
+
+        $binary = Storage::disk('private')->get(ReadingImageUpload::firstOrFail()->path);
+
+        $this->assertStringStartsWith("\xFF\xD8", $binary);
+        $this->assertStringEndsWith("\xFF\xD9", $binary);
+    }
+
     public function test_the_image_is_filed_under_the_product_folder(): void
     {
         EmailReadingProduct::create([
