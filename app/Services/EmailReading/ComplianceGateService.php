@@ -73,7 +73,9 @@ class ComplianceGateService
             }
 
             $value = trim((string) $value);
-            if ($value !== '') {
+
+            // Image answers are links to uploaded files, not text to screen.
+            if ($value !== '' && ! app(ReadingImageUploadService::class)->looksLikeReference($value)) {
                 $values[$value] = $value;
             }
         }

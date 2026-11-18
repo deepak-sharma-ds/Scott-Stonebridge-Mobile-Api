@@ -34,7 +34,14 @@
                 break;
             }
         }
-        $resolved[] = ['label' => $slot['label'] ?? ($slot['key'] ?? '—'), 'value' => $value];
+        $upload = (($slot['type'] ?? 'text') === 'image' && $value !== '')
+            ? app(\App\Services\EmailReading\ReadingImageUploadService::class)->resolve($value)
+            : null;
+        $resolved[] = [
+            'label' => $slot['label'] ?? ($slot['key'] ?? '—'),
+            'value' => $value,
+            'image' => $upload ? route('admin.reading_uploads.show', ['token' => $upload->token]) : null,
+        ];
     }
 @endphp
 
@@ -64,7 +71,15 @@
                             @foreach($resolved as $row)
                                 <tr>
                                     <td style="width:40%;font-weight:600;color:var(--text-primary);vertical-align:top;">{{ $row['label'] }}</td>
-                                    <td style="color:var(--text-secondary);white-space:pre-wrap;">{{ $row['value'] !== '' ? $row['value'] : '—' }}</td>
+                                    <td style="color:var(--text-secondary);white-space:pre-wrap;">
+                                        @if($row['image'])
+                                            <a href="{{ $row['image'] }}" target="_blank" rel="noopener">
+                                                <img src="{{ $row['image'] }}" alt="Customer image" style="max-width:240px;max-height:240px;border-radius:8px;border:1px solid var(--card-border);">
+                                            </a>
+                                        @else
+                                            {{ $row['value'] !== '' ? $row['value'] : '—' }}
+                                        @endif
+                                    </td>
                                 </tr>
                             @endforeach
                         </tbody>

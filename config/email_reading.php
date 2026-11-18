@@ -135,6 +135,25 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Image Upload questions
+    |--------------------------------------------------------------------------
+    | Customer images for question slots of type "image". The private copy on
+    | `disk` is the source of truth (public token link, admin viewer, OpenAI).
+    | Unclaimed uploads (never reached a delivery) are purged after
+    | `unclaimed_ttl_hours`; claimed ones after `retention_days` (null = keep).
+    */
+    'image_upload' => [
+        'disk' => env('READINGS_IMAGE_DISK', 'private'),
+        'max_kb' => (int) env('READINGS_IMAGE_MAX_KB', 8192),
+        'min_dimension' => (int) env('READINGS_IMAGE_MIN_PX', 200),
+        'max_dimension' => (int) env('READINGS_IMAGE_MAX_PX', 2048),
+        'openai_detail' => env('READINGS_IMAGE_OPENAI_DETAIL', 'auto'),
+        'unclaimed_ttl_hours' => (int) env('READINGS_IMAGE_UNCLAIMED_TTL_HOURS', 720),
+        'retention_days' => env('READINGS_IMAGE_RETENTION_DAYS', 180),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Mail
     |--------------------------------------------------------------------------
     | admin_notify_email — recipient for delivery-failure notifications.

@@ -48,7 +48,7 @@ class EmailReadingProductRequest extends FormRequest
             'questions_schema' => ['nullable', 'array'],
             'questions_schema.*.key' => ['required', 'string', 'max:255'],
             'questions_schema.*.label' => ['required', 'string', 'max:1000'],
-            'questions_schema.*.type' => ['nullable', 'string', Rule::in(['text', 'textarea'])],
+            'questions_schema.*.type' => ['nullable', 'string', Rule::in(['text', 'textarea', 'image'])],
             'questions_schema.*.required' => ['nullable', 'boolean'],
         ];
     }
@@ -65,7 +65,7 @@ class EmailReadingProductRequest extends FormRequest
             ->map(fn ($row) => [
                 'key' => trim((string) $row['key']),
                 'label' => trim((string) ($row['label'] ?? '')),
-                'type' => in_array($row['type'] ?? null, ['text', 'textarea'], true) ? $row['type'] : 'text',
+                'type' => in_array($row['type'] ?? null, ['text', 'textarea', 'image'], true) ? $row['type'] : 'text',
                 'required' => filter_var($row['required'] ?? false, FILTER_VALIDATE_BOOLEAN),
             ])
             ->values()

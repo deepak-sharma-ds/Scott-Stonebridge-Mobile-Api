@@ -127,3 +127,14 @@ Schedule::command('calendar:sync-delta')
     ->everyThirtyMinutes()
     ->withoutOverlapping()
     ->name('calendar-sync-delta');
+
+/*
+|--------------------------------------------------------------------------
+| Reading image uploads
+|--------------------------------------------------------------------------
+| Purges expired customer images (unclaimed uploads and past-retention ones).
+*/
+Schedule::command('reading-images:purge')
+    ->daily()
+    ->withoutOverlapping()
+    ->name('reading-images-purge');
