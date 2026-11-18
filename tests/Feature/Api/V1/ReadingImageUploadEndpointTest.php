@@ -52,6 +52,27 @@ class ReadingImageUploadEndpointTest extends TestCase
         $this->assertStringEndsWith("\xFF\xD9", $binary);
     }
 
+    public function test_the_public_link_serves_the_exact_stored_bytes_despite_stray_output(): void
+    {
+        $this->postJson('/api/v1/reading-uploads', [
+            'image' => UploadedFile::fake()->image('selfie.jpg', 600, 600),
+        ])->assertCreated();
+
+        $upload = ReadingImageUpload::firstOrFail();
+        $stored = Storage::disk('private')->get($upload->path);
+
+        echo "\xA3\xFF\xFF\x08";
+
+        $response = $this->get('/reading-uploads/'.$upload->token);
+
+        $response->assertOk();
+        $this->assertSame('image/jpeg', $response->headers->get('Content-Type'));
+        $this->assertSame('identity', $response->headers->get('Content-Encoding'));
+        $this->assertStringContainsString('no-transform', $response->headers->get('Cache-Control'));
+        $this->assertSame((string) strlen($stored), $response->headers->get('Content-Length'));
+        $this->assertSame($stored, $response->getContent());
+    }
+
     public function test_the_image_is_filed_under_the_product_folder(): void
     {
         EmailReadingProduct::create([

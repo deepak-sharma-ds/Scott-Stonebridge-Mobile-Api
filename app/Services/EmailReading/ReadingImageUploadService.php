@@ -36,6 +36,13 @@ class ReadingImageUploadService
 
         Storage::disk($disk)->put($path, $binary);
 
+        if (Storage::disk($disk)->get($path) !== $binary) {
+            Storage::disk($disk)->delete($path);
+            Log::error('Reading image was corrupted while being written to disk', ['disk' => $disk, 'path' => $path]);
+
+            throw new InvalidArgumentException('The image could not be saved. Please try again.');
+        }
+
         $upload = ReadingImageUpload::create([
             'token' => $token,
             'disk' => $disk,
