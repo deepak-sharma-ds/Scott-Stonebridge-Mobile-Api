@@ -29,6 +29,15 @@ return [
         .'Do not include a greeting/salutation (e.g. "Dear ...") or a sign-off (e.g. "Warm blessings, ...") — '
         .'output only the body of the reading itself, since the surrounding email template already supplies those.'
     ),
+    /*
+    | Appended to the system prompt only when the customer's image is sent
+    | with the request (live readings and the admin prompt test).
+    */
+    'image_system_prompt' => env(
+        'READINGS_IMAGE_SYSTEM_PROMPT',
+        "The customer's image is attached. Use it only to inform the reading, "
+        .'and never identify the person or comment on their appearance beyond what the reading needs.'
+    ),
 
     /*
     |--------------------------------------------------------------------------

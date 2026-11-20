@@ -54,6 +54,19 @@ class ReadingImageUploadService
         return $upload;
     }
 
+    /**
+     * Validate and re-encode an image into a data URL without storing it.
+     * Used by the admin prompt test so nothing is persisted.
+     *
+     * @throws InvalidArgumentException when the file is not a usable JPEG/PNG
+     */
+    public function dataUrlForFile(UploadedFile $file): string
+    {
+        [$binary, $mime] = $this->reencode($file);
+
+        return 'data:'.$mime.';base64,'.base64_encode($binary);
+    }
+
     /** Folder named after the product (from our own record, never client text); "general" when unknown. */
     private function productFolder(?int $shopifyProductId): string
     {

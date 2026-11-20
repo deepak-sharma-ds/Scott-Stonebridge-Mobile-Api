@@ -372,9 +372,10 @@ class EmailReadingGenerationService
      * delivery row and WITHOUT persisting. Used by the product prompt-test tool.
      *
      * @param  array<string,mixed>  $answers
+     * @param  array<string,string>  $images  data URLs keyed by question key
      * @return array{content:string,prompt_tokens:int,completion_tokens:int,model:string}
      */
-    public function testForProduct(EmailReadingProduct $product, array $answers, ?string $customerName = null): array
+    public function testForProduct(EmailReadingProduct $product, array $answers, ?string $customerName = null, array $images = []): array
     {
         $model = $product->model ?: (string) config('email_reading.openai_model');
         $maxTokens = (int) ($product->max_tokens ?: config('email_reading.max_tokens', 1500));
@@ -384,9 +385,22 @@ class EmailReadingGenerationService
             $answers
         );
 
+        // Same as real deliveries: the template sees a marker, the image travels as an attachment.
+        foreach (array_keys($images) as $key) {
+            $data[$key] = '[the customer\'s image is attached]';
+        }
+
         $prompt = $this->renderTemplate($product->prompt_template, $data);
 
-        $result = $this->complete($this->buildSystemPrompt($product), $prompt, $model, $maxTokens);
+        $result = $this->complete(
+            $this->buildSystemPrompt($product),
+            $prompt,
+            $model,
+            $maxTokens,
+            null,
+            0.0,
+            array_values($images)
+        );
         $result['content'] = MarkdownMailBody::toHtml($result['content']);
 
         return $result;
@@ -401,6 +415,10 @@ class EmailReadingGenerationService
      */
     private function complete(string $system, string $user, string $model, int $maxTokens, ?string $adminInstruction = null, float $presencePenalty = 0.0, array $images = []): array
     {
+        if ($images !== [] && filled(config('email_reading.image_system_prompt'))) {
+            $system .= "\n\n".trim((string) config('email_reading.image_system_prompt'));
+        }
+
         $messages = [
             ['role' => 'system', 'content' => $system],
             ['role' => 'user', 'content' => $images === [] ? $user : $this->userContentWithImages($user, $images)],
@@ -497,8 +515,7 @@ class EmailReadingGenerationService
     {
         $parts = [[
             'type' => 'text',
-            'text' => $prompt."\n\nThe customer's image is attached. Use it only to inform the reading, "
-                .'and never identify the person or comment on their appearance beyond what the reading needs.',
+            'text' => $prompt,
         ]];
 
         foreach ($images as $dataUrl) {

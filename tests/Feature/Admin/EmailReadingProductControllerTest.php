@@ -141,6 +141,49 @@ class EmailReadingProductControllerTest extends TestCase
         });
     }
 
+    public function test_prompt_test_sends_uploaded_image_to_openai_without_storing_it(): void
+    {
+        Storage::fake('private');
+        OpenAI::fake([
+            CreateResponse::fake([
+                'choices' => [
+                    ['message' => ['role' => 'assistant', 'content' => '## Seen']],
+                ],
+            ]),
+        ]);
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('admin.email-reading-products.test'), [
+                'prompt_template' => 'Photo: {{ $photo }}.',
+                'images' => ['photo' => UploadedFile::fake()->image('hand.jpg', 400, 400)],
+            ], ['Accept' => 'application/json'])
+            ->assertOk()
+            ->assertJsonPath('success', true);
+
+        OpenAI::assertSent(Chat::class, function (string $method, array $parameters): bool {
+            $user = collect($parameters['messages'])->firstWhere('role', 'user')['content'] ?? [];
+
+            $system = collect($parameters['messages'])->firstWhere('role', 'system')['content'] ?? '';
+
+            return is_array($user)
+                && str_contains($system, config('email_reading.image_system_prompt'))
+                && str_contains($user[0]['text'], "[the customer's image is attached]")
+                && str_starts_with($user[1]['image_url']['url'], 'data:image/jpeg;base64,');
+        });
+
+        $this->assertSame([], Storage::disk('private')->allFiles());
+    }
+
+    public function test_prompt_test_rejects_a_non_image_upload(): void
+    {
+        $this->actingAs(User::factory()->create())
+            ->post(route('admin.email-reading-products.test'), [
+                'prompt_template' => 'Photo: {{ $photo }}.',
+                'images' => ['photo' => UploadedFile::fake()->create('notes.pdf', 10, 'application/pdf')],
+            ], ['Accept' => 'application/json'])
+            ->assertStatus(422);
+    }
+
     public function test_preview_requires_authentication(): void
     {
         $product = EmailReadingProduct::create($this->payload());

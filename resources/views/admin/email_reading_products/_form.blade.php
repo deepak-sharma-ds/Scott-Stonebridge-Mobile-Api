@@ -169,7 +169,13 @@
             <template x-for="(slot, i) in schema" :key="'t' + i">
                 <div x-show="slot.key">
                     <label class="form-label" style="font-size:0.8125rem;" x-text="slot.label || slot.key"></label>
-                    <input type="text" class="form-control" x-model="testAnswers[slot.key]">
+                    <template x-if="slot.type === 'image'">
+                        <input type="file" class="form-control" accept="image/png,image/jpeg"
+                            @change="testImages[slot.key] = $event.target.files[0] || null">
+                    </template>
+                    <template x-if="slot.type !== 'image'">
+                        <input type="text" class="form-control" x-model="testAnswers[slot.key]">
+                    </template>
                 </div>
             </template>
         </div>
@@ -225,6 +231,7 @@
             maxTokens: {{ (int) old('max_tokens', $p->max_tokens ?? 1500) }},
             testName: '',
             testAnswers: {},
+            testImages: {},
             testOutput: '',
             testInfo: '',
             testLoading: false,
@@ -261,21 +268,30 @@
                 this.testLoading = true;
                 this.testInfo = '';
                 try {
+                    const body = new FormData();
+                    body.append('prompt_template', this.promptTemplate);
+                    if (this.formattingContract) body.append('formatting_contract', this.formattingContract);
+                    if (this.model) body.append('model', this.model);
+                    if (this.maxTokens) body.append('max_tokens', this.maxTokens);
+                    if (this.testName) body.append('customer_name', this.testName);
+
+                    // Only send answers/images for slots that still exist, split by type.
+                    this.schema.filter(s => s.key).forEach(s => {
+                        if (s.type === 'image') {
+                            const file = this.testImages[s.key];
+                            if (file) body.append('images[' + s.key + ']', file);
+                        } else if (this.testAnswers[s.key]) {
+                            body.append('answers[' + s.key + ']', this.testAnswers[s.key]);
+                        }
+                    });
+
                     const res = await fetch(this.testUrl, {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json',
                             'Accept': 'application/json',
                             'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
                         },
-                        body: JSON.stringify({
-                            prompt_template: this.promptTemplate,
-                            formatting_contract: this.formattingContract || null,
-                            model: this.model || null,
-                            max_tokens: this.maxTokens || null,
-                            customer_name: this.testName || null,
-                            answers: this.testAnswers,
-                        }),
+                        body: body,
                     });
                     const data = await res.json();
                     if (!res.ok || !data.success) {
