@@ -10,11 +10,13 @@ use App\Models\EmailReadingDelivery;
 use App\Models\EmailReadingProduct;
 use App\Services\EmailReading\EmailReadingGenerationService;
 use App\Services\EmailReading\ReadingCatalogSyncService;
+use App\Services\EmailReading\ReadingImageUploadService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Mail;
+use InvalidArgumentException;
 use Throwable;
 
 class EmailReadingProductController extends Controller
@@ -23,7 +25,8 @@ class EmailReadingProductController extends Controller
 
     public function __construct(
         private readonly EmailReadingGenerationService $generation,
-        private readonly ReadingCatalogSyncService $catalogSync
+        private readonly ReadingCatalogSyncService $catalogSync,
+        private readonly ReadingImageUploadService $imageUploads
     ) {}
 
     public function index()
@@ -193,7 +196,19 @@ class EmailReadingProductController extends Controller
             'customer_name' => ['nullable', 'string', 'max:255'],
             'answers' => ['nullable', 'array'],
             'answers.*' => ['nullable', 'string'],
+            'images' => ['nullable', 'array'],
+            'images.*' => ['file', 'mimes:jpg,jpeg,png', 'max:10240'],
         ]);
+
+        // Re-encode in memory only (nothing is stored) so the test mirrors a real upload.
+        $images = [];
+        try {
+            foreach ((array) $request->file('images', []) as $key => $file) {
+                $images[(string) $key] = $this->imageUploads->dataUrlForFile($file);
+            }
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 422);
+        }
 
         // Build a transient (unsaved) product so testForProduct can reuse the
         // exact render + system-prompt path without persisting anything.
@@ -208,7 +223,8 @@ class EmailReadingProductController extends Controller
             $result = $this->generation->testForProduct(
                 $product,
                 $validated['answers'] ?? [],
-                $validated['customer_name'] ?? null
+                $validated['customer_name'] ?? null,
+                $images
             );
 
             return response()->json([
