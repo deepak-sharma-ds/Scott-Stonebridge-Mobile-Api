@@ -60,6 +60,7 @@ class ShopifyInstallTest extends TestCase
         $store = Store::where('domain', self::SHOP)->firstOrFail();
         $this->assertSame('shpat_new', $store->app_admin_access_token);
         $this->assertSame('client-id', $store->app_client_id);
+        $this->assertSame(self::SECRET, $store->webhook_secret);
         Http::assertSent(fn ($r) => $r['grant_type'] === 'urn:ietf:params:oauth:grant-type:token-exchange'
             && $r['requested_token_type'] === 'urn:shopify:params:oauth:token-type:offline-access-token');
     }

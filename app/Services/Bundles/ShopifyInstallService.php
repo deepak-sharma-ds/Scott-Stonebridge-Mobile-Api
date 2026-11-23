@@ -191,6 +191,7 @@ class ShopifyInstallService
         $store->name = $store->name ?: $shop;
         $store->app_client_id = $store->app_client_id ?: $this->credentials->clientId();
         $store->app_secret_key = $store->app_secret_key ?: $this->credentials->clientSecret();
+        $store->webhook_secret = $store->webhook_secret ?: $this->credentials->clientSecret();
         $store->app_admin_access_token = $token;
         $store->status = true;
         $store->save();
