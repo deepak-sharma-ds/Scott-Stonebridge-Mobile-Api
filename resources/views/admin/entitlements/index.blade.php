@@ -1,5 +1,7 @@
 @extends('admin.layouts.app')
 
+@section('page-title', 'Subscribed Customers')
+
 @section('content')
     <div class="container-fluid">
         <style>
@@ -126,15 +128,25 @@
             }
         </style>
 
-        <div class="page-header">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-                <div>
-                    <h1 style="font-size: 2rem; font-weight: 900; color: #ffffff; margin: 0;">Customer Entitlements</h1>
-                    <p style="color: rgba(255, 255, 255, 0.9); font-size: 1rem; margin-top: 0.5rem;">Manage purchased audio
-                        access records</p>
-                </div>
+        @include('admin.components.page-header', [
+            'title' => 'Subscribed Customers',
+            'subtitle' => 'Manage purchased audio access records',
+            'action' => '',
+        ])
+
+        {{-- Alert Messages --}}
+        @if ($errors->any())
+            <div class="alert alert-danger alert-dismissible fade show card" role="alert"
+                style="border-left: 4px solid #ef4444;">
+                <strong>Error:</strong>
+                <ul style="margin: 0.5rem 0 0; padding-left: 1.25rem;">
+                    @foreach ($errors->all() as $error)
+                        <li>{{ $error }}</li>
+                    @endforeach
+                </ul>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
             </div>
-        </div>
+        @endif
 
         <form method="GET" action="{{ route('admin.customer.entitlements.index') }}" class="card p-4 mb-4"
             style="position: relative; overflow: visible;">
@@ -254,7 +266,7 @@
                                         <path d="M6 12h12"></path>
                                         <path d="M8 17h8"></path>
                                     </svg>
-                                    <p style="margin: 0;">No customer entitlements found</p>
+                                    <p style="margin: 0;">No audio subscribed customers found</p>
                                 </td>
                             </tr>
                         @endforelse
@@ -278,7 +290,8 @@
             @endphp
 
             @if (count($emails) > 1)
-                <div class="modal fade entitlement-emails-modal" id="{{ $modalId }}" tabindex="-1" aria-hidden="true">
+                <div class="modal fade entitlement-emails-modal" id="{{ $modalId }}" tabindex="-1"
+                    aria-hidden="true">
                     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
                         <div class="modal-content">
                             <div class="modal-header">

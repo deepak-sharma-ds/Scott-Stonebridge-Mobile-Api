@@ -1,12 +1,12 @@
 @extends('admin.layouts.app')
 
-@section('page-title', 'Marketing Campaigns')
+@section('page-title', 'VIP Campaigns')
 
 @section('content')
 <div class="container-fluid">
 
     @include('admin.components.page-header', [
-        'title'    => 'Marketing Campaigns',
+        'title'    => 'VIP Campaigns',
         'subtitle' => 'Campaign Email Automation — attribute purchases from unlisted-product campaign links',
         'action'   => '<a href="' . route('admin.marketing-campaigns.create') . '" class="btn btn-primary">+ New Campaign</a>',
     ])
@@ -54,7 +54,7 @@
                     @empty
                         <tr>
                             <td colspan="6">
-                                @include('admin.components.empty-state', ['message' => 'No marketing campaigns yet.'])
+                                @include('admin.components.empty-state', ['message' => 'No VIP campaigns yet.'])
                             </td>
                         </tr>
                     @endforelse

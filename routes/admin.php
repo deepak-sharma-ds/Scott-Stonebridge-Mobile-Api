@@ -157,7 +157,7 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
         Route::post('unlisted-products/sync', [UnlistedProductController::class, 'sync'])->name('unlisted-products.sync');
         Route::resource('unlisted-products', UnlistedProductController::class)->only(['index', 'edit', 'update']);
 
-        // Marketing Campaigns (Campaign Email Automation admin registry)
+        // VIP Campaigns (Campaign Email Automation admin registry)
         Route::get('marketing-campaigns/{marketingCampaign}/products/available', [CampaignProductController::class, 'available'])->name('marketing-campaigns.products.available');
         Route::post('marketing-campaigns/{marketingCampaign}/products', [CampaignProductController::class, 'store'])->name('marketing-campaigns.products.store');
         Route::delete('marketing-campaigns/{marketingCampaign}/products/{campaignProduct}', [CampaignProductController::class, 'destroy'])->name('marketing-campaigns.products.destroy');
@@ -191,7 +191,7 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
         });
     });
 
-    // Booking Inquiries
+    // Scheduled Meetings
     Route::get('booking-inquiries', [BookingController::class, 'index'])->name('admin.scheduled-meetings');
     Route::get('booking/{id}/view', [BookingController::class, 'view'])->name('admin.booking.view');
     Route::post('booking/store', [BookingController::class, 'store'])->name('admin.booking.store');
@@ -210,7 +210,7 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
     // 	->name('audio.stream');
     // ->middleware('auth'); // or your custom auth for Shopify tag
 
-    // Manage customer entitlements of audio purchases
+    // Manage Subscribed Customers of audio purchases
     Route::get('customer-entitlements', [CustomerEntitlementController::class, 'index'])
         ->name('admin.customer.entitlements.index');
     Route::get('customer-entitlements/{customerEntitlement}/edit', [CustomerEntitlementController::class, 'edit'])

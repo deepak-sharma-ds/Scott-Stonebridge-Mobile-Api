@@ -1,12 +1,14 @@
 @extends('admin.layouts.app')
 
+@section('page-title', 'Scheduled Meetings')
+
 @section('content')
     <div class="container-fluid">
 
         {{-- Page Header --}}
         @include('admin.components.page-header', [
-            'title' => 'Booking Inquiries',
-            'subtitle' => 'Manage customer booking requests and schedules',
+            'title' => 'Scheduled Meetings',
+            'subtitle' => 'Manage customer Scheduled Meetings requests and schedules',
             'action' => '<div style="display: flex; justify-content: flex-end; margin-bottom: 1rem;">
                                     <button type="button" class="btn btn-primary" id="btnAddMeeting">
                                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -65,7 +67,7 @@
             </div>
         </form>
 
-        {{-- Booking Inquiries Table --}}
+        {{-- Scheduled Meetings Table --}}
         <div class="card p-4">
             <div class="table-responsive">
                 <table class="table">
@@ -203,7 +205,7 @@
                             <tr>
                                 <td colspan="6">
                                     @include('admin.components.empty-state', [
-                                        'message' => 'No booking inquiries found',
+                                        'message' => 'No scheduled meetings found',
                                         'icon' => '<svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin: 0 auto 1rem; opacity: 0.5;">
                                                                                                                         <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
                                                                                                                         <line x1="16" y1="2" x2="16" y2="6"></line>

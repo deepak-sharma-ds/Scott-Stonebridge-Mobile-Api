@@ -4,7 +4,7 @@
     <div class="container">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
-                <h2 class="mb-1">Edit Customer Entitlement</h2>
+                <h2 class="mb-1">Edit Audio Subscribed Customers</h2>
                 <p class="text-muted mb-0">Add one or more customer emails to the same package entitlement.</p>
             </div>
             <a href="{{ route('admin.customer.entitlements.index') }}" class="btn btn-outline-primary">Back to list</a>
