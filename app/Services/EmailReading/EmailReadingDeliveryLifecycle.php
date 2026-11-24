@@ -8,6 +8,7 @@ use App\Jobs\EmailReading\MarkReadingOrderFulfilledJob;
 use App\Jobs\EmailReading\NotifyReadingFailureJob;
 use App\Jobs\EmailReading\ProcessEmailReadingOrderJob;
 use App\Jobs\EmailReading\SendEmailReadingJob;
+use App\Jobs\EmailReading\WriteHistoryDigestJob;
 use App\Models\EmailReadingDelivery;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -395,6 +396,10 @@ class EmailReadingDeliveryLifecycle
         if ($fulfil) {
             $this->dispatchFulfillment($delivery->id);
         }
+
+        if (trim((string) $delivery->ai_response) !== '') {
+            $this->dispatchHistoryDigest($delivery->id);
+        }
     }
 
     /**
@@ -455,6 +460,7 @@ class EmailReadingDeliveryLifecycle
 
         if ($updated === 1) {
             $this->dispatchFulfillment($deliveryId);
+            $this->dispatchHistoryDigest($deliveryId);
         }
 
         return $updated === 1;
@@ -595,6 +601,28 @@ class EmailReadingDeliveryLifecycle
             }
 
             return false;
+        }
+    }
+
+    /**
+     * Queue the History Digest of a delivery that is now `sent`. Best-effort:
+     * a queue failure here is logged and never affects the send itself.
+     */
+    private function dispatchHistoryDigest(int $deliveryId): void
+    {
+        if (! (bool) config('email_reading.history.digest.enabled', true)) {
+            return;
+        }
+
+        try {
+            WriteHistoryDigestJob::dispatch($deliveryId)
+                ->onConnection(config('email_reading.queue.connection'))
+                ->onQueue(config('email_reading.queue.process'));
+        } catch (Throwable $e) {
+            Log::channel('shopify_webhooks')->warning('Failed to dispatch history digest job', [
+                'delivery_id' => $deliveryId,
+                'error' => $e->getMessage(),
+            ]);
         }
     }
 

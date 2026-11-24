@@ -4,6 +4,7 @@ namespace App\Services\EmailReading;
 
 use App\Jobs\EmailReading\ProcessEmailReadingOrderJob;
 use App\Models\EmailReadingDelivery;
+use App\Support\CustomerHistory;
 use App\Support\SafeHtml;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
@@ -20,8 +21,48 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 class EmailReadingAdminService
 {
     public function __construct(
-        private readonly EmailReadingDeliveryLifecycle $lifecycle
+        private readonly EmailReadingDeliveryLifecycle $lifecycle,
+        private readonly HistoryDigestService $digests,
+        private readonly CustomerHistoryService $history
     ) {}
+
+    /**
+     * Store a hand-written History Digest (blank removes it) on a sent delivery.
+     *
+     * @throws RuntimeException when the delivery is not sent or is being sent
+     */
+    public function saveDigest(EmailReadingDelivery $delivery, ?string $text): void
+    {
+        $this->digests->saveManual($delivery, $text);
+    }
+
+    /**
+     * Write the History Digest again from the response as sent.
+     *
+     * @throws RuntimeException when the delivery is not sent, has no response, or OpenAI returns nothing
+     */
+    public function regenerateDigest(EmailReadingDelivery $delivery): void
+    {
+        $this->digests->regenerate($delivery);
+    }
+
+    /**
+     * What the customer's NEXT order would be given as history, with real
+     * limits applied, plus how many of their deliveries are kept out of it.
+     *
+     * @return array{enabled:bool,history:CustomerHistory,excluded:int}
+     */
+    public function customerHistoryPreview(EmailReadingDelivery $delivery): array
+    {
+        $email = (string) $delivery->customer_email;
+        $customerId = $delivery->shopify_customer_id ? (int) $delivery->shopify_customer_id : null;
+
+        return [
+            'enabled' => $this->history->isEnabled(),
+            'history' => $this->history->forCustomer($email, $customerId),
+            'excluded' => $this->history->excludedCount($email, $customerId),
+        ];
+    }
 
     /**
      * Paginated, filtered delivery list for the admin index.

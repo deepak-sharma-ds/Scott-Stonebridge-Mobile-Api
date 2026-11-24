@@ -40,5 +40,7 @@
         <env name="CAMPAIGN_EMAIL_TEST_EMAILS" value=""/>
         <env name="SHOPIFY_WEBHOOK_HMAC_ENABLED" value="false"/>
         <env name="CAMPAIGN_EMAIL_HMAC_ENABLED" value="false"/>
+        <!-- The digest job makes an extra OpenAI call after every send; tests that cover it enable it explicitly. -->
+        <env name="READINGS_HISTORY_DIGEST_ENABLED" value="false"/>
     </php>
 </phpunit>

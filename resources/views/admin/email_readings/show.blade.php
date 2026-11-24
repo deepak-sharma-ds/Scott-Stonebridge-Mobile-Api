@@ -107,6 +107,8 @@
                 @endif
             </div>
 
+            @include('admin.email_readings._history', ['delivery' => $delivery, 'historyPreview' => $historyPreview])
+
             @include('admin.components.delivery-audit-card', ['delivery' => $delivery])
 
             @include('admin.components.email-preview', [

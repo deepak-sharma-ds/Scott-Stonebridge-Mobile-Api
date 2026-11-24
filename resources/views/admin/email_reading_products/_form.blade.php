@@ -178,6 +178,11 @@
                     </template>
                 </div>
             </template>
+            <div>
+                <label class="form-label" style="font-size:0.8125rem;">Sample customer history (optional)</label>
+                <textarea class="form-control" rows="3" maxlength="5000" x-model="testHistory"
+                    placeholder="Earlier orders from a returning customer, e.g. the questions they asked and what Scott told them"></textarea>
+            </div>
         </div>
         <div style="margin:0.75rem 0;">
             <button type="button" class="btn btn-primary" @click="runTest()" :disabled="testLoading">
@@ -230,6 +235,7 @@
             model: @js(old('model', $p->model ?? '')),
             maxTokens: {{ (int) old('max_tokens', $p->max_tokens ?? 1500) }},
             testName: '',
+            testHistory: '',
             testAnswers: {},
             testImages: {},
             testOutput: '',
@@ -274,6 +280,7 @@
                     if (this.model) body.append('model', this.model);
                     if (this.maxTokens) body.append('max_tokens', this.maxTokens);
                     if (this.testName) body.append('customer_name', this.testName);
+                    if (this.testHistory) body.append('sample_history', this.testHistory);
 
                     // Only send answers/images for slots that still exist, split by type.
                     this.schema.filter(s => s.key).forEach(s => {

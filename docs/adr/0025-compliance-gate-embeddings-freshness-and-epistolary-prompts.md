@@ -1,6 +1,6 @@
 # Hybrid Compliance Gate, Embedding-Assisted Freshness Protocol, and Epistolary Prompts
 
-Status: accepted
+Status: accepted. Partly superseded by [0028](0028-customer-history-shared-with-the-model.md): the model now also receives a returning customer's earlier answers and reading digests, so "only a compact theme line" and "reject sending past readings" no longer describe the full prompt. The Freshness Protocol described here is unchanged.
 
 ## Context
 Automating personalized psychic email readings introduces serious compliance liabilities under UK regulations (Consumer Protection from Unfair Trading Regulations 2008, Cancer Act 1939, and ASA/CAP advertising rules). If customers submit high-liability questions (medical diagnosis, pregnancy complications, cancer/terminal illness, lottery/financial investments, criminal/legal disputes, or self-harm/suicide) and an automated AI model answers carelessly, the business incurs severe legal, financial, and reputational risk.
