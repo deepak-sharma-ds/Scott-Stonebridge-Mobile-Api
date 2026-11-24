@@ -143,7 +143,7 @@ return [
         'prompt_rules' => env('READINGS_HISTORY_RULES')
             ? array_values(array_filter(array_map('trim', explode('|', (string) env('READINGS_HISTORY_RULES')))))
             : [
-                'This client has ordered from you before. The message lists their earlier orders, oldest first. Refer back to that history at least once in this reading, in a natural way and with specific details taken from it.',
+                'This client might have ordered from you before. The message lists their earlier orders, oldest first. Refer back to that history at least once in this reading, in a natural way and with specific details taken from it.',
                 'Build on the history without repeating it: use fresh cards, perspectives and wording, and never repeat earlier guidance or phrasing.',
                 'Only use details that appear in the history. Never invent past conversations, predictions or facts about the client.',
                 'Orders marked "ordered, not yet delivered" have not reached the client yet. You may use what they asked for as context, but never say or imply that you have already told them anything about it.',
