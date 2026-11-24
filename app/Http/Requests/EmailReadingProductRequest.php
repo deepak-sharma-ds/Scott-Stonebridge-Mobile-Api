@@ -18,7 +18,15 @@ class EmailReadingProductRequest extends FormRequest
      */
     public function rules(): array
     {
-        $productId = $this->route('email_reading_product')?->id;
+        $product = $this->route('email_reading_product');
+        $productId = $product?->id;
+
+        // Required only while automation is on; a stored header image already
+        // satisfies the requirement on edit.
+        $whenAutomated = Rule::requiredIf(fn () => $this->boolean('is_automation_enabled'));
+        $headerImageRequired = Rule::requiredIf(
+            fn () => $this->boolean('is_automation_enabled') && empty($product?->header_image)
+        );
 
         return [
             'shopify_product_id' => [
@@ -30,16 +38,16 @@ class EmailReadingProductRequest extends FormRequest
                 'required', 'string', 'max:255',
                 Rule::unique('email_reading_products', 'slug')->ignore($productId),
             ],
-            'email_subject' => ['required', 'string', 'max:255'],
+            'email_subject' => [$whenAutomated, 'nullable', 'string', 'max:255'],
             'email_view' => ['nullable', 'string', 'max:255'],
-            'header_image' => ['nullable', 'image', 'max:15360'],
-            'email_content' => ['nullable', 'string'],
-            'email_footer' => ['nullable', 'string'],
+            'header_image' => [$headerImageRequired, 'nullable', 'image', 'max:15360'],
+            'email_content' => [$whenAutomated, 'nullable', 'string'],
+            'email_footer' => [$whenAutomated, 'nullable', 'string'],
             'model' => ['nullable', 'string', 'max:255'],
             'max_tokens' => ['nullable', 'integer', 'min:1', 'max:8000'],
             'is_active' => ['nullable', 'boolean'],
             'is_automation_enabled' => ['nullable', 'boolean'],
-            'prompt_template' => ['required', 'string'],
+            'prompt_template' => [$whenAutomated, 'nullable', 'string'],
             'formatting_contract' => ['nullable', 'string'],
             // An active product with zero questions is a legitimate final
             // state (some readings need no personalization) — not every
@@ -87,6 +95,11 @@ class EmailReadingProductRequest extends FormRequest
         return [
             'shopify_product_id.unique' => 'A reading product with this Shopify product ID already exists.',
             'slug.unique' => 'This slug is already in use.',
+            'email_subject.required' => 'The email subject is required when automation is enabled.',
+            'header_image.required' => 'The header banner image is required when automation is enabled.',
+            'email_content.required' => 'The email content is required when automation is enabled.',
+            'email_footer.required' => 'The email footer is required when automation is enabled.',
+            'prompt_template.required' => 'The prompt template is required when automation is enabled.',
             'header_image.max' => 'The header image must not be greater than 15MB.',
         ];
     }

@@ -53,6 +53,66 @@ class EmailReadingProductControllerTest extends TestCase
         Storage::disk('public')->assertExists('reading-header-images/'.$product->header_image);
     }
 
+    public function test_automation_enabled_requires_the_email_and_prompt_fields(): void
+    {
+        $response = $this->actingAs(User::factory()->create())
+            ->post(route('admin.email-reading-products.store'), [
+                'shopify_product_id' => 222,
+                'name' => 'Automated Reading',
+                'is_automation_enabled' => '1',
+            ]);
+
+        $response->assertSessionHasErrors([
+            'email_subject', 'header_image', 'email_content', 'email_footer', 'prompt_template',
+        ]);
+        $this->assertSame(0, EmailReadingProduct::count());
+    }
+
+    public function test_automation_disabled_does_not_require_the_email_and_prompt_fields(): void
+    {
+        $response = $this->actingAs(User::factory()->create())
+            ->post(route('admin.email-reading-products.store'), [
+                'shopify_product_id' => 222,
+                'name' => 'Manual Reading',
+            ]);
+
+        $response->assertSessionHasNoErrors()
+            ->assertRedirect(route('admin.email-reading-products.index'));
+
+        $product = EmailReadingProduct::where('shopify_product_id', 222)->firstOrFail();
+        $this->assertFalse($product->is_automation_enabled);
+        $this->assertNull($product->prompt_template);
+    }
+
+    public function test_automation_enabled_passes_when_all_fields_are_supplied(): void
+    {
+        Storage::fake('public');
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('admin.email-reading-products.store'), $this->payload([
+                'is_automation_enabled' => '1',
+                'header_image' => UploadedFile::fake()->image('banner.jpg'),
+                'email_content' => 'Intro.',
+                'email_footer' => 'Footer.',
+            ]))
+            ->assertSessionHasNoErrors();
+
+        $this->assertTrue(EmailReadingProduct::where('slug', 'love-reading')->firstOrFail()->is_automation_enabled);
+    }
+
+    public function test_automation_enabled_update_accepts_an_already_stored_header_image(): void
+    {
+        $product = EmailReadingProduct::create(array_merge($this->payload(), ['header_image' => 'existing.jpg']));
+
+        $this->actingAs(User::factory()->create())
+            ->put(route('admin.email-reading-products.update', $product), $this->payload([
+                'is_automation_enabled' => '1',
+                'email_content' => 'Intro.',
+                'email_footer' => 'Footer.',
+            ]))
+            ->assertSessionHasNoErrors();
+    }
+
     public function test_updating_without_a_new_upload_preserves_the_existing_header_image(): void
     {
         Storage::fake('public');
