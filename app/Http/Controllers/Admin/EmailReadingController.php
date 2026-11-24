@@ -64,7 +64,51 @@ class EmailReadingController extends Controller
     {
         $delivery->load('product');
 
-        return view('admin.email_readings.show', compact('delivery'));
+        return view('admin.email_readings.show', [
+            'delivery' => $delivery,
+            'historyPreview' => $this->service->customerHistoryPreview($delivery),
+        ]);
+    }
+
+    /**
+     * Hand-write (or, when blank, remove) the History Digest of a sent reading.
+     */
+    public function updateDigest(Request $request, EmailReadingDelivery $delivery): RedirectResponse
+    {
+        $validated = $request->validate([
+            'history_digest' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        try {
+            $this->service->saveDigest($delivery, $validated['history_digest'] ?? null);
+
+            return back()->with('success', filled($validated['history_digest'] ?? null) ? 'History digest saved.' : 'History digest removed.');
+        } catch (RuntimeException $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        }
+    }
+
+    /**
+     * Write the History Digest again. A hand-written digest is only replaced
+     * when the admin confirmed it.
+     */
+    public function regenerateDigest(Request $request, EmailReadingDelivery $delivery): RedirectResponse
+    {
+        if ($delivery->history_digest_is_manual && ! $request->boolean('confirm_overwrite')) {
+            return back()->with('error', 'This digest was written by hand. Tick the confirmation box to replace it.');
+        }
+
+        try {
+            $this->service->regenerateDigest($delivery);
+
+            return back()->with('success', 'History digest regenerated.');
+        } catch (RuntimeException $e) {
+            return back()->with('error', $e->getMessage());
+        } catch (Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'Failed to regenerate the digest: '.$e->getMessage());
+        }
     }
 
     public function edit(EmailReadingDelivery $delivery)

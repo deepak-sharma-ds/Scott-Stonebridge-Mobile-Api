@@ -48,9 +48,10 @@
 
     <div class="row" style="display:grid;grid-template-columns:2fr 1fr;gap:1rem;">
         <div class="mb-3">
-            <label for="email_subject" class="form-label">Email Subject</label>
+            <label for="email_subject" class="form-label">Email Subject <span x-show="automationEnabled" x-cloak
+                    style="color:#dc3545;">*</span></label>
             <input type="text" name="email_subject" id="email_subject" class="form-control"
-                value="{{ old('email_subject', $p->email_subject ?? '') }}" required>
+                value="{{ old('email_subject', $p->email_subject ?? '') }}" :required="automationEnabled">
         </div>
         <div class="mb-3">
             <label for="email_view" class="form-label">Email View <small style="color:var(--text-muted);">(blank =
@@ -67,7 +68,8 @@
             <span class="form-label" style="margin:0;">Active</span>
         </label>
         <label style="display:flex;align-items:center;gap:0.5rem;cursor:pointer;">
-            <input type="checkbox" name="is_automation_enabled" value="1" @checked(old('is_automation_enabled', $p->is_automation_enabled ?? false))>
+            <input type="checkbox" name="is_automation_enabled" value="1" x-model="automationEnabled"
+                @checked(old('is_automation_enabled', $p->is_automation_enabled ?? false))>
             <span class="form-label" style="margin:0;">Automation Enabled</span>
             <small style="color:var(--text-muted);">(auto-generate &amp; send the AI email on purchase; off = Scott handles it manually)</small>
         </label>
@@ -77,7 +79,8 @@
     <div class="card p-4" style="border:1px solid var(--card-border);margin-bottom:1rem;">
         <h3 style="margin:0 0 0.75rem;font-size:1rem;">Email Template</h3>
         <div class="mb-3">
-            <label for="header_image" class="form-label">Header Banner Image <small
+            <label for="header_image" class="form-label">Header Banner Image <span x-show="automationEnabled && !hasHeaderImage"
+                    x-cloak style="color:#dc3545;">*</span> <small
                     style="color:var(--text-muted);">(shown at the top of the email; falls back to the site logo
                     if left blank{{ $p?->header_image ? '; leave blank to keep the current one' : '' }})</small></label>
             @if ($p?->header_image)
@@ -86,16 +89,19 @@
                         style="max-height:60px;border-radius:6px;">
                 </div>
             @endif
-            <input type="file" name="header_image" id="header_image" class="form-control" accept="image/*">
+            <input type="file" name="header_image" id="header_image" class="form-control" accept="image/*"
+                :required="automationEnabled && !hasHeaderImage">
         </div>
         <div class="mb-3">
-            <label for="email_content" class="form-label">Email Content <small
+            <label for="email_content" class="form-label">Email Content <span x-show="automationEnabled" x-cloak
+                    style="color:#dc3545;">*</span> <small
                     style="color:var(--text-muted);">(shown above the reading; @{{ $productTitle }} /
                     @{{ $customerName }} available; leave blank to use the default copy)</small></label>
             <textarea name="email_content" id="email_content" class="form-control" rows="3" data-rich-text>{{ old('email_content', $p->email_content ?? '') }}</textarea>
         </div>
         <div class="mb-3">
-            <label for="email_footer" class="form-label">Email Footer <small
+            <label for="email_footer" class="form-label">Email Footer <span x-show="automationEnabled" x-cloak
+                    style="color:#dc3545;">*</span> <small
                     style="color:var(--text-muted);">(shown below the reading; @{{ $productTitle }} /
                     @{{ $customerName }} available; leave blank to use the default copy)</small></label>
             <textarea name="email_footer" id="email_footer" class="form-control" rows="5" data-rich-text>{{ old('email_footer', $p->email_footer ?? '') }}</textarea>
@@ -105,7 +111,7 @@
     {{-- Questions schema repeater --}}
     <div class="card p-4" style="border:1px solid var(--card-border);margin-bottom:1rem;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem;">
-            <h3 style="margin:0;font-size:1rem;">Question Slots</h3>
+            <h3 style="margin:0;font-size:1rem;">Question &amp; Upload Slots</h3>
             <button type="button" class="btn btn-sm btn-primary" @click="addRow()">+ Add Slot</button>
         </div>
         <template x-for="(slot, i) in schema" :key="i">
@@ -131,9 +137,10 @@
     </div>
 
     <div class="mb-3">
-        <label for="prompt_template" class="form-label">Prompt Template</label>
+        <label for="prompt_template" class="form-label">Prompt Template <span x-show="automationEnabled" x-cloak
+                style="color:#dc3545;">*</span></label>
         <textarea name="prompt_template" id="prompt_template" class="form-control" rows="10" x-model="promptTemplate"
-            style="font-family:monospace;font-size:0.8125rem;" required>{{ old('prompt_template', $p->prompt_template ?? '') }}</textarea>
+            style="font-family:monospace;font-size:0.8125rem;" :required="automationEnabled">{{ old('prompt_template', $p->prompt_template ?? '') }}</textarea>
         {{-- <small style="color:var(--text-muted);display:block;margin-top:0.375rem;">
             Blade template. Available variables: <code>{{ '{{ $customer_name }}' }}</code>, each slot key
             (e.g. <code>{{ '{{ $future_q1 }}' }}</code>), and positional <code>{{ '{{ $q1 }}' }}</code>, <code>{{ '{{ $q2 }}' }}</code>…
@@ -178,6 +185,11 @@
                     </template>
                 </div>
             </template>
+            <div>
+                <label class="form-label" style="font-size:0.8125rem;">Sample customer history (optional)</label>
+                <textarea class="form-control" rows="3" maxlength="5000" x-model="testHistory"
+                    placeholder="Earlier orders from a returning customer, e.g. the questions they asked and what Scott told them"></textarea>
+            </div>
         </div>
         <div style="margin:0.75rem 0;">
             <button type="button" class="btn btn-primary" @click="runTest()" :disabled="testLoading">
@@ -212,6 +224,8 @@
     function productForm(initialSchema, testUrl) {
         return {
             testUrl: testUrl,
+            automationEnabled: @js((bool) old('is_automation_enabled', $p->is_automation_enabled ?? false)),
+            hasHeaderImage: @js((bool) ($p?->header_image)),
             schema: (initialSchema && initialSchema.length) ?
                 initialSchema.map(s => ({
                     key: s.key || '',
@@ -230,6 +244,7 @@
             model: @js(old('model', $p->model ?? '')),
             maxTokens: {{ (int) old('max_tokens', $p->max_tokens ?? 1500) }},
             testName: '',
+            testHistory: '',
             testAnswers: {},
             testImages: {},
             testOutput: '',
@@ -274,6 +289,7 @@
                     if (this.model) body.append('model', this.model);
                     if (this.maxTokens) body.append('max_tokens', this.maxTokens);
                     if (this.testName) body.append('customer_name', this.testName);
+                    if (this.testHistory) body.append('sample_history', this.testHistory);
 
                     // Only send answers/images for slots that still exist, split by type.
                     this.schema.filter(s => s.key).forEach(s => {

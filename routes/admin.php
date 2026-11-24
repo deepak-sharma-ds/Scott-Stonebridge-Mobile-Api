@@ -124,6 +124,8 @@ Route::middleware(['auth'])->prefix('admin')->group(function () {
             Route::match(['GET', 'POST'], '/{delivery}/preview', [EmailReadingController::class, 'preview'])->name('preview');
             Route::put('/{delivery}', [EmailReadingController::class, 'update'])->name('update');
             Route::post('/{delivery}/regenerate', [EmailReadingController::class, 'regenerate'])->name('regenerate');
+            Route::put('/{delivery}/digest', [EmailReadingController::class, 'updateDigest'])->name('update_digest');
+            Route::post('/{delivery}/digest/regenerate', [EmailReadingController::class, 'regenerateDigest'])->name('regenerate_digest');
             Route::post('/{delivery}/send', [EmailReadingController::class, 'sendNow'])->name('send');
             Route::post('/{delivery}/cancel', [EmailReadingController::class, 'cancel'])->name('cancel');
             Route::post('/{delivery}/reactivate', [EmailReadingController::class, 'reactivate'])->name('reactivate');

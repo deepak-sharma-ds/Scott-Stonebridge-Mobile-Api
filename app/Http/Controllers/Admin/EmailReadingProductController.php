@@ -196,6 +196,7 @@ class EmailReadingProductController extends Controller
             'customer_name' => ['nullable', 'string', 'max:255'],
             'answers' => ['nullable', 'array'],
             'answers.*' => ['nullable', 'string'],
+            'sample_history' => ['nullable', 'string', 'max:5000'],
             'images' => ['nullable', 'array'],
             'images.*' => ['file', 'mimes:jpg,jpeg,png', 'max:10240'],
         ]);
@@ -224,7 +225,8 @@ class EmailReadingProductController extends Controller
                 $product,
                 $validated['answers'] ?? [],
                 $validated['customer_name'] ?? null,
-                $images
+                $images,
+                $validated['sample_history'] ?? null
             );
 
             return response()->json([

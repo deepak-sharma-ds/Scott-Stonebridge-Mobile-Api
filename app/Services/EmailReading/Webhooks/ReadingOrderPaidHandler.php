@@ -80,6 +80,8 @@ class ReadingOrderPaidHandler implements ShopifyWebhookHandlerInterface
 
         $conflictingIds = $this->campaignOwnedProductIds($matched->keys()->all());
 
+        $customerId = $this->customerId($order);
+
         $customerName = trim(
             (string) ($order['customer']['first_name'] ?? '').' '
             .(string) ($order['customer']['last_name'] ?? '')
@@ -131,6 +133,7 @@ class ReadingOrderPaidHandler implements ShopifyWebhookHandlerInterface
                         'shopify_order_id' => $orderId,
                         'email_reading_product_id' => $product->id,
                         'customer_email' => $customerEmail,
+                        'shopify_customer_id' => $customerId,
                         'customer_name' => $customerName ?: null,
                         'questions' => $this->mapProperties($line['properties'] ?? []),
                         'status' => EmailReadingDelivery::STATUS_FAILED,
@@ -154,6 +157,7 @@ class ReadingOrderPaidHandler implements ShopifyWebhookHandlerInterface
                     'shopify_order_id' => $orderId,
                     'email_reading_product_id' => $product->id,
                     'customer_email' => $customerEmail,
+                    'shopify_customer_id' => $customerId,
                     'customer_name' => $customerName ?: null,
                     'questions' => $this->mapProperties($line['properties'] ?? []),
                     'status' => EmailReadingDelivery::STATUS_PENDING,
@@ -181,6 +185,23 @@ class ReadingOrderPaidHandler implements ShopifyWebhookHandlerInterface
         ]);
 
         return WebhookOutcome::processed();
+    }
+
+    /**
+     * The Shopify customer id on the order, or null for a guest checkout
+     * (Shopify sends no customer record) or an unusable value.
+     *
+     * @param  array<string,mixed>  $order
+     */
+    private function customerId(array $order): ?int
+    {
+        $id = $order['customer']['id'] ?? null;
+
+        if (is_string($id) && preg_match('~^gid://shopify/Customer/(\d+)$~', $id, $match) === 1) {
+            $id = $match[1];
+        }
+
+        return is_numeric($id) && (int) $id > 0 ? (int) $id : null;
     }
 
     /**

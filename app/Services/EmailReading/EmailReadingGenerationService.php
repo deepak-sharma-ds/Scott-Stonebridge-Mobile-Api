@@ -8,6 +8,7 @@ use App\Jobs\EmailReading\NotifyComplianceHoldJob;
 use App\Jobs\EmailReading\NotifyReadingFailureJob;
 use App\Models\EmailReadingDelivery;
 use App\Models\EmailReadingProduct;
+use App\Support\CustomerHistory;
 use App\Support\GeneratedBodyValidationResult;
 use App\Support\GeneratedBodyValidator;
 use App\Support\MarkdownMailBody;
@@ -30,7 +31,8 @@ class EmailReadingGenerationService
     public function __construct(
         private readonly ComplianceGateService $complianceGate,
         private readonly ReadingFreshnessService $freshness,
-        private readonly ReadingImageUploadService $images
+        private readonly ReadingImageUploadService $images,
+        private readonly CustomerHistoryService $history
     ) {}
 
     /**
@@ -58,8 +60,9 @@ class EmailReadingGenerationService
         $model = $product->model ?: (string) config('email_reading.openai_model');
         $maxTokens = (int) ($product->max_tokens ?: config('email_reading.max_tokens', 1500));
 
-        $prompt = $this->buildUserPrompt($product->prompt_template, $delivery);
-        $systemPrompt = $this->buildSystemPrompt($product);
+        $history = $this->history->forDelivery($delivery);
+        $prompt = $this->buildUserPrompt($product->prompt_template, $delivery, $history);
+        $systemPrompt = $this->buildSystemPrompt($product, $history->hasEntries());
         $contract = $this->resolveFormattingContract($product);
         $expectedClosing = $this->resolveExpectedClosingSection($contract);
 
@@ -134,6 +137,7 @@ class EmailReadingGenerationService
                 'error_message' => null,
                 'theme_summary' => $this->freshness->extractThemeSummary($html) ?: null,
                 'embedding' => $embedding === null ? null : json_encode($embedding),
+                ...$history->auditAttributes(),
             ]);
 
         if ($saved !== 1) {
@@ -163,12 +167,18 @@ class EmailReadingGenerationService
     }
 
     /**
-     * The rendered product prompt, plus the compact "previous themes" line
-     * for a returning customer.
+     * The rendered product prompt, then the Customer History block and the
+     * compact "previous themes" line for a returning customer. The history is
+     * appended as plain text after rendering, never passed through Blade.
      */
-    private function buildUserPrompt(string $template, EmailReadingDelivery $delivery): string
+    private function buildUserPrompt(string $template, EmailReadingDelivery $delivery, CustomerHistory $history): string
     {
         $prompt = $this->renderPrompt($template, $delivery);
+
+        if ($history->hasEntries()) {
+            $prompt .= "\n\n".$history->block;
+        }
+
         $themeLine = $this->freshnessEnabled() ? $this->freshness->themeLine($delivery) : null;
 
         return $themeLine === null ? $prompt : $prompt."\n\n".$themeLine;
@@ -340,10 +350,11 @@ class EmailReadingGenerationService
         $model = $product->model ?: (string) config('email_reading.openai_model');
         $maxTokens = (int) ($product->max_tokens ?: config('email_reading.max_tokens', 1500));
 
-        $prompt = $this->buildUserPrompt($product->prompt_template, $delivery);
+        $history = $this->history->forDelivery($delivery);
+        $prompt = $this->buildUserPrompt($product->prompt_template, $delivery, $history);
 
         $result = $this->complete(
-            $this->buildSystemPrompt($product),
+            $this->buildSystemPrompt($product, $history->hasEntries()),
             $prompt,
             $model,
             $maxTokens,
@@ -375,7 +386,7 @@ class EmailReadingGenerationService
      * @param  array<string,string>  $images  data URLs keyed by question key
      * @return array{content:string,prompt_tokens:int,completion_tokens:int,model:string}
      */
-    public function testForProduct(EmailReadingProduct $product, array $answers, ?string $customerName = null, array $images = []): array
+    public function testForProduct(EmailReadingProduct $product, array $answers, ?string $customerName = null, array $images = [], ?string $sampleHistory = null): array
     {
         $model = $product->model ?: (string) config('email_reading.openai_model');
         $maxTokens = (int) ($product->max_tokens ?: config('email_reading.max_tokens', 1500));
@@ -392,8 +403,16 @@ class EmailReadingGenerationService
 
         $prompt = $this->renderTemplate($product->prompt_template, $data);
 
+        // Optional admin-typed history stands in for a returning customer, so
+        // the history rules and block can be previewed. Nothing is stored.
+        $withHistory = filled($sampleHistory);
+
+        if ($withHistory) {
+            $prompt .= "\n\n".$this->history->sampleBlock((string) $sampleHistory);
+        }
+
         $result = $this->complete(
-            $this->buildSystemPrompt($product),
+            $this->buildSystemPrompt($product, $withHistory),
             $prompt,
             $model,
             $maxTokens,
@@ -554,21 +573,42 @@ class EmailReadingGenerationService
 
     /**
      * Builds the full system prompt composed of Scott's base persona, the
-     * formatting contract (product override or shared default), and voice rules.
+     * formatting contract (product override or shared default), voice rules,
+     * and, only for a customer with history, the history rules. The history
+     * rules are global, so a product's formatting contract override can never
+     * drop them.
      */
-    public function buildSystemPrompt(?EmailReadingProduct $product = null): string
+    public function buildSystemPrompt(?EmailReadingProduct $product = null, bool $withHistoryRules = false): string
     {
         $base = $this->systemPrompt();
         $contract = $this->resolveFormattingContract($product);
         $voiceRules = $this->voiceRulesPrompt();
         $complianceRules = $this->complianceRulesPrompt();
+        $historyRules = $withHistoryRules ? $this->historyRulesPrompt() : '';
 
         $parts = array_filter(
-            [$base, $contract, $voiceRules, $complianceRules],
+            [$base, $contract, $voiceRules, $complianceRules, $historyRules],
             fn (mixed $part): bool => filled($part)
         );
 
         return implode("\n\n", $parts);
+    }
+
+    /**
+     * Formats the customer-history rules as a bulleted block.
+     */
+    private function historyRulesPrompt(): string
+    {
+        $rules = array_filter(
+            array_map(fn (mixed $rule): string => trim((string) $rule), (array) config('email_reading.history.prompt_rules', []))
+        );
+
+        if ($rules === []) {
+            return '';
+        }
+
+        return "Customer history rules (this client has ordered before):\n"
+            .implode("\n", array_map(fn (string $rule): string => '- '.$rule, $rules));
     }
 
     /**

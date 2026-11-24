@@ -74,11 +74,11 @@ The validation comparing a freshly generated response against a returning custom
 _Avoid_: Deduplication (too generic)
 
 **Reading Embedding**:
-The mathematical semantic representation of a reading's core concepts and themes, preserved alongside the delivery record to power semantic similarity comparison across repeat customer orders and build a structured historical corpus for future AI assistance.
+The mathematical semantic representation of a reading's core concepts and themes, preserved alongside the delivery record to power semantic similarity comparison across repeat customer orders. It is used only by the Freshness Protocol; the model is told about past orders through Customer History, not through embeddings.
 _Avoid_: Vector Array, Float List
 
 **Theme Summary**:
-The compact list (max 15 words) of cards and section themes a reading explored, extracted locally from the generated text and stored on the delivery. A returning customer's next prompt carries a single line built from their earlier Theme Summaries instead of the full past readings. Earlier readings count when the same customer email has a stored response in `generated`, `sending` or `sent` status, because emails go out days after generation.
+The compact list (max 15 words) of cards and section themes a reading explored, extracted locally from the generated text and stored on the delivery. A returning customer's next prompt carries a single line built from their earlier Theme Summaries, as part of the Freshness Protocol and alongside Customer History. Earlier readings count when the same customer email has a stored response in `generated`, `sending` or `sent` status, because emails go out days after generation.
 
 **Modality Prompt**:
 The per-product prompt template that tells the model how that kind of reading is given: Tarot products draw and name cards, mediumship channels spirit impressions with no cards, love products explore relational energy and communication, astrology walks four seasonal quarters. Distinct from the shared Formatting Contract and from the global persona and compliance rules in the system prompt.
@@ -107,6 +107,14 @@ _Avoid_: Fake Open, Bot Open
 **Send History**:
 The chronological, immutable audit log of all mail transmissions associated with a single delivery. Each record captures the dispatch timestamp, RFC message identifier, and SMTP server handshake response, preserving proof of timely fulfillment even after administrative resends.
 _Avoid_: Resend Log, Retry Counter
+
+**Customer History**:
+Everything the model is told about a customer's earlier Deliveries when it writes a new Personalized Response, across every Reading Product. Two Deliveries belong to the same customer when their emails match (ignoring letter case) or their Shopify customer IDs match; a guest checkout without a customer ID matches on email alone. It has two tiers: *delivered* Deliveries (sent) contribute the customer's own answers plus a History Digest; *in-flight* Deliveries (pending, generated or sending) contribute the customer's answers only, and the reading must never claim to have already said anything about them. Failed, cancelled and Compliance Hold Deliveries are never part of it. Every reading for a returning customer must refer back to this history at least once.
+_Avoid_: Memory, Past Orders
+
+**History Digest**:
+A short summary (a few sentences) of what a customer was told in a sent Delivery: the guidance given, predictions made and cards drawn. Written once, in the background, after the email is accepted, from the text as it was actually sent (including any admin edits). If it cannot be written, the Delivery still contributes its answers to Customer History.
+_Avoid_: Theme Summary (a different, much shorter list of cards and headings)
 
 
 
